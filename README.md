@@ -69,3 +69,14 @@ W5 — delete: rows carry a Delete control; the click issues an htmx DELETE to
 state — the row drops without a reload, deleting the last row lands the empty
 state, and deleted ids are never reused (schema autoincrement). Browser
 acceptance: `make e2e-w5` (also `make e2e-w1` for the foundation).
+
+W8 — in-flight control serialization: while the operation triggered by a
+control is in flight, repeat activation of that control causes no request —
+all four controls (create Add, row checkbox, edit Save, row Delete) carry
+htmx `hx-disabled-elt` naming exactly the activated control, and each
+re-enables when the response arrives, success or failure. Blocking is
+per-control: controls on other rows stay usable. Browser acceptance:
+`make e2e-w8` — a Playwright route delay makes the in-flight window
+observable, a counting proxy proves exactly one request (and one server-side
+effect via `GET /todos`) per double activation, and a forced 500 proves the
+control never stays dead.

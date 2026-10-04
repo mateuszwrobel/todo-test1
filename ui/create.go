@@ -15,7 +15,7 @@ import (
 
 var createAreaTmpl = template.Must(template.New("create-area").Parse(
 	`<div id="create-area"{{if .OOB}} hx-swap-oob="outerHTML"{{end}}>
-<form id="create-form" hx-post="/ui/todos" hx-target="#todos-area" hx-swap="innerHTML">
+<form id="create-form" hx-post="/ui/todos" hx-target="#todos-area" hx-swap="innerHTML" hx-disabled-elt="#create-form button[type=submit]">
 <input type="text" name="title" value="{{.Value}}" placeholder="What needs doing?">
 <button type="submit">Add</button>{{if .Error}}
 <p id="create-error">{{.Error}}</p>{{end}}

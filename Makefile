@@ -71,3 +71,16 @@ e2e-w6:
 	go build -o e2e/bin/todo ./cmd/todo
 	go build -o e2e/bin/seed ./e2e/testdata
 	NODE_PATH=$$(npm root -g) node e2e/w6-stale.js
+
+# W8 e2e: in-flight control serialization in a real browser — each of the
+# four controls (create Add, row checkbox toggle, edit Save, row Delete) is
+# activated twice inside a route-delayed in-flight window; the counting
+# proxy proves exactly one request per double activation, GET /todos proves
+# exactly one server-side effect, and the control re-enables after success
+# AND after a forced 500 failure (retry then lands).
+.PHONY: e2e-w8
+e2e-w8:
+	@mkdir -p e2e/bin
+	go build -o e2e/bin/todo ./cmd/todo
+	go build -o e2e/bin/seed ./e2e/testdata
+	NODE_PATH=$$(npm root -g) node e2e/w8-inflight.js

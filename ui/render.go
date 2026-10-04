@@ -62,16 +62,16 @@ document.body.addEventListener('htmx:responseError', function (event) {
 var listTmpl = template.Must(template.New("list").Parse(`<ul id="todo-list">
 {{- range .}}
 <li id="todo-{{.ID}}"{{if .Editing}} class="editing"{{end}} data-state="{{if .Done}}done{{else}}not-done{{end}}">
-<label class="done-toggle"><input type="checkbox" {{if .Done}}checked{{end}} hx-patch="/ui/todos/{{.ID}}" hx-vals='{"done": {{if .Done}}false{{else}}true{{end}}}' hx-target="#todos-area" hx-swap="innerHTML">
+<label class="done-toggle"><input type="checkbox" {{if .Done}}checked{{end}} hx-patch="/ui/todos/{{.ID}}" hx-vals='{"done": {{if .Done}}false{{else}}true{{end}}}' hx-target="#todos-area" hx-swap="innerHTML" hx-disabled-elt="this">
 <span>{{if .Done}}done{{else}}not done{{end}}</span></label>
 <span class="title">{{.Title}}</span>
 {{if not .Done}}<button type="button" class="edit" hx-on:click="this.closest('li').classList.toggle('editing')">Edit</button>
-<form class="edit-form" hx-patch="/ui/todos/{{.ID}}" hx-target="#todos-area" hx-swap="innerHTML">
+<form class="edit-form" hx-patch="/ui/todos/{{.ID}}" hx-target="#todos-area" hx-swap="innerHTML" hx-disabled-elt="#todo-{{.ID}} .save">
 <input type="text" name="title" value="{{if .Editing}}{{.Typed}}{{else}}{{.Title}}{{end}}">
-<button type="submit">Save</button>
+<button type="submit" class="save">Save</button>
 <button type="button" class="cancel" hx-on:click="this.closest('li').classList.remove('editing')">Cancel</button>
 </form>{{end}}{{if .EditError}}<p id="edit-error-{{.ID}}" class="edit-error">{{.EditError}}</p>{{end}}
-<button type="button" class="delete" hx-delete="/ui/todos/{{.ID}}" hx-target="#todos-area" hx-swap="innerHTML">Delete</button>
+<button type="button" class="delete" hx-delete="/ui/todos/{{.ID}}" hx-target="#todos-area" hx-swap="innerHTML" hx-disabled-elt="this">Delete</button>
 </li>
 {{- end}}
 </ul>`))
