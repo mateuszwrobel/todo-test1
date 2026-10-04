@@ -257,3 +257,54 @@ func TestDoneRowsCarryNoEditControl(t *testing.T) {
 		t.Errorf("reopened row 3 carries no edit form:\n%s", findRow(t, frag, "3"))
 	}
 }
+
+// Card ui/11 — Stale edit of a done todo is refused visibly.
+// Given a page stale about a todo's done state shows it as not-done
+// When  the user submits an edit for it
+// Then  the rejection states that the todo is done and its text cannot
+//
+//	be edited — the contract's own stated refusal.
+//	And the row keeps displaying its original text, now truthfully done.
+func TestStaleEditOfDoneTodoRefusedVisibly(t *testing.T) {
+	fapi := &editAPI{todos: []todo{
+		{ID: 3, Title: "walk the dog", Done: false},
+		{ID: 7, Title: "other task", Done: false},
+	}}
+	api := fakeAPI(t, fapi.ServeHTTP)
+	uiSrv := uiServer(t, api.URL)
+
+	// The page loads while the todo is not-done — it shows an edit control.
+	status, page := getPage(t, uiSrv.URL+"/")
+	if status != http.StatusOK {
+		t.Fatalf("GET / status = %d, want 200", status)
+	}
+	if editForm(t, page, "3") == "" {
+		t.Fatalf("not-done row 3 carries no edit form on load:\n%s", findRow(t, page, "3"))
+	}
+
+	// The todo becomes done server-side (another window, a toggle elsewhere)
+	// while the open page stays stale and still shows the band.
+	fapi.mu.Lock()
+	fapi.todos[0].Done = true
+	fapi.mu.Unlock()
+
+	// The stale page submits an edit — the contract refuses with its stated
+	// reason, and the swapped-in content is the server truth.
+	status, frag := patchTitleFragment(t, uiSrv.URL, 3, "walk the dog in the park")
+	if status != http.StatusUnprocessableEntity {
+		t.Fatalf("stale edit status = %d, want 422 (body %s)", status, frag)
+	}
+	if !strings.Contains(frag, `class="edit-error"`) ||
+		!strings.Contains(frag, "cannot edit a done todo") {
+		t.Errorf("refusal not stated visibly on the row:\n%s", frag)
+	}
+	// The row keeps its original text — the typed text changed nothing —
+	// and it shows done, so nothing looks like the edit succeeded.
+	assertRowState(t, frag, "3", "done", "walk the dog")
+	// A done row keeps no edit affordance even in the refusal render.
+	if doneRow := findRow(t, frag, "3"); strings.Contains(doneRow, `class="edit-form"`) {
+		t.Errorf("refusal render leaves an edit band on the done row:\n%s", doneRow)
+	}
+	// The other row is untouched, still not-done with its own band.
+	assertRowState(t, frag, "7", "not-done", "other task")
+}
