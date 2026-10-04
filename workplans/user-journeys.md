@@ -8,7 +8,7 @@ One single local user. No authentication, no roles — whoever holds the page ac
 
 ## Interaction decision — in-flight control blocking
 
-The control that triggers an operation — the Add button, the per-row toggle, the row's Save while editing, the delete control — is disabled from the moment the request leaves until the response arrives. The create input and Add button return to ready per J2's ready-state rule. This is a UI decision layered on the workplan, not a new app behavior: one mutation per page action stays fully inside the existing contract — no new endpoints, no new fields.
+The control that triggers an operation — the Add button, the per-row toggle, the row's Save while editing, the delete control — is disabled from the moment the request leaves until the response arrives. The create input and Add button return to ready per J2's ready-state rule. This is required behavior, not a UI decision layered on the workplan: it traces to the workplan scenario "Repeat activation while an operation is in flight" (workplan Decisions carry the matching line). One mutation per page action stays fully inside the existing contract — no new endpoints, no new fields.
 
 Consequence: the page never issues a second mutation for an operation already in flight from that page. Same-tab double-clicks cannot produce two requests — Delete clicked twice no longer means a second request hitting 404. The page serializes its own operations per control.
 
@@ -139,7 +139,7 @@ Consequence: the page never issues a second mutation for an operation already in
 
 ## J6 — Operate on a todo that no longer exists
 
-**Goal / context:** the edge of the single-user assumption. The page is stale — it shows a todo that no longer exists. Double-submit from this page is now closed: the in-flight control blocking decision disables the triggered control until its response arrives, so a second mutation of an operation already in flight never leaves this page — the double-clicked Delete whose second request hit 404 is no longer a reachable path. The paths that remain: a second browser tab acting from its own page snapshot, a server restart against a different or emptied data file (workplan Assumptions/Risks), and direct edits of the data file. Last write wins; a concurrent edit can be lost. The app does not merge or revive anything — the operation simply does not take effect. (Noted once here; not repeated in J3–J5 beyond their error flows.)
+**Goal / context:** the edge of the single-user assumption. The page is stale — it shows a todo that no longer exists. Double-submit from this page is now closed: the in-flight control blocking decision — required behavior, the workplan scenario "Repeat activation while an operation is in flight" — disables the triggered control until its response arrives, so a second mutation of an operation already in flight never leaves this page — the double-clicked Delete whose second request hit 404 is no longer a reachable path. The paths that remain: a second browser tab acting from its own page snapshot, a server restart against a different or emptied data file (workplan Assumptions/Risks), and direct edits of the data file. Last write wins; a concurrent edit can be lost. The app does not merge or revive anything — the operation simply does not take effect. (Noted once here; not repeated in J3–J5 beyond their error flows.)
 
 **Entry state:** a stale page showing at least one todo whose identifier no longer exists.
 

@@ -47,6 +47,12 @@ When the user edits, marks done, or deletes identifier X
 Then the operation does not take effect
   And the app states that the todo does not exist
 
+### Scenario: Repeat activation while an operation is in flight
+Given the list contains a todo
+When the user activates the same row control twice before the first response arrives
+Then no additional effect occurs beyond the single operation
+  And the list ends in the state produced by exactly one operation
+
 ## Decisions
 
 - Single user, no authentication — Rationale: explicitly chosen scope; the app runs locally. Rejected: multi-user accounts, out of scope.
@@ -59,6 +65,7 @@ Then the operation does not take effect
 - The server also serves the browser page — Rationale: one process to start, no separate deploy target for the page. Rejected: separately served frontend, unnecessary boundary for a single-user local app.
 - Implementation stack: Go only, htmx for page interactivity, Playwright for integration/e2e, archspec as architecture-test gate — Rationale: user decision; recorded in ADR-001 — see docs/adr/ADR-001-stack-go-htmx-playwright-archspec.md.
 - Database engine: embedded SQLite, single local data file — Rationale: satisfies the relational single-table store with zero operational surface; recorded in ADR-002 — see docs/adr/ADR-002-database-sqlite.md.
+- Controls for an operation stay disabled from request until response — Rationale: a page never issues a duplicate mutation for an action already in flight; the same-tab double-submit race is closed at the source. Rejected: server-side duplicate suppression, a repeated legitimate request is indistinguishable from a stray double-click.
 
 > Decomposition: this workplan is decomposed into sub-workplans only after all Open Questions below are resolved.
 
@@ -160,7 +167,7 @@ None — single table. Deleting a todo removes its only row.
 ### Behavior Analysis
 - Todo data and its mutation rules (create, list, change, delete, persistence) — changes when the todo model changes.
 - Wire contract (HTTP paths, status codes, request/response shapes) — changes when the interface contract changes, independent of storage or page.
-- Page interaction (render the list, issue the operations, show error messages) — changes when the user-facing presentation changes.
+- Page interaction (render the list, issue the operations, block the triggered control while its operation is in flight, show error messages) — changes when the user-facing presentation changes.
 
 ### Module Placement
 | Behavior | Fits Existing Module | New Module | Reason |
