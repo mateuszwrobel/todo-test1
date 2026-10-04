@@ -1,9 +1,15 @@
 package todos
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 )
+
+// ErrNotFound is the typed not-found outcome of Change: no todo carries the
+// given identifier. Outcomes stay free of HTTP semantics — that mapping is
+// the api module's decision (workplan decision).
+var ErrNotFound = errors.New("todos: no such todo")
 
 // ChangeFields carries the optional fields of a Change operation: at least
 // one must be supplied. A nil field means "leave this column alone"; the
@@ -33,8 +39,16 @@ func (s *Store) Change(id int64, fields ChangeFields) (Todo, error) {
 		args = append(args, done)
 	}
 	query := fmt.Sprintf(`UPDATE todos SET %s WHERE id = ?`, strings.Join(sets, ", "))
-	if _, err := s.db.Exec(query, append(args, id)...); err != nil {
+	res, err := s.db.Exec(query, append(args, id)...)
+	if err != nil {
 		return Todo{}, fmt.Errorf("change todo %d: %w", id, err)
+	}
+	// The affected-row count distinguishes not-found: nothing matched, so
+	// nothing was written either (workplan data flow).
+	if n, err := res.RowsAffected(); err != nil {
+		return Todo{}, fmt.Errorf("change todo %d: %w", id, err)
+	} else if n == 0 {
+		return Todo{}, ErrNotFound
 	}
 	return s.get(id)
 }

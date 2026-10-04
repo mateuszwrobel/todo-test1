@@ -1,6 +1,7 @@
 package todos
 
 import (
+	"errors"
 	"path/filepath"
 	"testing"
 )
@@ -53,4 +54,42 @@ func TestChangeDoneStateKeepsTitle(t *testing.T) {
 		}
 	}
 	t.Fatalf("List lost the changed todo (id %d)", created.ID)
+}
+
+// Card todos/08 — Change missing identifier.
+// Given no todo exists with identifier X
+// When  Change is called for X
+// Then  the result is a typed not-found outcome and no state changes
+func TestChangeMissingIdentifier(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "store.db"))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer store.Close()
+
+	seed, err := store.Create("keep me")
+	if err != nil {
+		t.Fatalf("seed Create: %v", err)
+	}
+	before := mustList(t, store)
+
+	// An identifier no todo has ever had (autoincrement: seed.ID + 1 is unassigned).
+	missing := seed.ID + 1
+
+	done := true
+	_, err = store.Change(missing, ChangeFields{Done: &done})
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Change(missing id) err = %v, want ErrNotFound", err)
+	}
+
+	// No state change: the list is exactly what it was.
+	after := mustList(t, store)
+	if len(after) != len(before) {
+		t.Fatalf("list changed size: before %+v after %+v", before, after)
+	}
+	for i := range before {
+		if after[i] != before[i] {
+			t.Errorf("state changed: entry %d = %+v, want %+v", i, after[i], before[i])
+		}
+	}
 }
