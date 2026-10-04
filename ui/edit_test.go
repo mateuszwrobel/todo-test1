@@ -308,3 +308,62 @@ func TestStaleEditOfDoneTodoRefusedVisibly(t *testing.T) {
 	// The other row is untouched, still not-done with its own band.
 	assertRowState(t, frag, "7", "not-done", "other task")
 }
+
+// Card ui/12 — Empty edit text keeps the original.
+// When  the user submits an edit with empty or whitespace-only text
+// Then  the row keeps its original text
+//
+//	And the edit surface states that the text is required.
+//	(Decision honored: the rejected text survives in the band for the
+//	correcting submit.)
+func TestEmptyEditTextKeepsTheOriginal(t *testing.T) {
+	fapi := &editAPI{todos: []todo{
+		{ID: 3, Title: "keep me", Done: false},
+	}}
+	api := fakeAPI(t, fapi.ServeHTTP)
+	uiSrv := uiServer(t, api.URL)
+
+	for _, typed := range []string{"", "   \t "} {
+		status, frag := patchTitleFragment(t, uiSrv.URL, 3, typed)
+		if status != http.StatusUnprocessableEntity {
+			t.Fatalf("empty edit %q status = %d, want 422 (body %s)", typed, status, frag)
+		}
+		// The edit surface states the contract's required-text refusal.
+		if !strings.Contains(frag, `class="edit-error"`) ||
+			!strings.Contains(frag, "title is required") {
+			t.Errorf("edit %q: required text not stated on the row:\n%s", typed, frag)
+		}
+		// The todo's text is untouched, and the row is still editable.
+		assertRowState(t, frag, "3", "not-done", "keep me")
+		// The band is open around the rejected text for the correcting
+		// submit.
+		form := editForm(t, frag, "3")
+		if form == "" {
+			t.Fatalf("edit %q: row 3 band gone after the refusal:\n%s", typed, frag)
+		}
+		row := findRow(t, frag, "3")
+		if !strings.Contains(row, `class="editing"`) {
+			t.Errorf("edit %q: band not revealed after the refusal:\n%s", typed, row)
+		}
+		want := `value="` + typed + `"`
+		if !strings.Contains(form, want) {
+			t.Errorf("edit %q: rejected text did not survive in the band:\n%s", typed, form)
+		}
+	}
+
+	// Nothing changed server-side: the original stands.
+	list, err := fapi.snapshot()
+	if err != nil {
+		t.Fatalf("api snapshot: %v", err)
+	}
+	if len(list) != 1 || list[0].Title != "keep me" {
+		t.Errorf("empty edits changed the todo: %+v", list)
+	}
+}
+
+// snapshot reads the fake contract's list under its lock.
+func (f *editAPI) snapshot() ([]todo, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]todo(nil), f.todos...), nil
+}
