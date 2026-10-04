@@ -60,9 +60,14 @@ func (s *Store) Close() error {
 }
 
 // Create inserts a todo with the given title, done false, and a fresh
-// identifier. The write is committed before the result returns.
+// identifier. Invalid text is rejected before any write (see validation.go);
+// the write is committed before the result returns.
 func (s *Store) Create(title string) (Todo, error) {
-	res, err := s.db.Exec(`INSERT INTO todos (title) VALUES (?)`, title)
+	trimmed, err := validateTitle(title)
+	if err != nil {
+		return Todo{}, err
+	}
+	res, err := s.db.Exec(`INSERT INTO todos (title) VALUES (?)`, trimmed)
 	if err != nil {
 		return Todo{}, fmt.Errorf("create todo: %w", err)
 	}
@@ -70,7 +75,7 @@ func (s *Store) Create(title string) (Todo, error) {
 	if err != nil {
 		return Todo{}, fmt.Errorf("create todo: %w", err)
 	}
-	return Todo{ID: id, Title: title, Done: false}, nil
+	return Todo{ID: id, Title: trimmed, Done: false}, nil
 }
 
 // List returns every todo in creation order — ascending identifier, oldest
