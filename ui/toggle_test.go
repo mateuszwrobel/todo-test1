@@ -95,7 +95,7 @@ func TestToggleMarksDoneAndReopens(t *testing.T) {
 	if !strings.Contains(row, `hx-patch="/ui/todos/3"`) {
 		t.Errorf("row 3 checkbox does not PATCH the fragment endpoint:\n%s", row)
 	}
-	for _, want := range []string{`hx-target="#todo-list"`, `hx-swap="outerHTML"`} {
+	for _, want := range []string{`hx-target="#todos-area"`, `hx-swap="innerHTML"`} {
 		if !strings.Contains(row, want) {
 			t.Errorf("row 3 toggle missing swap wiring %s:\n%s", want, row)
 		}

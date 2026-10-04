@@ -25,8 +25,8 @@ import (
 // refusal (422) the list is re-rendered from server truth with the
 // contract's stated reason on the affected row; the rejected text survives
 // in a still-not-done row's band for the correcting submit. A missing todo
-// stays a plainly failed edit — the stated missing-todo surface is ui/14's
-// (W6).
+// is answered with the stated missing-todo surface shared by all row
+// operations (ui/14, stale.go).
 func (p *page) handleEditSave(w http.ResponseWriter, r *http.Request, id int64) {
 	title := r.Form.Get("title")
 	status, reason, err := p.patchTitle(r, id, title)
@@ -64,7 +64,10 @@ func (p *page) handleEditSave(w http.ResponseWriter, r *http.Request, id int64) 
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		_ = listTmpl.Execute(w, rows)
 	case http.StatusNotFound:
-		http.Error(w, "no such todo", http.StatusNotFound)
+		// The todo vanished behind the page's back — the missing-todo
+		// failure is stated for edit exactly as for toggle and delete
+		// (ui/14): banner + truth re-render, no row left faking the edit.
+		p.writeMissingTodo(w, reason)
 	default:
 		http.Error(w, "edit failed", http.StatusBadGateway)
 	}

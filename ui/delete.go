@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"io"
 	"net/http"
 )
 
@@ -11,8 +10,8 @@ import (
 // state as the fragment htmx swaps into the page — the deleted row is gone,
 // every other row keeps its text, done state, and order, and the removal of
 // the last row lands the stated empty state. A missing todo arrives as the
-// contract's 404 and is relayed as a transport error without touching the
-// page; the stated missing-todo banner is ui/14's surface (W6).
+// contract's 404 and is answered with the stated missing-todo surface
+// (ui/14): the banner plus the current truth, not a silent relay.
 func (p *page) handleDelete(w http.ResponseWriter, r *http.Request) {
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodDelete,
 		p.apiBase+"/todos/"+r.PathValue("id"), nil)
@@ -26,13 +25,15 @@ func (p *page) handleDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, resp.Body)
 
 	switch resp.StatusCode {
 	case http.StatusNoContent:
 		p.renderTodosFragment(w)
 	case http.StatusNotFound:
-		http.Error(w, "no such todo", http.StatusNotFound)
+		// The todo was already gone before this delete reached the
+		// contract — state the missing-todo failure (ui/14) rather than
+		// relaying a transport error that leaves the page silent.
+		p.writeMissingTodo(w, statedMissingReason(resp.Body))
 	default:
 		http.Error(w, "delete failed", http.StatusBadGateway)
 	}

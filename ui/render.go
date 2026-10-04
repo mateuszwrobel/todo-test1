@@ -31,26 +31,27 @@ li.editing .title{display:none}
 {{.CreateArea}}
 </main>
 <script>
-// htmx swaps 2xx responses by default; a create refusal arrives as a 4xx
-// whose body is an already-rendered create-area fragment. Route it through
-// the same htmx swap engine — no browser-side rendering happens here.
+// htmx swaps 2xx responses by default; a stated failure arrives as a 4xx
+// whose body is already-rendered HTML for the same surface the operation
+// acts on. Route those bodies through the same htmx swap engine — no
+// browser-side rendering happens here.
 document.body.addEventListener('htmx:responseError', function (event) {
   var elt = event.detail && event.detail.elt;
   if (elt && elt.closest && elt.closest('#create-form')) {
+    // A create refusal: the already-rendered create-area fragment.
     htmx.swap(document.getElementById('create-area'),
               event.detail.xhr.responseText,
               { swapStyle: 'outerHTML' });
+    return;
   }
-  // An edit refusal arrives the same way: its body is the already-rendered
-  // list carrying the stated reason on the row (server truth — a row that
-  // became done shows done). Route it through the swap engine too; plain
-  // (non-HTML) error bodies never swap, so no row can look like text.
-  if (elt && elt.closest && elt.closest('form.edit-form')) {
-    var list = document.getElementById('todo-list');
-    var ctype = event.detail.xhr.getResponseHeader('Content-Type') || '';
-    if (list && ctype.indexOf('text/html') === 0) {
-      htmx.swap(list, event.detail.xhr.responseText, { swapStyle: 'outerHTML' });
-    }
+  // A row-operation failure: the stated surface plus the server-truth list
+  // (an edit refusal carries the reason on the row, a missing todo carries
+  // the banner above the truthful list). Plain (non-HTML) error bodies
+  // never swap, so nothing on the page can look like it succeeded.
+  var area = document.getElementById('todos-area');
+  var ctype = event.detail.xhr.getResponseHeader('Content-Type') || '';
+  if (area && ctype.indexOf('text/html') === 0) {
+    htmx.swap(area, event.detail.xhr.responseText, { swapStyle: 'innerHTML' });
   }
 });
 </script>
@@ -61,16 +62,16 @@ document.body.addEventListener('htmx:responseError', function (event) {
 var listTmpl = template.Must(template.New("list").Parse(`<ul id="todo-list">
 {{- range .}}
 <li id="todo-{{.ID}}"{{if .Editing}} class="editing"{{end}} data-state="{{if .Done}}done{{else}}not-done{{end}}">
-<label class="done-toggle"><input type="checkbox" {{if .Done}}checked{{end}} hx-patch="/ui/todos/{{.ID}}" hx-vals='{"done": {{if .Done}}false{{else}}true{{end}}}' hx-target="#todo-list" hx-swap="outerHTML">
+<label class="done-toggle"><input type="checkbox" {{if .Done}}checked{{end}} hx-patch="/ui/todos/{{.ID}}" hx-vals='{"done": {{if .Done}}false{{else}}true{{end}}}' hx-target="#todos-area" hx-swap="innerHTML">
 <span>{{if .Done}}done{{else}}not done{{end}}</span></label>
 <span class="title">{{.Title}}</span>
 {{if not .Done}}<button type="button" class="edit" hx-on:click="this.closest('li').classList.toggle('editing')">Edit</button>
-<form class="edit-form" hx-patch="/ui/todos/{{.ID}}" hx-target="#todo-list" hx-swap="outerHTML">
+<form class="edit-form" hx-patch="/ui/todos/{{.ID}}" hx-target="#todos-area" hx-swap="innerHTML">
 <input type="text" name="title" value="{{if .Editing}}{{.Typed}}{{else}}{{.Title}}{{end}}">
 <button type="submit">Save</button>
 <button type="button" class="cancel" hx-on:click="this.closest('li').classList.remove('editing')">Cancel</button>
 </form>{{end}}{{if .EditError}}<p id="edit-error-{{.ID}}" class="edit-error">{{.EditError}}</p>{{end}}
-<button type="button" class="delete" hx-delete="/ui/todos/{{.ID}}" hx-target="#todo-list" hx-swap="outerHTML">Delete</button>
+<button type="button" class="delete" hx-delete="/ui/todos/{{.ID}}" hx-target="#todos-area" hx-swap="innerHTML">Delete</button>
 </li>
 {{- end}}
 </ul>`))

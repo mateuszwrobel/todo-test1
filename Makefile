@@ -60,3 +60,14 @@ e2e-w4:
 	go build -o e2e/bin/todo ./cmd/todo
 	go build -o e2e/bin/seed ./e2e/testdata
 	NODE_PATH=$$(npm root -g) node e2e/w4-edit.js
+
+# W6 e2e: real-browser stale-page acceptance — the todo deleted behind the
+# page's back; toggle, edit-save, and delete of the missing id each state the
+# missing-todo failure (banner, contract's "no such todo"), never a fake
+# success; a reload shows exactly the server truth with no banner left.
+.PHONY: e2e-w6
+e2e-w6:
+	@mkdir -p e2e/bin
+	go build -o e2e/bin/todo ./cmd/todo
+	go build -o e2e/bin/seed ./e2e/testdata
+	NODE_PATH=$$(npm root -g) node e2e/w6-stale.js

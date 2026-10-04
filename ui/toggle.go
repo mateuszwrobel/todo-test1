@@ -34,12 +34,19 @@ func (p *page) handleToggle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "done=true or done=false is required", http.StatusUnprocessableEntity)
 		return
 	}
-	status, err := p.patchDone(id, done == "true")
+	status, reason, err := p.patchDone(id, done == "true")
 	if err != nil {
 		http.Error(w, "api unreachable", http.StatusBadGateway)
 		return
 	}
 	if status != http.StatusOK {
+		if status == http.StatusNotFound {
+			// The page is stale about this todo — state the missing-todo
+			// failure (banner + truth re-render, ui/14). A silent failure
+			// would leave the clicked checkbox flipped as if it worked.
+			p.writeMissingTodo(w, reason)
+			return
+		}
 		// The contract's failure is stated with the contract's own status:
 		// htmx does not swap error responses, so no row is left looking like
 		// the operation succeeded.
@@ -57,22 +64,26 @@ func (p *page) handleToggle(w http.ResponseWriter, r *http.Request) {
 
 // patchDone performs the done-state change on the api contract:
 // PATCH {apiBase}/todos/{id} with {"done": bool}. It returns the contract's
-// status; ui never re-implements the rule, the contract owns it.
-func (p *page) patchDone(id int64, done bool) (int, error) {
+// status and, on a failure, the contract's stated reason; ui never
+// re-implements the rule, the contract owns it.
+func (p *page) patchDone(id int64, done bool) (int, string, error) {
 	body, err := json.Marshal(map[string]bool{"done": done})
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	req, err := http.NewRequest(http.MethodPatch, fmt.Sprintf("%s/todos/%d", p.apiBase, id), bytes.NewReader(body))
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := p.client.Do(req)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, resp.Body) // drain for connection reuse
-	return resp.StatusCode, nil
+	if resp.StatusCode == http.StatusOK {
+		_, _ = io.Copy(io.Discard, resp.Body) // drain for connection reuse
+		return http.StatusOK, "", nil
+	}
+	return resp.StatusCode, statedMissingReason(resp.Body), nil
 }

@@ -155,7 +155,7 @@ func TestInlineEditUpdatesInPlace(t *testing.T) {
 		t.Fatalf("not-done row 3 carries no edit form:\n%s", findRow(t, page, "3"))
 	}
 	for _, want := range []string{
-		`hx-patch="/ui/todos/3"`, `hx-target="#todo-list"`, `hx-swap="outerHTML"`,
+		`hx-patch="/ui/todos/3"`, `hx-target="#todos-area"`, `hx-swap="innerHTML"`,
 		`name="title" value="first task"`, `>Save</button>`,
 	} {
 		if !strings.Contains(form, want) {

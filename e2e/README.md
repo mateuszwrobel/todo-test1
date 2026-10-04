@@ -156,3 +156,36 @@ make e2e-w4
 6. **An empty edit is refused with the stated reason** — clearing the title
    and saving states "title is required"; the todo itself is intact (a reload
    shows the original title back).
+
+# W6 e2e — stale page / missing todo
+
+Browser-driven check of card ui/14 for wave W6: with a todo deleted behind
+the open page's back (a direct api DELETE — the "second page"), every
+operation on that missing id states the failure. CommonJS, global Playwright.
+
+## Run
+
+From the repo root:
+
+```sh
+make e2e-w6
+```
+
+## What it asserts
+
+1. **Toggle on a missing todo states the failure** — clicking the stale row's
+   checkbox swaps in the missing-todo banner stating "no such todo" (the
+   contract's own reason), exactly once, visibly; the stale row is not left on
+   the page faking the toggle, survivors keep text, done state, and order, and
+   the server JSON is byte-equal before and after — no change occurred
+   anywhere. No navigation.
+2. **Edit-save on a missing todo states the same failure** — saving the stale
+   row's edit band lands the same banner; the todo stays absent, survivors
+   untouched, server unchanged.
+3. **Delete of a missing todo states the same failure** — the stale Delete is
+   not a silent fake success: the banner states it above the truthfully
+   rendered (empty) list; the server already had nothing to delete and keeps
+   nothing.
+4. **Each reload shows the server truth** — after every failed operation a
+   reload carries no banner and exactly the surviving (or empty) truth: the
+   failure statement never outlives the reload.

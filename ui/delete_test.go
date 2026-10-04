@@ -164,7 +164,7 @@ func TestRenderedRowsWireDeleteToFragmentEndpoint(t *testing.T) {
 	if !strings.Contains(page, `hx-delete="/ui/todos/5"`) {
 		t.Fatalf(`row delete control is not wired with hx-delete="/ui/todos/{id}": %s`, page)
 	}
-	if !strings.Contains(page, `hx-target="#todo-list"`) || !strings.Contains(page, `hx-swap="outerHTML"`) {
+	if !strings.Contains(page, `hx-target="#todos-area"`) || !strings.Contains(page, `hx-swap="innerHTML"`) {
 		t.Fatalf(`delete control must target the list for an outerHTML swap: %s`, page)
 	}
 }
