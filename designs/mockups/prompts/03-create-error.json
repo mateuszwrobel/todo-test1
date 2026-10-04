@@ -42,31 +42,31 @@
       "color_specs": ["#2563EB", "#D1D5DB", "#9CA3AF", "#FFFFFF", "#6B7280"]
     },
     {
-      "description": "Rounded list container with a hairline border holding four unchanged todo rows stacked vertically with thin dividers, oldest at the top.",
+      "description": "Rounded list container with a hairline border holding four unchanged todo rows stacked vertically with thin dividers, oldest at the top; the first two rows are done, the last two are not-done. The string \"Edit\" is rendered exactly 2 times, on rows 3 and 4; the string \"Delete\" is rendered on rows 1, 2, 3 and 4. Done rows show only the Delete button, no Edit button.",
       "coordinates": "cx: 0.500, cy: 0.618, w: 0.500, h: 0.372",
       "hierarchy_and_relation": "Inside the app card below the create row and its error text, spanning the card inner width; owns all four todo rows in creation order.",
       "color_specs": ["#FFFFFF", "#E5E7EB"]
     },
     {
-      "description": "Todo row 1 of 4, first in creation order: a square checkbox at the left filled blue with a white checkmark, done todo text \"Buy milk\" in faded grey with a horizontal strikethrough, and two small grey text-buttons labeled \"Edit\" and \"Delete\" aligned at the right end of the row.",
+      "description": "Todo row 1 of 4, first in creation order, done: a square checkbox at the left filled blue with a white checkmark, done todo text \"Buy milk\" in faded grey crossed by a single thin horizontal strikethrough line crossing the middle of the text, and one small grey text-button labeled \"Delete\" aligned at the right end of the row; no Edit button on this row.",
       "coordinates": "cx: 0.500, cy: 0.478, w: 0.460, h: 0.074",
-      "hierarchy_and_relation": "First child of the list container; checkbox left-aligned, text left-aligned after the checkbox, action buttons right-aligned; same row layout grid as all other rows.",
+      "hierarchy_and_relation": "First child of the list container; checkbox left-aligned, text left-aligned after the checkbox, single button right-aligned; same row layout grid as all other rows.",
       "color_specs": ["#2563EB", "#9CA3AF", "#4B5563"]
     },
     {
-      "description": "Todo row 2 of 4: a square checkbox at the left filled blue with a white checkmark, done todo text \"Pay electricity bill\" in faded grey with a horizontal strikethrough, and the same pair of small grey row action text-buttons as the first row aligned at the right end.",
+      "description": "Todo row 2 of 4, done: a square checkbox at the left filled blue with a white checkmark, done todo text \"Pay electricity bill\" in faded grey crossed by a single thin horizontal strikethrough line crossing the middle of the text, and one small grey text-button labeled \"Delete\" aligned at the right end of the row; no Edit button on this row.",
       "coordinates": "cx: 0.500, cy: 0.568, w: 0.460, h: 0.074",
       "hierarchy_and_relation": "Second child of the list container directly below the first row; identical layout grid to the first row.",
       "color_specs": ["#2563EB", "#9CA3AF", "#4B5563"]
     },
     {
-      "description": "Todo row 3 of 4: an empty unchecked square checkbox at the left, not-done todo text \"Walk the dog\" in normal dark text, and the same pair of small grey row action text-buttons as the first row aligned at the right end.",
+      "description": "Todo row 3 of 4, not-done: an empty unchecked square checkbox at the left, not-done todo text \"Walk the dog\" in solid dark text with no strikethrough line on this row, and two small grey text-buttons labeled \"Edit\" and \"Delete\" aligned at the right end of the row.",
       "coordinates": "cx: 0.500, cy: 0.658, w: 0.460, h: 0.074",
       "hierarchy_and_relation": "Third child of the list container directly below the second row; identical layout grid to the first row.",
       "color_specs": ["#9CA3AF", "#374151", "#4B5563"]
     },
     {
-      "description": "Todo row 4 of 4, newest at the bottom: an empty unchecked square checkbox at the left, not-done todo text \"Read 20 pages\" in normal dark text, and the same pair of small grey row action text-buttons as the first row aligned at the right end.",
+      "description": "Todo row 4 of 4, newest at the bottom, not-done: an empty unchecked square checkbox at the left, not-done todo text \"Read 20 pages\" in solid dark text with no strikethrough line on this row, and two small grey text-buttons labeled \"Edit\" and \"Delete\" aligned at the right end of the row.",
       "coordinates": "cx: 0.500, cy: 0.748, w: 0.460, h: 0.074",
       "hierarchy_and_relation": "Fourth child of the list container, last in creation order; identical layout grid to the first row.",
       "color_specs": ["#9CA3AF", "#374151", "#4B5563"]
