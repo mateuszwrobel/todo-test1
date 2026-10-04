@@ -26,7 +26,7 @@
     {
       "description": "A centered white application card with a thin light border, rounded corners and a subtle shadow; it holds the whole todo app.",
       "coordinates": "cx: 0.500, cy: 0.530, w: 0.560, h: 0.600",
-      "hierarchy_and_relation": "Centered horizontally in the browser content area below the chrome; contains the card header, create row and list container stacked top to bottom.",
+      "hierarchy_and_relation": "Centered horizontally in the browser content area below the chrome; contains the card header, create row, error banner and list container stacked top to bottom.",
       "color_specs": ["#FFFFFF", "#E5E7EB"]
     },
     {
@@ -37,45 +37,45 @@
     },
     {
       "description": "Create row with a single-line text input showing grey placeholder text \"Add a new todo…\", a blue filled button labeled \"Add\" immediately to the right of the input, and small grey helper text \"Up to 500 characters\" under the input.",
-      "coordinates": "cx: 0.500, cy: 0.348, w: 0.500, h: 0.078",
+      "coordinates": "cx: 0.500, cy: 0.338, w: 0.500, h: 0.068",
       "hierarchy_and_relation": "Inside the app card below the header; input and button share one horizontal line, helper text left-aligned under the input.",
       "color_specs": ["#D1D5DB", "#9CA3AF", "#2563EB", "#FFFFFF", "#6B7280"]
     },
     {
-      "description": "Rounded list container with a hairline border holding exactly four todo rows stacked vertically with thin dividers, oldest at the top, and nothing below the fourth row; the list is not five rows and contains no extra rows.",
-      "coordinates": "cx: 0.500, cy: 0.612, w: 0.500, h: 0.380",
-      "hierarchy_and_relation": "Inside the app card below the create row, spanning the card inner width; owns all four todo rows in creation order; the red notice under the fourth row belongs to that row, not to a row of its own.",
+      "description": "Rounded list container with a hairline border holding exactly four todo rows stacked vertically with thin dividers, oldest at the top; the list contains exactly four rows and nothing else, and the word Cancel appears nowhere in the image.",
+      "coordinates": "cx: 0.500, cy: 0.614, w: 0.500, h: 0.376",
+      "hierarchy_and_relation": "Inside the app card below the error banner, spanning the card inner width; owns all four todo rows in creation order; the banner above it belongs to the app card, not to any row.",
       "color_specs": ["#FFFFFF", "#E5E7EB"]
     },
     {
       "description": "Todo row 1 of 4, first in creation order, done: a checked blue box with white tick at the left, todo text \"Buy milk\" in faded grey crossed by a single thin horizontal strikethrough line crossing the middle of the text, and two small grey text-buttons labeled \"Edit\" and \"Delete\" aligned at the right end of the row.",
-      "coordinates": "cx: 0.500, cy: 0.474, w: 0.460, h: 0.074",
+      "coordinates": "cx: 0.500, cy: 0.475, w: 0.460, h: 0.074",
       "hierarchy_and_relation": "First child of the list container; checkbox left-aligned, text left-aligned after the checkbox, action buttons right-aligned; same row layout grid as all other rows.",
       "color_specs": ["#2563EB", "#9CA3AF", "#4B5563"]
     },
     {
       "description": "Todo row 2 of 4, done: a checked blue box with white tick at the left, todo text \"Pay electricity bill\" in faded grey crossed by a single thin horizontal strikethrough line crossing the middle of the text, and the same pair of small grey row action text-buttons as the first row aligned at the right end.",
-      "coordinates": "cx: 0.500, cy: 0.566, w: 0.460, h: 0.074",
+      "coordinates": "cx: 0.500, cy: 0.565, w: 0.460, h: 0.074",
       "hierarchy_and_relation": "Second child of the list container directly below the first row; identical layout grid to the first row.",
       "color_specs": ["#2563EB", "#9CA3AF", "#4B5563"]
     },
     {
       "description": "Todo row 3 of 4, not-done: an empty unchecked box with a grey border at the left, todo text \"Walk the dog\" in solid dark text with no strikethrough line on this row, and the same pair of small grey row action text-buttons as the first row aligned at the right end.",
-      "coordinates": "cx: 0.500, cy: 0.658, w: 0.460, h: 0.074",
+      "coordinates": "cx: 0.500, cy: 0.655, w: 0.460, h: 0.074",
       "hierarchy_and_relation": "Third child of the list container directly below the second row; identical layout grid to the first row.",
       "color_specs": ["#9CA3AF", "#374151", "#4B5563"]
     },
     {
-      "description": "Todo row 4 of 4, newest at the bottom, not-done, a slightly taller row otherwise rendered exactly like the other not-done rows: an empty unchecked box with a grey border at the left, todo text \"Read 20 pages\" in solid dark text with no strikethrough line on this row, and the same pair of small grey row action text-buttons as the first row aligned at the right end.",
-      "coordinates": "cx: 0.500, cy: 0.756, w: 0.460, h: 0.086",
-      "hierarchy_and_relation": "Fourth and last child of the list container; same layout grid as the first row with extra blank space reserved under the text for the inline notice; nothing renders below this row.",
+      "description": "Todo row 4 of 4, newest at the bottom, not-done: an empty unchecked box with a grey border at the left, todo text \"Read 20 pages\" in solid dark text with no strikethrough line on this row, and the same pair of small grey row action text-buttons as the first row aligned at the right end; this row is rendered unchanged like every other row.",
+      "coordinates": "cx: 0.500, cy: 0.745, w: 0.460, h: 0.074",
+      "hierarchy_and_relation": "Fourth and last child of the list container; identical layout grid to the first row; nothing renders below this row inside the container.",
       "color_specs": ["#9CA3AF", "#374151", "#4B5563"]
     },
     {
-      "description": "Stale-operation notice belonging to todo row 4, rendered inside that row's band as one small line of red text reading \"Todo does not exist\" directly under the row's text, left-aligned with the row's text; the notice has no checkbox, no divider and no controls of its own, and is not a row: the list shows exactly four rows.",
-      "coordinates": "cx: 0.410, cy: 0.777, w: 0.280, h: 0.028",
-      "hierarchy_and_relation": "Owned by the fourth todo row, contained within that row's band under its text; the fourth row itself stays rendered unchanged with its checkbox and text above the notice.",
-      "color_specs": ["#DC2626"]
+      "description": "Stale-operation error banner: a light-red rounded rectangle strip inside the app card positioned above the list container in the gap under the create row, containing one small line of dark-red text reading \"Todo does not exist\" left-aligned with padding; the banner is not a todo row, has no checkbox, no divider and no buttons, and this string is rendered exactly once in the whole image.",
+      "coordinates": "cx: 0.500, cy: 0.398, w: 0.500, h: 0.040",
+      "hierarchy_and_relation": "Owned by the app card, stacked between the create row and the list container, spanning the card inner width; the list container and its four rows sit entirely below it.",
+      "color_specs": ["#FEE2E2", "#DC2626"]
     }
   ]
 }
