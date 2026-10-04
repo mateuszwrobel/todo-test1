@@ -50,6 +50,6 @@ func (p *page) renderTodosFragment(w http.ResponseWriter) {
 	case len(todos) == 0:
 		_ = emptyTmpl.Execute(w, nil)
 	default:
-		_ = listTmpl.Execute(w, todos)
+		_ = listTmpl.Execute(w, rowsFor(todos))
 	}
 }

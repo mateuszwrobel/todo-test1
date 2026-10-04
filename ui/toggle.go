@@ -21,6 +21,13 @@ func (p *page) handleToggle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid todo id", http.StatusBadRequest)
 		return
 	}
+	// The endpoint serves both row operations (ui workplan endpoint table):
+	// a form carrying a title is the inline edit's save — that direction
+	// owns its own file (edit.go).
+	if err := r.ParseForm(); err == nil && r.Form.Has("title") {
+		p.handleEditSave(w, r, id)
+		return
+	}
 	done := r.FormValue("done")
 	if done != "true" && done != "false" {
 		// Defensive path mirroring the contract's at-least-one-field rule.
@@ -45,7 +52,7 @@ func (p *page) handleToggle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_ = listTmpl.Execute(w, list)
+	_ = listTmpl.Execute(w, rowsFor(list))
 }
 
 // patchDone performs the done-state change on the api contract:

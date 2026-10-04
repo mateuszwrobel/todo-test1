@@ -20,6 +20,13 @@ var pageTmpl = template.Must(template.New("page").Parse(`<!doctype html>
 <body>
 <main>
 <h1>Todos</h1>
+<style>
+/* The row edit band stays hidden until the row's Edit control puts the
+   row in edit mode — the list reads as text, not as inputs. */
+.edit-form{display:none}
+li.editing .edit-form{display:inline}
+li.editing .title{display:none}
+</style>
 <div id="todos-area">{{.State}}</div>
 {{.CreateArea}}
 </main>
@@ -34,6 +41,17 @@ document.body.addEventListener('htmx:responseError', function (event) {
               event.detail.xhr.responseText,
               { swapStyle: 'outerHTML' });
   }
+  // An edit refusal arrives the same way: its body is the already-rendered
+  // list carrying the stated reason on the row (server truth — a row that
+  // became done shows done). Route it through the swap engine too; plain
+  // (non-HTML) error bodies never swap, so no row can look like text.
+  if (elt && elt.closest && elt.closest('form.edit-form')) {
+    var list = document.getElementById('todo-list');
+    var ctype = event.detail.xhr.getResponseHeader('Content-Type') || '';
+    if (list && ctype.indexOf('text/html') === 0) {
+      htmx.swap(list, event.detail.xhr.responseText, { swapStyle: 'outerHTML' });
+    }
+  }
 });
 </script>
 </body>
@@ -42,11 +60,16 @@ document.body.addEventListener('htmx:responseError', function (event) {
 
 var listTmpl = template.Must(template.New("list").Parse(`<ul id="todo-list">
 {{- range .}}
-<li id="todo-{{.ID}}" data-state="{{if .Done}}done{{else}}not-done{{end}}">
+<li id="todo-{{.ID}}"{{if .Editing}} class="editing"{{end}} data-state="{{if .Done}}done{{else}}not-done{{end}}">
 <label class="done-toggle"><input type="checkbox" {{if .Done}}checked{{end}} hx-patch="/ui/todos/{{.ID}}" hx-vals='{"done": {{if .Done}}false{{else}}true{{end}}}' hx-target="#todo-list" hx-swap="outerHTML">
 <span>{{if .Done}}done{{else}}not done{{end}}</span></label>
 <span class="title">{{.Title}}</span>
-{{if not .Done}}<button type="button" class="edit">Edit</button>{{end}}
+{{if not .Done}}<button type="button" class="edit" hx-on:click="this.closest('li').classList.toggle('editing')">Edit</button>
+<form class="edit-form" hx-patch="/ui/todos/{{.ID}}" hx-target="#todo-list" hx-swap="outerHTML">
+<input type="text" name="title" value="{{if .Editing}}{{.Typed}}{{else}}{{.Title}}{{end}}">
+<button type="submit">Save</button>
+<button type="button" class="cancel" hx-on:click="this.closest('li').classList.remove('editing')">Cancel</button>
+</form>{{end}}{{if .EditError}}<p id="edit-error-{{.ID}}" class="edit-error">{{.EditError}}</p>{{end}}
 <button type="button" class="delete" hx-delete="/ui/todos/{{.ID}}" hx-target="#todo-list" hx-swap="outerHTML">Delete</button>
 </li>
 {{- end}}
@@ -69,11 +92,31 @@ func renderPage(w http.ResponseWriter, state template.HTML) {
 
 func renderList(w http.ResponseWriter, todos []todo) {
 	var b bytes.Buffer
-	if err := listTmpl.Execute(&b, todos); err != nil {
+	if err := listTmpl.Execute(&b, rowsFor(todos)); err != nil {
 		http.Error(w, "render failed", http.StatusInternalServerError)
 		return
 	}
 	renderPage(w, template.HTML(b.String()))
+}
+
+// listRow is one rendered row: the todo itself plus, on the edit feature's
+// refusal path only, the stated contract refusal and the rejected text kept
+// in the row's band (ui/11, ui/12). The plain browse/toggle/delete renderings
+// leave the three edit fields empty — rows render as before.
+type listRow struct {
+	todo
+	EditError string // contract's stated refusal, shown on this row when set
+	Typed     string // rejected edit text, prefilled back into the band
+	Editing   bool   // band revealed on load — a refusal on a not-done row
+}
+
+// rowsFor maps a plain list state to rows carrying no edit surface.
+func rowsFor(todos []todo) []listRow {
+	rows := make([]listRow, 0, len(todos))
+	for _, t := range todos {
+		rows = append(rows, listRow{todo: t})
+	}
+	return rows
 }
 
 func renderState(w http.ResponseWriter, which *template.Template) {

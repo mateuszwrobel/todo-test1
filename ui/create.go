@@ -116,7 +116,7 @@ func (p *page) writeTodosAreaFragment(w io.Writer) error {
 	if len(items) == 0 {
 		return writeFragment(w, emptyTmpl, nil)
 	}
-	return writeFragment(w, listTmpl, items)
+	return writeFragment(w, listTmpl, rowsFor(items))
 }
 
 func writeFragment(w io.Writer, tmpl *template.Template, data any) error {
