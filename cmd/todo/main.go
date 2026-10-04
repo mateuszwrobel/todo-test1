@@ -58,9 +58,9 @@ func run(args []string, stderr io.Writer) error {
 	uiHandler := ui.NewHandler(baseURL)
 
 	mux := http.NewServeMux()
-	mux.Handle("/todos", apiHandler) // JSON contract
-	mux.Handle("/todos/", apiHandler)
-	mux.Handle("/", uiHandler) // page, fragments, static
+	mux.Handle("/todos", apiHandler)  // JSON contract
+	mux.Handle("/todos/", apiHandler) // JSON contract: /todos/{id} items (change, delete)
+	mux.Handle("/", uiHandler)        // page, fragments, static
 
 	fmt.Fprintf(stderr, "todo: serving on http://%s (db %s)\n", ln.Addr(), *dbPath)
 	if err := http.Serve(ln, mux); err != nil {

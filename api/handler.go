@@ -16,6 +16,7 @@ import (
 type TodoStore interface {
 	List() ([]todos.Todo, error)
 	Change(id int64, fields todos.ChangeFields) (todos.Todo, error)
+	Delete(id int64) error
 }
 
 // NewHandler builds the handler for the /todos subtree. The composition root
@@ -24,6 +25,7 @@ func NewHandler(store TodoStore) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /todos", handleList(store))
 	mux.HandleFunc("PATCH /todos/{id}", handleChange(store))
+	mux.HandleFunc("DELETE /todos/{id}", handleDelete(store))
 	return mux
 }
 
