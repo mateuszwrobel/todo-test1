@@ -37,3 +37,13 @@ e2e-w2:
 	@mkdir -p e2e/bin
 	go build -o e2e/bin/todo ./cmd/todo
 	NODE_PATH=$$(npm root -g) node e2e/w2-create.js
+
+# W7 e2e: lifecycle in real processes — restart resumes state (mixed done
+# mix survives a real SIGTERM stop + start on the same db, page + JSON agree)
+# and SIGTERM completes in-flight work (exit 0, durable change).
+.PHONY: e2e-w7
+e2e-w7:
+	@mkdir -p e2e/bin
+	go build -o e2e/bin/todo ./cmd/todo
+	go build -o e2e/bin/seed ./e2e/testdata
+	NODE_PATH=$$(npm root -g) node e2e/w7-lifecycle.js

@@ -94,3 +94,30 @@ NODE_PATH=$(npm root -g) node e2e/w2-create.js
    500-character limit, nothing is created.
 4. **Reload shows persistence** — a real reload (marker clears, proving the
    reload happened) renders exactly the created todos from the data file.
+
+# W7 e2e — lifecycle
+
+Real-process check of wave W7 ("Todos survive server restart" + clean
+shutdown): binaries are started, driven, stopped with real SIGTERM signals,
+and started again on the same data file.
+
+## Run
+
+From the repo root:
+
+```sh
+make e2e-w7
+```
+
+## What it asserts
+
+1. **Restart resumes state** — mixed done mix (seeded), one toggle through a
+   live checkbox click, the command stopped (SIGTERM) and started again on
+   the same path: the JSON contract reports byte-identical todos and the
+   reloaded page shows the same texts and states. Mid-run state changes go
+   through the toggle PATCH over seeded rows, the same route the browser's
+   checkbox uses.
+2. **SIGTERM completes in-flight work** — a PATCH whose request body lands
+   only after the signal (the handler sits mid-flight): the response still
+   arrives with 200, the process exits 0, the listener stops, and a fresh
+   start on the same file shows the completed change.
