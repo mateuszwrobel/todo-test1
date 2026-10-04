@@ -33,7 +33,7 @@ var pageTmpl = template.Must(template.New("page").Parse(`<!doctype html>
 var listTmpl = template.Must(template.New("list").Parse(`<ul id="todo-list">
 {{- range .}}
 <li id="todo-{{.ID}}" data-state="{{if .Done}}done{{else}}not-done{{end}}">
-<label class="done-toggle"><input type="checkbox" {{if .Done}}checked{{end}}>
+<label class="done-toggle"><input type="checkbox" {{if .Done}}checked{{end}} hx-patch="/ui/todos/{{.ID}}" hx-vals='{"done": {{if .Done}}false{{else}}true{{end}}}' hx-target="#todo-list" hx-swap="outerHTML">
 <span>{{if .Done}}done{{else}}not done{{end}}</span></label>
 <span class="title">{{.Title}}</span>
 {{if not .Done}}<button type="button" class="edit">Edit</button>{{end}}
