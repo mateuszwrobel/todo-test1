@@ -41,7 +41,7 @@ A workplan has six core sections (always present, fixed order) plus partial sect
    Then [observable result]
      And [observable result]
    ```
-   One scenario per behavior. Cover the happy path and key edge cases. Errors are behaviors too — write them as scenarios ("When an invalid value is submitted, Then the request is rejected").
+   One scenario per behavior. Cover the happy path and key edge cases. Errors are behaviors too — write them as scenarios ("When an invalid value is submitted, Then the request is rejected"). Concrete values in scenarios (names, strings, numbers) are illustrative witnesses of the behavior, never requirements — the derived implementation must handle every input the contract permits; special-casing an example literal in code or tests violates the behavior/implementation dividing line.
 3. **Decisions** — Every design decision made during planning. Each: the decision, the rationale, alternatives rejected and why. Record decisions here; never leave them as open options in the plan.
 4. **Assumptions** — Facts taken as true without verification. Each: the assumption, what depends on it, what happens if it is wrong.
 5. **Risks** — Each: the risk, the impact, the mitigation.

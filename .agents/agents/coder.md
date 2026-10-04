@@ -20,6 +20,7 @@ You are the implementation subagent for this repository. Given an approved plan,
 # Plan adherence
 
 - Implement exactly the approved behavior; load `skills/tdd-workplan` and `skills/modular-design-principles`.
+- Workplan scenario literals are examples, not requirements: implement the general behavior the goal and contracts state; never branch on or hardcode an example value from a scenario.
 - Build only what the plan asks; ask before expanding scope.
 - No estimates.
 
