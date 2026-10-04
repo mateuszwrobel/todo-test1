@@ -141,9 +141,10 @@ Cards are byte-identical splits of the source scenarios. Proof before committing
 
 Workplans forbid implementation order; parallel lanes still need a dependency DAG. It lives in `workplans/dependencies.md` — the companion artifact owning all ordering, never in a workplan:
 
-- Per-card edges of two kinds: a **contract edge** (the consumer defines a port plus an in-test fake against the published contract — work starts immediately, the contract is committed) and a **code edge** (the card needs the real implementation — work waits).
-- Per-module waves and the lane listing (what runs concurrently).
-- Integration checkpoints `CP1..CPn`: when depended-on code merges, contract fakes retire against the real dependency and drift surfaces there. Integration is a checkpoint event, never an in-flight card requirement; a card never claims an integration result it could not observe.
+- Ordering proceeds as **feature waves**. Standing law: **a module is never implemented wholesale.** Every wave is a vertical slice of one feature/common scenario — the thinnest cut through the modules that makes that feature observable end to end (store → contract translation → page). Whole-module waves are forbidden; a module grows one feature per wave it appears in.
+- Per-card dependencies inside each wave; a wave's cards land in dependency order within the wave.
+- A wave graph: what each wave requires, what can run concurrently. Lanes follow wave branches, landing through separate worktrees merged in wave order.
+- Wave end is integration: the wave's cards wired against the real code landed in the same wave — no contract fakes, no fake-then-replace staging — with the repo architecture gate green and that feature's parent scenarios re-executed end to end as acceptance. Integration is the wave end, never an in-flight card requirement; no card claims an integration result its wave has not reached.
 
 ### Parent-scenario traceability
 

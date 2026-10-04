@@ -110,8 +110,8 @@ Then create a TDD workplan (see the `skills/tdd-workplan` skill) per module.
 When implementation will be parallelized, after the per-module workplans exist:
 
 1. **Decompose each module workplan into single-scenario cards** — `workplans/scenarios/<module>/<NN>-<slug>.md`, byte-identical scenario splits with mechanical proof. Format and rules: the `skills/tdd-workplan` skill, section "Decomposing for parallel implementation".
-2. **Create `workplans/dependencies.md`** — the companion artifact owning all ordering: contract-vs-code edges per card, per-module waves, lane listing, integration checkpoints. Workplans stay order-free; the ledger carries the order.
-3. **Parent scenarios are the whole-system view** — their e2e suite is the parent scenarios re-executed against the composed process after composition completes, never a separate lane of new Gherkin.
+2. **Create `workplans/dependencies.md`** — the companion artifact owning all ordering: per-card dependencies organized as **feature waves** (a module is never implemented wholesale — each wave is one feature's vertical slice through the modules), the wave graph, and wave-end integration. Step 7's module order is graph context only; the executable order is the wave graph. Workplans stay order-free; the ledger carries the order.
+3. **Parent scenarios are the whole-system view** — their e2e suite is the parent scenarios re-executed against the real code at each wave end and against the composed process after composition: acceptance, never a separate lane of new Gherkin.
 
 ## Validation Checklist
 
