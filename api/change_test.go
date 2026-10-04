@@ -252,3 +252,67 @@ func TestPatchTitleStoresTrimmedForm(t *testing.T) {
 		t.Errorf("title = %q, want the trimmed form %q", got.Title, "Buy milk")
 	}
 }
+
+// Card api/07 — Title edit on done todo refused.
+// When  a PATCH /todos/{id} carrying a title arrives for a done todo
+// Then  the response is 422 with {"error": "cannot edit a done todo"}
+//
+//	And the todo is unchanged.
+//	The done-only reopen path is unaffected — reopening still answers
+//	200 and unlocks the title direction again (todos/07's story on the
+//	contract).
+func TestPatchTitleOnDoneTodoRefused(t *testing.T) {
+	store := openStore(t)
+	created, err := store.Create("Buy milk")
+	if err != nil {
+		t.Fatalf("seed Create: %v", err)
+	}
+	done := true
+	if _, err := store.Change(created.ID, todos.ChangeFields{Done: &done}); err != nil {
+		t.Fatalf("seed Change(done=true): %v", err)
+	}
+	srv := httptest.NewServer(NewHandler(store))
+	defer srv.Close()
+
+	// Title carried — even alongside done — the frozen refusal answers.
+	for _, body := range []string{`{"title": "Buy oat milk"}`, `{"title": "Buy oat milk", "done": true}`} {
+		resp, respBody := patchTodo(t, srv.URL, created.ID, body)
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Fatalf("PATCH %s status = %d, want 422 (body %s)", body, resp.StatusCode, respBody)
+		}
+		var errBody map[string]string
+		if err := json.Unmarshal([]byte(respBody), &errBody); err != nil {
+			t.Fatalf("PATCH %s: error body is not JSON: %v (resp %s)", body, err, respBody)
+		}
+		if errBody["error"] != "cannot edit a done todo" {
+			t.Errorf("PATCH %s: error = %q, want %q", body, errBody["error"], "cannot edit a done todo")
+		}
+	}
+
+	// Unchanged: still the original text, still done.
+	list, err := store.List()
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(list) != 1 || list[0] != (todos.Todo{ID: created.ID, Title: "Buy milk", Done: true}) {
+		t.Fatalf("frozen patches changed the todo: %+v", list)
+	}
+
+	// Reopen unaffected: done-only answers 200, and the title direction
+	// then succeeds — the unlock path over the contract.
+	resp, respBody := patchTodo(t, srv.URL, created.ID, `{"done": false}`)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("reopen status = %d, want 200 (body %s)", resp.StatusCode, respBody)
+	}
+	resp, respBody = patchTodo(t, srv.URL, created.ID, `{"title": "Buy oat milk"}`)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("title after reopen status = %d, want 200 (body %s)", resp.StatusCode, respBody)
+	}
+	list, err = store.List()
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(list) != 1 || list[0] != (todos.Todo{ID: created.ID, Title: "Buy oat milk", Done: false}) {
+		t.Fatalf("reopen-then-edit did not persist: %+v", list)
+	}
+}

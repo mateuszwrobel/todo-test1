@@ -57,6 +57,12 @@ func handleChange(store TodoStore) http.HandlerFunc {
 				errorJSON(w, http.StatusNotFound, "no such todo")
 				return
 			}
+			if errors.Is(err, todos.ErrDoneFrozen) {
+				// The store's frozen-text rule stated on the contract
+				// (api/07): a done todo's title is not editable.
+				errorJSON(w, http.StatusUnprocessableEntity, "cannot edit a done todo")
+				return
+			}
 			if errors.Is(err, todos.ErrTitleRequired) {
 				errorJSON(w, http.StatusUnprocessableEntity, "title is required")
 				return
