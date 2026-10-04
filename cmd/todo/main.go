@@ -5,17 +5,26 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"todo/api"
 	"todo/todos"
 	"todo/ui"
 )
+
+// shutdownDrainTimeout bounds how long shutdown waits for in-flight requests.
+// After the bound the remaining connections are closed (their requests fail)
+// and the store still closes, so completed operations stay durable.
+const shutdownDrainTimeout = 5 * time.Second
 
 func main() {
 	if err := run(os.Args[1:], os.Stderr); err != nil {
@@ -63,8 +72,27 @@ func run(args []string, stderr io.Writer) error {
 	mux.Handle("/", uiHandler)        // page, fragments, static
 
 	fmt.Fprintf(stderr, "todo: serving on http://%s (db %s)\n", ln.Addr(), *dbPath)
-	if err := http.Serve(ln, mux); err != nil {
+
+	// Graceful shutdown: SIGINT/SIGTERM stops accepting, in-flight requests
+	// drain within a bounded timeout, the store closes after them (the
+	// deferred Close below), and the process exits 0.
+	srv := &http.Server{Handler: mux}
+	serveDone := make(chan error, 1)
+	go func() { serveDone <- srv.Serve(ln) }()
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	select {
+	case err := <-serveDone:
 		return fmt.Errorf("serve: %w", err)
+	case <-ctx.Done():
 	}
+
+	drainCtx, cancelDrain := context.WithTimeout(context.Background(), shutdownDrainTimeout)
+	defer cancelDrain()
+	if err := srv.Shutdown(drainCtx); err != nil {
+		srv.Close() // bound reached: remaining requests fail, store still closes
+	}
+	<-serveDone // the listener is stopped
 	return nil
 }
