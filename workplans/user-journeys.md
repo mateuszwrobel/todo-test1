@@ -195,7 +195,7 @@ The contract's 422 "at least one field required" (empty PATCH body) is defensive
 | J5 Delete | Delete todo | DELETE /todos/{id} |
 | J6 Stale id | Operation on missing todo | PATCH /todos/{id}, DELETE /todos/{id} |
 
-All 7 workplan scenarios are covered: Create (J2), Reject empty (J2), Mark done (J3), Edit keeps done (J4), Delete (J5), Survive restart (J1), Missing todo (J6). Error variants trace to contract lines: POST 422 (J2), PATCH 422 (J4), 404s (J6). Journey steps trace to a scenario or a contract line, with one stated exception: the empty-list and load-failure page states (J1) are derived page necessities — the GET contract documents only 200, and no scenario describes a failed load.
+All 8 workplan scenarios are covered: Create (J2), Reject empty (J2), Mark done (J3), Edit keeps done (J4), Delete (J5), Survive restart (J1), Missing todo (J6), Repeat activation in flight (J2–J5, via the in-flight control blocking decision). Error variants trace to contract lines: POST 422 (J2), PATCH 422 (J4), 404s (J6). Journey steps trace to a scenario or a contract line, with one stated exception: the empty-list and load-failure page states (J1) are derived page necessities — the GET contract documents only 200, and no scenario describes a failed load.
 
 ## Open questions for UI design
 
