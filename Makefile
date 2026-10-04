@@ -7,5 +7,5 @@
 e2e-w1:
 	@mkdir -p e2e/bin
 	go build -o e2e/bin/todo ./cmd/todo
-	go build -o e2e/bin/seed ./e2e/seed
+	go build -o e2e/bin/seed ./e2e/testdata
 	NODE_PATH=$$(npm root -g) node e2e/w1-browse.js

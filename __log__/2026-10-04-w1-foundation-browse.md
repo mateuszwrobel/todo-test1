@@ -62,12 +62,13 @@ Integration bootstrap: `e2e/` Playwright script (chromium via global install)
 starts the real binary on ephemeral ports with temp dbs — populated list
 (order/checkboxes/control placement), fresh-db empty state, and
 db-removed-while-stopped → start → empty state. Wired behind `make e2e-w1`;
-`e2e/seed` is test-support tooling (only place outside todos that touches
+`e2e/testdata` is test-support tooling (only place outside todos that touches
 the file, mirroring test-scope exemption).
 
 Deviations from the workplan: one micro-ordering note — the listener bind
 happens before the ui constructors so the injected base URL is the actual
 bound address (workplan's listed order puts listen last); lifecycle
 ownership and the no-lazy-wiring decision are preserved. The W1 import scan
-excludes `_test.go` files and the `e2e/` test-support tree, consistent with
-"excluded trees are out of the model".
+excludes `_test.go` files and `testdata` trees (the seed tool lives in
+`e2e/testdata/` so archspec keeps the model at exactly the four declared
+modules), consistent with "excluded trees are out of the model".

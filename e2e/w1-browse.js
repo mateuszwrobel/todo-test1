@@ -74,7 +74,7 @@ function tmpDb(name) {
 async function main() {
   fs.mkdirSync(binDir, { recursive: true });
   run('go', ['build', '-o', serverBin, './cmd/todo']);
-  run('go', ['build', '-o', seedBin, './e2e/seed']);
+  run('go', ['build', '-o', seedBin, './e2e/testdata']);
 
   const browser = await chromium.launch();
   const page = await browser.newPage();

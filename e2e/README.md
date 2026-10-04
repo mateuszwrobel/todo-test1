@@ -34,4 +34,5 @@ chromium installed (`playwright --version` works; `npm root -g` gives the
    the file, start again on the same path; the empty state shows.
 
 Binaries land in `e2e/bin/` (git-ignored via the script's `mkdir -p`); the
-seed helper is `e2e/seed/` (test-support tool, not served application code).
+seed helper is `e2e/testdata/` (go tool and archspec ignore testdata dirs;
+test-support tool, not served application code).

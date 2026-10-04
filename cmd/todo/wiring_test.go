@@ -76,9 +76,10 @@ func sourceImports(t *testing.T, root string) map[string][]string {
 			return err
 		}
 		if d.IsDir() {
-			// static assets and the e2e test-support tree are not served
-			// module code; like _test.go files they are out of the model.
-			if d.Name() == "static" || d.Name() == "e2e" ||
+			// static assets and test-support trees (testdata is ignored
+			// by the go tool and by archspec) are not served module code;
+			// like _test.go files they are out of the model.
+			if d.Name() == "static" || d.Name() == "testdata" ||
 				(d.Name() != "." && strings.HasPrefix(d.Name(), ".")) {
 				return fs.SkipDir
 			}
