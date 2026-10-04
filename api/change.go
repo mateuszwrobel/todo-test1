@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -49,9 +50,22 @@ func handleChange(store TodoStore) http.HandlerFunc {
 		updated, err := store.Change(id, fields)
 		if err != nil {
 			// Outcome mapping fixed by the api workplan: not-found → 404,
-			// invalid-no-fields → 422 stating the rule.
+			// invalid-no-fields → 422 stating the rule, invalid-text → 422
+			// with the store's rule stated (title required / limit number
+			// owned by todos.MaxTitleLength).
 			if errors.Is(err, todos.ErrNotFound) {
 				errorJSON(w, http.StatusNotFound, "no such todo")
+				return
+			}
+			if errors.Is(err, todos.ErrTitleRequired) {
+				errorJSON(w, http.StatusUnprocessableEntity, "title is required")
+				return
+			}
+			if errors.Is(err, todos.ErrTitleTooLong) {
+				// The limit number has one owner — the todos constant — so
+				// this message can never drift from the rule.
+				errorJSON(w, http.StatusUnprocessableEntity,
+					fmt.Sprintf("title exceeds the %d-character limit", todos.MaxTitleLength))
 				return
 			}
 			if errors.Is(err, todos.ErrNoFields) {

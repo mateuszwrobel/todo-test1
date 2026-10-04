@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -140,5 +141,114 @@ func TestPatchEmptyBodyIs422(t *testing.T) {
 	}
 	if len(list) != 1 || list[0] != (todos.Todo{ID: created.ID, Title: "unchanged", Done: false}) {
 		t.Fatalf("state changed on empty-body patches: %+v", list)
+	}
+}
+
+// Card api/05 — Change text of a not-done todo.
+// When  a PATCH /todos/{id} with {"title": "new text"} arrives for an
+//
+//	existing not-done todo —
+//
+// Then  the response is 200 with the updated todo JSON and done state
+//
+//	unchanged, and the change persists.
+//	An empty/whitespace-only title is the contract's 422 "title is
+//	required" — the rule arrives through the store's todos/02
+//	validation, never re-implemented here.
+//	An over-the-limit title is 422 stating the limit, stated from
+//	todos.MaxTitleLength — the constant's single owner.
+func TestPatchTitleOnNotDoneTodo(t *testing.T) {
+	store := openStore(t)
+	created, err := store.Create("Walk the dog")
+	if err != nil {
+		t.Fatalf("seed Create: %v", err)
+	}
+	srv := httptest.NewServer(NewHandler(store))
+	defer srv.Close()
+
+	// The happy direction: 200 with the updated todo, done still false.
+	resp, body := patchTodo(t, srv.URL, created.ID, `{"title": "Walk the dog in the park"}`)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("PATCH {title} status = %d, want 200 (body %s)", resp.StatusCode, body)
+	}
+	var got todos.Todo
+	if err := json.Unmarshal([]byte(body), &got); err != nil {
+		t.Fatalf("PATCH response is not todo JSON: %v (body %s)", err, body)
+	}
+	if got != (todos.Todo{ID: created.ID, Title: "Walk the dog in the park", Done: false}) {
+		t.Errorf("PATCH {title} = %+v, want {ID:%d Title:Walk the dog in the park Done:false}", got, created.ID)
+	}
+	// It persists.
+	list, err := store.List()
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(list) != 1 || list[0] != got {
+		t.Fatalf("PATCH title did not persist: %+v", list)
+	}
+
+	// Empty and whitespace-only titles arrive as the store's invalid-text
+	// outcome, stated as the contract's 422.
+	for _, raw := range []string{`{"title": ""}`, `{"title": "   "}`} {
+		resp, body = patchTodo(t, srv.URL, created.ID, raw)
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Fatalf("PATCH body %s status = %d, want 422 (body %s)", raw, resp.StatusCode, body)
+		}
+		var errBody map[string]string
+		if err := json.Unmarshal([]byte(body), &errBody); err != nil {
+			t.Fatalf("body %s: error body is not JSON: %v (resp %s)", raw, err, body)
+		}
+		if errBody["error"] != "title is required" {
+			t.Errorf("body %s: error = %q, want %q", raw, errBody["error"], "title is required")
+		}
+	}
+
+	// Over the limit: 422 stating the limit number — owned by one constant.
+	long := strings.Repeat("x", todos.MaxTitleLength+1)
+	resp, body = patchTodo(t, srv.URL, created.ID, `{"title": "`+long+`"}`)
+	if resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("over-limit PATCH status = %d, want 422 (body %s)", resp.StatusCode, body)
+	}
+	var errBody map[string]string
+	if err := json.Unmarshal([]byte(body), &errBody); err != nil {
+		t.Fatalf("over-limit: error body is not JSON: %v (resp %s)", err, body)
+	}
+	if msg := errBody["error"]; !strings.Contains(msg, strconv.Itoa(todos.MaxTitleLength)) ||
+		!strings.Contains(msg, "limit") {
+		t.Errorf("over-limit error = %q, want it to state the %d-character limit",
+			msg, todos.MaxTitleLength)
+	}
+
+	// Every rejection above left the todo exactly at the happy-path result.
+	list, err = store.List()
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(list) != 1 || list[0] != (todos.Todo{ID: created.ID, Title: "Walk the dog in the park", Done: false}) {
+		t.Fatalf("rejected patches changed the todo: %+v", list)
+	}
+}
+
+// The stored form is canonical — the trimmed title, the same rule Create
+// applies (todos/02): one text the rules speak about.
+func TestPatchTitleStoresTrimmedForm(t *testing.T) {
+	store := openStore(t)
+	created, err := store.Create("padded")
+	if err != nil {
+		t.Fatalf("seed Create: %v", err)
+	}
+	srv := httptest.NewServer(NewHandler(store))
+	defer srv.Close()
+
+	resp, body := patchTodo(t, srv.URL, created.ID, `{"title": "   Buy milk\t"}`)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("PATCH padded title status = %d, want 200 (body %s)", resp.StatusCode, body)
+	}
+	var got todos.Todo
+	if err := json.Unmarshal([]byte(body), &got); err != nil {
+		t.Fatalf("response is not todo JSON: %v (body %s)", err, body)
+	}
+	if got.Title != "Buy milk" {
+		t.Errorf("title = %q, want the trimmed form %q", got.Title, "Buy milk")
 	}
 }

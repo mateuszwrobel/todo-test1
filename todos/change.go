@@ -37,6 +37,31 @@ type ChangeFields struct {
 // and returns the updated todo. The write is committed before the result
 // returns.
 func (s *Store) Change(id int64, fields ChangeFields) (Todo, error) {
+	// The title direction settles its rules BEFORE any write: the frozen-
+	// text rule (todos/06) refuses a title for a done todo first — the done
+	// state dominates — and the shared title rules (todos/02, the single
+	// owner validation.go) canonicalize the text. The pre-read carries both
+	// the done check and not-found for this direction; the done-only
+	// direction keeps the UPDATE's affected-row count as its not-found check
+	// (workplan data flow).
+	if fields.Title != nil {
+		var doneFlag int
+		err := s.db.QueryRow(`SELECT done FROM todos WHERE id = ?`, id).Scan(&doneFlag)
+		if errors.Is(err, sql.ErrNoRows) {
+			return Todo{}, ErrNotFound
+		}
+		if err != nil {
+			return Todo{}, fmt.Errorf("change todo %d: %w", id, err)
+		}
+		if doneFlag != 0 {
+			return Todo{}, ErrDoneFrozen
+		}
+		trimmed, err := validateTitle(*fields.Title)
+		if err != nil {
+			return Todo{}, err
+		}
+		fields.Title = &trimmed
+	}
 	var sets []string
 	var args []any
 	if fields.Title != nil {
@@ -53,23 +78,6 @@ func (s *Store) Change(id int64, fields ChangeFields) (Todo, error) {
 	}
 	if len(sets) == 0 {
 		return Todo{}, ErrNoFields
-	}
-	// Frozen-text rule (todos/06): a title for a done todo is refused BEFORE
-	// any column update (store workplan data flow). The pre-read carries both
-	// the done check and not-found for the title direction; the done-only
-	// direction keeps the UPDATE's affected-row count as its not-found check.
-	if fields.Title != nil {
-		var doneFlag int
-		err := s.db.QueryRow(`SELECT done FROM todos WHERE id = ?`, id).Scan(&doneFlag)
-		if errors.Is(err, sql.ErrNoRows) {
-			return Todo{}, ErrNotFound
-		}
-		if err != nil {
-			return Todo{}, fmt.Errorf("change todo %d: %w", id, err)
-		}
-		if doneFlag != 0 {
-			return Todo{}, ErrDoneFrozen
-		}
 	}
 	query := fmt.Sprintf(`UPDATE todos SET %s WHERE id = ?`, strings.Join(sets, ", "))
 	res, err := s.db.Exec(query, append(args, id)...)
