@@ -7,3 +7,4 @@
 ```
 
 Workplan authored from tdd-workplan skill; web app + persistence + single-user scope confirmed with user.
+- moved workplan to `workplans/workplan_todo_application.md` per user convention.
