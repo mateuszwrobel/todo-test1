@@ -103,3 +103,42 @@ func TestPatchMissingTodoIs404(t *testing.T) {
 		t.Errorf("error body = %s, want {\"error\": \"no such todo\"}", body)
 	}
 }
+
+// Card api/09 — Change with empty body (defensive path).
+// When  a PATCH /todos/{id} with an empty JSON object arrives — or a body
+//
+//	with no recognizable JSON fields at all —
+//
+// Then  the response is 422 stating that at least one field is required
+func TestPatchEmptyBodyIs422(t *testing.T) {
+	store := openStore(t)
+	created, err := store.Create("unchanged")
+	if err != nil {
+		t.Fatalf("seed Create: %v", err)
+	}
+	srv := httptest.NewServer(NewHandler(store))
+	defer srv.Close()
+
+	for _, body := range []string{`{}`, ``} {
+		resp, respBody := patchTodo(t, srv.URL, created.ID, body)
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Fatalf("PATCH body %q status = %d, want 422 (resp %s)", body, resp.StatusCode, respBody)
+		}
+		var errBody map[string]string
+		if err := json.Unmarshal([]byte(respBody), &errBody); err != nil {
+			t.Fatalf("body %q: error body is not JSON: %v (resp %s)", body, err, respBody)
+		}
+		if !strings.Contains(errBody["error"], "at least one field") {
+			t.Errorf("body %q: error = %q, want it to state that at least one field is required", body, errBody["error"])
+		}
+	}
+
+	// No state change from either rejected request.
+	list, err := store.List()
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(list) != 1 || list[0] != (todos.Todo{ID: created.ID, Title: "unchanged", Done: false}) {
+		t.Fatalf("state changed on empty-body patches: %+v", list)
+	}
+}
