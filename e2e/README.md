@@ -36,3 +36,27 @@ chromium installed (`playwright --version` works; `npm root -g` gives the
 Binaries land in `e2e/bin/` (git-ignored via the script's `mkdir -p`); the
 seed helper is `e2e/testdata/` (go tool and archspec ignore testdata dirs;
 test-support tool, not served application code).
+
+# W3 e2e — toggle done
+
+Browser-driven check of wave W3 ("Mark todo done"): the page's checkbox PATCHes
+the done state through the composed server and the row updates in place.
+
+## Run
+
+From the repo root:
+
+```sh
+make e2e-w3
+```
+
+## What it asserts
+
+1. **Check → done without reload** — a marker placed on the live document
+   survives the update (an htmx swap, not a reload); the row shows done, drops
+   its edit control, texts and row count never move, the other row is intact.
+2. **Uncheck → not-done without reload** — the same checkbox reopens the todo
+   the same way; the edit control returns.
+3. **Done persists across reload** — after a full reload the row shows done,
+   read from the store.
+4. **Reopen persists across reload** — not-done likewise.
