@@ -77,22 +77,21 @@ are test-first increments of the same surface, safe to pair in one lane, order-f
 | server/05 unusable-configuration-fails-loudly | server/01 | failure path of the same startup |
 | server/06 wiring-honors-the-dependency-directions | all modules (code) + archspec gate | the gate itself is the test |
 
-## Parent scenarios (integration wave — after server/01)
+## Parent scenarios — acceptance re-execution
 
-The 9 parent scenarios become the Playwright e2e suite; each depends on: everything its
-module cards depend on, plus server/01 (one composed process to drive).
+The 9 parent scenarios are the same BDD behaviors the module cards already state, seen whole. Nothing new is planned or built here: after server/01, Playwright replays the parent Gherkin against the composed process as end-to-end acceptance — the first real end-to-end moment for each feature.
 
-## Parallel lanes (what runs at once)
+## Integration checkpoints
 
-```
-lane-A (todos)   : wave1 {01, 02, 13} → wave2 {03, 04, 05, 10, 12, 14} → wave3 {06, 07, 08, 09, 11}
-lane-B (api)     : {01..11} immediately — contract fake, zero waiting
-lane-C (ui)      : wave1 {01, 02, 03} → wave2 {04, 05, 08, 09, 10, 13, 15} → wave3 {06, 07, 11, 12, 14, 16}
-lane-D (server)  : starts when A+B+C merged → {01} → {02, 03, 04, 05} ∥ {06 whenever structure exists}
-lane-E (e2e)     : parent 9 scenarios after server/01 green
-```
+Integration is not a completion rule for an in-flight card — it is a checkpoint that fires when the depended-on code exists:
 
-Lane rules:
+- CP1 — todos code merged: api replaces contract fakes with the real store behind the injected port; drift between fakes and reality surfaces per operation.
+- CP2 — api code merged: ui fragment endpoints exercise the real contract against the real handler; page fakes retire.
+- CP3 — todos + api + ui merged (lane D start): composed-process checks + archspec verify --strict green.
+- Lane-E label kept for the Playwright acceptance re-execution of the parent BDD; it adds no new Gherkin — the parent file is the suite.
+
+## Lane rules
 - Lanes land through separate worktrees; only the orchestrator merges ff-only, in merge order A, B, C (they touch disjoint packages — conflicts not expected).
-- A lane's contract-fake tests must also run the real dependency once it lands (integration test behind the same port) before the lane claims done.
-- archspec `verify --strict` runs in every lane's CI; it goes green only at lane-D, findings before that must name exactly the not-yet-landed packages.
+- Card-done gate: card test green against contract fakes + archspec findings that name only not-yet-landed packages. No card claims an integration result it could not observe.
+- Real-dependency verification happens at checkpoints, never as an in-flight card requirement; a lane stays valid while its dependencies are still landing.
+- archspec verify --strict runs in every lane; it goes fully green only at CP3; findings before that must name exactly the not-yet-landed packages.
