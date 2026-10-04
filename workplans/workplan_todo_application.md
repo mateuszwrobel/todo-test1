@@ -58,6 +58,7 @@ Then the operation does not take effect
 - No due dates, priorities, projects, or tags — Rationale: build only requested behavior; forecasting abstractions is forbidden by modular design principle 9. Rejected: adding them now.
 - The server also serves the browser page — Rationale: one process to start, no separate deploy target for the page. Rejected: separately served frontend, unnecessary boundary for a single-user local app.
 - Implementation stack: Go only, htmx for page interactivity, Playwright for integration/e2e, archspec as architecture-test gate — Rationale: user decision; recorded in ADR-001 — see docs/adr/ADR-001-stack-go-htmx-playwright-archspec.md.
+- Database engine: embedded SQLite, single local data file — Rationale: satisfies the relational single-table store with zero operational surface; recorded in ADR-002 — see docs/adr/ADR-002-database-sqlite.md.
 
 > Decomposition: this workplan is decomposed into sub-workplans only after all Open Questions below are resolved.
 
@@ -134,7 +135,7 @@ Then the operation does not take effect
 ## Database
 
 ### Existing Data Store
-None — greenfield. Decision: one embedded local relational-style store in a single data file; no external server.
+None — greenfield. Decision: embedded SQLite database in a single local data file; no external server — recorded in ADR-002 — see docs/adr/ADR-002-database-sqlite.md.
 
 ### Proposed Tables
 #### todos
