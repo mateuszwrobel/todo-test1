@@ -1,6 +1,7 @@
 package todos
 
 import (
+	"errors"
 	"path/filepath"
 	"testing"
 )
@@ -47,5 +48,35 @@ func TestDeleteRemovesAndIdentifierNeverReused(t *testing.T) {
 		if todo.ID == doomed.ID {
 			t.Fatalf("deleted todo (id %d) appears in List: %+v", doomed.ID, todo)
 		}
+	}
+}
+
+// Card todos/11 — Delete missing identifier.
+// Given no todo exists with identifier X
+// When  Delete is called for X
+// Then  the result is a not-found outcome
+//
+//	And no state changes
+func TestDeleteMissingIdentifierIsNotFound(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "store.db"))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer store.Close()
+
+	keep, err := store.Create("untouched")
+	if err != nil {
+		t.Fatalf("seed Create: %v", err)
+	}
+
+	const missing int64 = 987654321
+	if err := store.Delete(missing); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Delete(%d) error = %v, want not-found outcome (ErrNotFound)", missing, err)
+	}
+
+	// No state change: the store still holds exactly the pre-existing todo.
+	list := mustList(t, store)
+	if len(list) != 1 || list[0] != keep {
+		t.Fatalf("List after failed Delete = %+v, want exactly [%+v]", list, keep)
 	}
 }

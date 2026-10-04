@@ -6,8 +6,9 @@ import (
 	"strings"
 )
 
-// ErrNotFound is the typed not-found outcome of Change: no todo carries the
-// given identifier. Outcomes stay free of HTTP semantics — that mapping is
+// ErrNotFound is the module's typed not-found outcome: no todo carries the
+// given identifier. Shared by every operation whose subject may be gone
+// (Change, Delete). Outcomes stay free of HTTP semantics — that mapping is
 // the api module's decision (workplan decision).
 var ErrNotFound = errors.New("todos: no such todo")
 
