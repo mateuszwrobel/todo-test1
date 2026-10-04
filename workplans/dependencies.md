@@ -81,6 +81,16 @@ are test-first increments of the same surface, safe to pair in one lane, order-f
 
 The 9 parent scenarios are the same BDD behaviors the module cards already state, seen whole. Nothing new is planned or built here: after server/01, Playwright replays the parent Gherkin against the composed process as end-to-end acceptance — the first real end-to-end moment for each feature.
 
+## Parallel lanes (what runs at once)
+
+```
+lane-A (todos)   : wave1 {01, 02, 13} → wave2 {03, 04, 05, 10, 12, 14} → wave3 {06, 07, 08, 09, 11}
+lane-B (api)     : {01..11} immediately — contract fake, zero waiting
+lane-C (ui)      : wave1 {01, 02, 03} → wave2 {04, 05, 08, 09, 10, 13, 15} → wave3 {06, 07, 11, 12, 14, 16}
+lane-D (server)  : starts when A+B+C merged → {01} → {02, 03, 04, 05} ∥ {06 whenever structure exists}
+lane-E (e2e)     : acceptance re-execution of the 9 parent scenarios via Playwright after server/01
+```
+
 ## Integration checkpoints
 
 Integration is not a completion rule for an in-flight card — it is a checkpoint that fires when the depended-on code exists:
