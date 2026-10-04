@@ -25,11 +25,17 @@ When the user marks it done
 Then the list shows that todo as done
   And the todo's text is unchanged
 
-### Scenario: Edit todo text keeps done state
-Given the list contains a done todo
+### Scenario: Edit todo text leaves done state alone
+Given the list contains a not-done todo
 When the user edits that todo's text
 Then the list shows the new text
-  And the todo remains marked done
+  And the todo remains not-done
+
+### Scenario: Done todo rejects text edits
+Given the list contains a done todo
+When the user attempts to edit that todo's text from a page that still shows it as not-done
+Then the todo's text is unchanged
+  And the app states that the todo is done and its text cannot be edited
 
 ### Scenario: Delete todo
 Given the list contains a todo
@@ -66,6 +72,7 @@ Then no additional effect occurs beyond the single operation
 - Implementation stack: Go only, htmx for page interactivity, Playwright for integration/e2e, archspec as architecture-test gate — Rationale: user decision; recorded in ADR-001 — see docs/adr/ADR-001-stack-go-htmx-playwright-archspec.md.
 - Database engine: embedded SQLite, single local data file — Rationale: satisfies the relational single-table store with zero operational surface; recorded in ADR-002 — see docs/adr/ADR-002-database-sqlite.md.
 - Controls for an operation stay disabled from request until response — Rationale: a page never issues a duplicate mutation for an action already in flight; the same-tab double-submit race is closed at the source. Rejected: server-side duplicate suppression, a repeated legitimate request is indistinguishable from a stray double-click.
+- A done todo's text is frozen — edit requires reopening first — Rationale: done marks settled state; text edits and done-state toggles stay independent observable operations, and a page that is stale about the done flag gets a stated refusal instead of a silent rewrite. Rejected: editing done text freely (previous scenario), page-only enforcement without a contract rule (server is the truth a stale page cannot see).
 
 > Decomposition: this workplan is decomposed into sub-workplans only after all Open Questions below are resolved.
 
@@ -123,6 +130,7 @@ Then no additional effect occurs beyond the single operation
 **Error responses**
 - Status: 404 — Body: `{ "error": "no such todo" }` when the identifier does not exist
 - Status: 422 — Body: `{ "error": "title is required" }` when `title` is present but empty or whitespace-only; when an empty body is sent, the same 422 states that at least one field is required
+- Status: 422 — Body: `{ "error": "cannot edit a done todo" }` when the todo is done and the request carries a title
 
 #### DELETE /todos/{id}
 **Success response**
@@ -158,7 +166,7 @@ None — single table. Deleting a todo removes its only row.
 ### Data Flow
 - POST /todos inserts a row (title only), assigns id, returns the created Todo.
 - GET /todos selects all rows ordered by id ascending, maps rows to Todo.
-- PATCH /todos/{id} updates only the columns present in the request for the matching id; a no-match update is reported as 404.
+- PATCH /todos/{id} updates only the columns present in the request for the matching id; a no-match update is reported as 404; a title carried for a done todo is refused as 422 before any column update.
 - DELETE /todos/{id} removes the row matching id; no match reports 404.
 - The schema must satisfy the API Todo fields exactly: id, title, done — nothing more is stored.
 
@@ -167,7 +175,7 @@ None — single table. Deleting a todo removes its only row.
 ### Behavior Analysis
 - Todo data and its mutation rules (create, list, change, delete, persistence) — changes when the todo model changes.
 - Wire contract (HTTP paths, status codes, request/response shapes) — changes when the interface contract changes, independent of storage or page.
-- Page interaction (render the list, issue the operations, block the triggered control while its operation is in flight, show error messages) — changes when the user-facing presentation changes.
+- Page interaction (render the list, issue the operations, show the edit affordance only on not-done rows, block the triggered control while its operation is in flight, show error messages) — changes when the user-facing presentation changes.
 
 ### Module Placement
 | Behavior | Fits Existing Module | New Module | Reason |

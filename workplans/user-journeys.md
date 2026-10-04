@@ -21,7 +21,7 @@ Consequence: the page never issues a second mutation for an operation already in
 **Main flow:**
 1. User opens (or reloads) the page → page shows all todos, creation order, oldest first — newest at the bottom.
 2. Each row shows its text and whether it is done or not-done.
-3. Each row exposes controls to edit its text, toggle its done state, and delete it; the create control sits with the list, not a row.
+3. Each row exposes controls to toggle its done state and delete it; not-done rows also expose a control to edit their text; the create control sits with the list, not a row.
 4. User reloads the page, or restarts the server and reloads → the same todos with the same texts and done states appear. Persistence is observable at this step.
 
 **Alternate/error flows:**
@@ -34,7 +34,7 @@ Consequence: the page never issues a second mutation for an operation already in
 
 **UI design hooks:**
 - The page needs three distinguishable list states: items / empty / could-not-load. The empty state and the load-error state are derived page necessities, not workplan scenarios — the GET contract documents only 200.
-- Done vs not-done must be readable at a glance on every row; edit/toggle/delete affordances exist regardless of done state.
+- Done vs not-done must be readable at a glance on every row; toggle and delete affordances exist regardless of done state, the edit affordance exists only on not-done rows (done rows show none).
 - The page renders the order as given (oldest first) — it never reorders on its own.
 - A reload reproduces identical content — the page must not depend on anything beyond a fresh list read.
 
@@ -88,26 +88,29 @@ Consequence: the page never issues a second mutation for an operation already in
 
 ## J4 — Edit a todo's text
 
-**Goal:** change a todo's text without changing anything else about it.
+**Goal:** change a todo's text without changing anything else about it. A done todo's text is frozen — reopening first (J3) is the documented path (workplan Decisions).
 
-**Entry state:** list loaded; the todo's text and done state are visible.
+**Entry state:** list loaded; the todo's text and done state are visible; the todo is not-done — done rows carry no edit affordance.
 
 **Main flow:**
 1. User changes the todo's text and submits the edit.
 2. The row shows the new text.
-3. The todo's done state is whatever it was before the edit — done stays done, not-done stays not-done.
+3. The todo remains not-done.
 4. The todo's position in the list is unchanged.
 
 **Alternate/error flows:**
+- The todo is done → on a freshly loaded page no edit affordance exists on its row; the path to change its text is reopen via J3, edit, then mark done again.
+- A stale page still showing a done todo as not-done submits an edit → rejected (422 "cannot edit a done todo"); the row keeps its original text and the page states that the todo is done and its text cannot be edited.
 - New text empty or whitespace-only → rejected (422 "title is required"); the page states that the text is required and the row keeps its original text.
 - Edit targets a todo that no longer exists → see J6.
 
-**Exit state:** the todo shows the new text with the same id, same done state, same position — or, on rejection, the original text intact.
+**Exit state:** the todo shows the new text with the same id, still not-done, same position — or, on rejection, the original text intact.
 
-**API calls used:** PATCH /todos/{id} carrying the title field — 200 with the updated todo; 422 on validation failure; 404 per J6.
+**API calls used:** PATCH /todos/{id} carrying the title field — 200 with the updated todo; 422 on validation failure or when the todo is done; 404 per J6.
 
 **UI design hooks:**
-- Editing must be reachable per row and the result shown in place — inline vs a separate input is a UI decision (Open Questions).
+- Editing must be reachable per not-done row and the result shown in place — inline vs a separate input is a UI decision (Open Questions).
+- Done rows show no edit affordance; the page derives this from the row's own done state — no contract surface beyond the 422 the stale-page path exercises.
 - A rejected edit must surface its stated reason tied to that row, while the row itself keeps displaying the original text.
 - The row's done state stays visible throughout the edit.
 - The row's Save control is disabled from request until response (in-flight blocking) — a second click cannot reach the server while the save is in flight.
@@ -171,9 +174,10 @@ Every observable page/app state the journeys require:
 | Empty list — "no todos", distinct from load failure * | J1, J2 (empty start), J5 (last deleted) |
 | List load failure — "could not load", truth unknown * | J1 |
 | Todo row: not-done | J1, J2, J3, J4 |
-| Todo row: done | J1, J3, J4 |
+| Todo row: done — no edit affordance | J1, J3, J4 |
 | Error surface "text is required" — create | J2 |
 | Error surface "text is required" — edit | J4 |
+| Error surface "cannot edit a done todo" | J4 |
 | Error surface "over the 500-character limit" | J2 |
 | Error surface "todo does not exist" | J6 (and J3/J4/J5 error flows) |
 | Create input ready — initial / after success / after rejection | J2 |
@@ -191,11 +195,11 @@ The contract's 422 "at least one field required" (empty PATCH body) is defensive
 | J1 Browse | Todos survive server restart; "list shows…" clauses of every scenario | GET /todos |
 | J2 Create | Create todo; Reject empty todo text | POST /todos |
 | J3 Toggle done | Mark todo done (reopen per Decisions line) | PATCH /todos/{id} |
-| J4 Edit text | Edit todo text keeps done state | PATCH /todos/{id} |
+| J4 Edit text | Edit todo text leaves done state alone; Done todo rejects text edits | PATCH /todos/{id} |
 | J5 Delete | Delete todo | DELETE /todos/{id} |
 | J6 Stale id | Operation on missing todo | PATCH /todos/{id}, DELETE /todos/{id} |
 
-All 8 workplan scenarios are covered: Create (J2), Reject empty (J2), Mark done (J3), Edit keeps done (J4), Delete (J5), Survive restart (J1), Missing todo (J6), Repeat activation in flight (J2–J5, via the in-flight control blocking decision). Error variants trace to contract lines: POST 422 (J2), PATCH 422 (J4), 404s (J6). Journey steps trace to a scenario or a contract line, with one stated exception: the empty-list and load-failure page states (J1) are derived page necessities — the GET contract documents only 200, and no scenario describes a failed load.
+All 9 workplan scenarios are covered: Create (J2), Reject empty (J2), Mark done (J3), Edit leaves done alone (J4), Done refuses edits (J4), Delete (J5), Survive restart (J1), Missing todo (J6), Repeat activation in flight (J2–J5, via the in-flight control blocking decision). Error variants trace to contract lines: POST 422 (J2), PATCH 422 (J4), 404s (J6). Journey steps trace to a scenario or a contract line, with one stated exception: the empty-list and load-failure page states (J1) are derived page necessities — the GET contract documents only 200, and no scenario describes a failed load.
 
 ## Open questions for UI design
 
