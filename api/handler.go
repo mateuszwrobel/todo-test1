@@ -15,6 +15,7 @@ import (
 // no module depends on another's concrete type.
 type TodoStore interface {
 	List() ([]todos.Todo, error)
+	Change(id int64, fields todos.ChangeFields) (todos.Todo, error)
 }
 
 // NewHandler builds the handler for the /todos subtree. The composition root
@@ -22,6 +23,7 @@ type TodoStore interface {
 func NewHandler(store TodoStore) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /todos", handleList(store))
+	mux.HandleFunc("PATCH /todos/{id}", handleChange(store))
 	return mux
 }
 
