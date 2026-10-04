@@ -1,0 +1,57 @@
+{
+  "canvas_settings": {
+    "aspect_ratio": "1:1",
+    "ambient_lighting": "flat, even UI lighting",
+    "image_style": "clean modern high-fidelity web app UI mockup, flat design, sans-serif typography, light theme"
+  },
+  "layers": [
+    {
+      "description": "Solid light grey page backdrop filling the entire square canvas behind everything else.",
+      "coordinates": "cx: 0.500, cy: 0.500, w: 1.000, h: 1.000",
+      "hierarchy_and_relation": "Root background layer; the browser window floats centered on top of it.",
+      "color_specs": ["#F3F4F6"]
+    },
+    {
+      "description": "A desktop browser window with rounded corners and a soft drop shadow, white content area, occupying most of the canvas.",
+      "coordinates": "cx: 0.500, cy: 0.500, w: 0.920, h: 0.700",
+      "hierarchy_and_relation": "Centered above the background; contains the browser chrome strip at its top edge and the web page content below.",
+      "color_specs": ["#FFFFFF", "#E5E7EB"]
+    },
+    {
+      "description": "Browser chrome strip along the window top: three small grey circular window buttons at the left and a wide rounded grey address bar holding the small grey web address \"localhost:3000\".",
+      "coordinates": "cx: 0.500, cy: 0.177, w: 0.920, h: 0.054",
+      "hierarchy_and_relation": "Owned by the browser window, docked to its top edge, spanning the full window width; the app card sits below it.",
+      "color_specs": ["#F9FAFB", "#D1D5DB", "#6B7280"]
+    },
+    {
+      "description": "A centered white application card with a thin light border, rounded corners and a subtle shadow; it holds the whole todo app.",
+      "coordinates": "cx: 0.500, cy: 0.530, w: 0.560, h: 0.600",
+      "hierarchy_and_relation": "Centered horizontally in the browser content area below the chrome; contains the card header, create row and empty list area stacked top to bottom.",
+      "color_specs": ["#FFFFFF", "#E5E7EB"]
+    },
+    {
+      "description": "Card header band with the app title \"My Todos\" in large dark sans-serif text aligned to the left with padding.",
+      "coordinates": "cx: 0.500, cy: 0.268, w: 0.560, h: 0.072",
+      "hierarchy_and_relation": "First child inside the app card, directly under its top edge; title aligned to the card left padding.",
+      "color_specs": ["#111827"]
+    },
+    {
+      "description": "Create row with a single-line text input showing grey placeholder text \"Add a new todo…\", a blue filled button labeled \"Add\" immediately to the right of the input, and small grey helper text \"Up to 500 characters\" under the input.",
+      "coordinates": "cx: 0.500, cy: 0.348, w: 0.500, h: 0.078",
+      "hierarchy_and_relation": "Inside the app card below the header; input and button share one horizontal line, helper text left-aligned under the input; the input is empty and ready.",
+      "color_specs": ["#D1D5DB", "#9CA3AF", "#2563EB", "#FFFFFF", "#6B7280"]
+    },
+    {
+      "description": "Empty list container with a hairline border and generous blank interior, holding no todo rows at all.",
+      "coordinates": "cx: 0.500, cy: 0.612, w: 0.500, h: 0.380",
+      "hierarchy_and_relation": "Inside the app card below the create row, spanning the card inner width; contains only the centered empty-state text block.",
+      "color_specs": ["#FFFFFF", "#E5E7EB"]
+    },
+    {
+      "description": "Empty-state message centered inside the empty list container: a single line of medium grey text reading \"No todos yet — add your first one above the list.\" with calm spacing, the area reading clean and intentional rather than broken.",
+      "coordinates": "cx: 0.500, cy: 0.612, w: 0.400, h: 0.060",
+      "hierarchy_and_relation": "Centered both horizontally and vertically within the list container; the only content in the container.",
+      "color_specs": ["#6B7280"]
+    }
+  ]
+}

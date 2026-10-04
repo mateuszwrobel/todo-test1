@@ -1,0 +1,81 @@
+{
+  "canvas_settings": {
+    "aspect_ratio": "1:1",
+    "ambient_lighting": "flat, even UI lighting",
+    "image_style": "clean modern high-fidelity web app UI mockup, flat design, sans-serif typography, light theme"
+  },
+  "layers": [
+    {
+      "description": "Solid light grey page backdrop filling the entire square canvas behind everything else.",
+      "coordinates": "cx: 0.500, cy: 0.500, w: 1.000, h: 1.000",
+      "hierarchy_and_relation": "Root background layer; the browser window floats centered on top of it.",
+      "color_specs": ["#F3F4F6"]
+    },
+    {
+      "description": "A desktop browser window with rounded corners and a soft drop shadow, white content area, occupying most of the canvas.",
+      "coordinates": "cx: 0.500, cy: 0.500, w: 0.920, h: 0.700",
+      "hierarchy_and_relation": "Centered above the background; contains the browser chrome strip at its top edge and the web page content below.",
+      "color_specs": ["#FFFFFF", "#E5E7EB"]
+    },
+    {
+      "description": "Browser chrome strip along the window top: three small grey circular window buttons at the left and a wide rounded grey address bar holding the small grey web address \"localhost:3000\".",
+      "coordinates": "cx: 0.500, cy: 0.177, w: 0.920, h: 0.054",
+      "hierarchy_and_relation": "Owned by the browser window, docked to its top edge, spanning the full window width; the app card sits below it.",
+      "color_specs": ["#F9FAFB", "#D1D5DB", "#6B7280"]
+    },
+    {
+      "description": "A centered white application card with a thin light border, rounded corners and a subtle shadow; it holds the whole todo app.",
+      "coordinates": "cx: 0.500, cy: 0.530, w: 0.560, h: 0.600",
+      "hierarchy_and_relation": "Centered horizontally in the browser content area below the chrome; contains the card header, create row and list container stacked top to bottom.",
+      "color_specs": ["#FFFFFF", "#E5E7EB"]
+    },
+    {
+      "description": "Card header band with the app title \"My Todos\" in large dark sans-serif text aligned to the left with padding.",
+      "coordinates": "cx: 0.500, cy: 0.268, w: 0.560, h: 0.072",
+      "hierarchy_and_relation": "First child inside the app card, directly under its top edge; title aligned to the card left padding.",
+      "color_specs": ["#111827"]
+    },
+    {
+      "description": "Create row with an empty single-line text input showing grey placeholder text \"Add a new todo…\", the input actively focused with a thin blue focus outline, a blue filled button labeled \"Add\" immediately to the right of the input, and small grey helper text \"Up to 500 characters\" under the input.",
+      "coordinates": "cx: 0.500, cy: 0.340, w: 0.500, h: 0.078",
+      "hierarchy_and_relation": "Inside the app card below the header; input and button share one horizontal line, helper text left-aligned under the input.",
+      "color_specs": ["#2563EB", "#D1D5DB", "#9CA3AF", "#FFFFFF", "#6B7280"]
+    },
+    {
+      "description": "Rounded list container with a hairline border holding four unchanged todo rows stacked vertically with thin dividers, oldest at the top.",
+      "coordinates": "cx: 0.500, cy: 0.618, w: 0.500, h: 0.372",
+      "hierarchy_and_relation": "Inside the app card below the create row and its error text, spanning the card inner width; owns all four todo rows in creation order.",
+      "color_specs": ["#FFFFFF", "#E5E7EB"]
+    },
+    {
+      "description": "Todo row 1 of 4, first in creation order: a square checkbox at the left filled blue with a white checkmark, done todo text \"Buy milk\" in faded grey with a horizontal strikethrough, and two small grey text-buttons labeled \"Edit\" and \"Delete\" aligned at the right end of the row.",
+      "coordinates": "cx: 0.500, cy: 0.478, w: 0.460, h: 0.074",
+      "hierarchy_and_relation": "First child of the list container; checkbox left-aligned, text left-aligned after the checkbox, action buttons right-aligned; same row layout grid as all other rows.",
+      "color_specs": ["#2563EB", "#9CA3AF", "#4B5563"]
+    },
+    {
+      "description": "Todo row 2 of 4: a square checkbox at the left filled blue with a white checkmark, done todo text \"Pay electricity bill\" in faded grey with a horizontal strikethrough, and the same pair of small grey row action text-buttons as the first row aligned at the right end.",
+      "coordinates": "cx: 0.500, cy: 0.568, w: 0.460, h: 0.074",
+      "hierarchy_and_relation": "Second child of the list container directly below the first row; identical layout grid to the first row.",
+      "color_specs": ["#2563EB", "#9CA3AF", "#4B5563"]
+    },
+    {
+      "description": "Todo row 3 of 4: an empty unchecked square checkbox at the left, not-done todo text \"Walk the dog\" in normal dark text, and the same pair of small grey row action text-buttons as the first row aligned at the right end.",
+      "coordinates": "cx: 0.500, cy: 0.658, w: 0.460, h: 0.074",
+      "hierarchy_and_relation": "Third child of the list container directly below the second row; identical layout grid to the first row.",
+      "color_specs": ["#9CA3AF", "#374151", "#4B5563"]
+    },
+    {
+      "description": "Todo row 4 of 4, newest at the bottom: an empty unchecked square checkbox at the left, not-done todo text \"Read 20 pages\" in normal dark text, and the same pair of small grey row action text-buttons as the first row aligned at the right end.",
+      "coordinates": "cx: 0.500, cy: 0.748, w: 0.460, h: 0.074",
+      "hierarchy_and_relation": "Fourth child of the list container, last in creation order; identical layout grid to the first row.",
+      "color_specs": ["#9CA3AF", "#374151", "#4B5563"]
+    },
+    {
+      "description": "Rejection error surface attached to the create control: small red text reading \"Text is required\" directly under the create input, left-aligned with the input, under a just-rejected empty submit while the input stays focused and the todo list below remains unchanged.",
+      "coordinates": "cx: 0.360, cy: 0.416, w: 0.240, h: 0.030",
+      "hierarchy_and_relation": "Owned by the create row area, positioned in the gap between the create row and the list container; left edge aligned with the create input left edge.",
+      "color_specs": ["#DC2626"]
+    }
+  ]
+}
