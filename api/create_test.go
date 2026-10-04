@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -86,6 +87,49 @@ func TestPostTodosMalformedJSONIs400(t *testing.T) {
 		t.Fatalf("read body: %v", err)
 	}
 	assertCreateError(t, body, "invalid request")
+}
+
+// Card api/03 — Create over length limit.
+// When  a POST /todos with a title longer than 500 characters arrives
+// Then  the response is 422 stating the 500-character limit
+//
+//	And no todo is created
+func TestPostTodosOverLimit(t *testing.T) {
+	store := openStore(t)
+	srv := httptest.NewServer(NewHandler(store))
+	defer srv.Close()
+
+	long := strings.Repeat("x", todos.MaxTitleLength+1)
+	resp, err := http.Post(srv.URL+"/todos", "application/json",
+		strings.NewReader(`{"title": "`+long+`"}`))
+	if err != nil {
+		t.Fatalf("POST /todos: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422", resp.StatusCode)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	var got map[string]string
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("error body is not JSON: %v (body %s)", err, body)
+	}
+	// The refusal states the limit: the stated number and the word "limit".
+	if msg := got["error"]; !strings.Contains(msg, strconv.Itoa(todos.MaxTitleLength)) ||
+		!strings.Contains(msg, "limit") {
+		t.Errorf("error = %q, want it to state the %d-character limit",
+			msg, todos.MaxTitleLength)
+	}
+
+	if list, err := store.List(); err != nil {
+		t.Fatalf("store.List: %v", err)
+	} else if len(list) != 0 {
+		t.Errorf("over-limit request created todos: %+v", list)
+	}
 }
 
 func assertCreateError(t *testing.T, body []byte, want string) {

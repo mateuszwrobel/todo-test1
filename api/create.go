@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"todo/todos"
@@ -39,6 +40,11 @@ func handleCreate(store TodoStore) http.HandlerFunc {
 			switch {
 			case errors.Is(err, todos.ErrTitleRequired):
 				respondError(http.StatusUnprocessableEntity, "title is required")
+			case errors.Is(err, todos.ErrTitleTooLong):
+				// The limit number has one owner — the todos constant — so
+				// this message can never drift from the rule.
+				respondError(http.StatusUnprocessableEntity,
+					fmt.Sprintf("title exceeds the %d-character limit", todos.MaxTitleLength))
 			default:
 				http.Error(w, "failed to create todo", http.StatusInternalServerError)
 			}
