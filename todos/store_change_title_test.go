@@ -95,3 +95,53 @@ func TestChangeTitleOnDoneTodoIsRefused(t *testing.T) {
 
 // The freeze is about the TITLE direction only: a done-only change (the
 // reopen) stays allowed on a done todo — exercised by todos/07 below.
+
+// Card todos/07 — Reopen a done todo by done-only change.
+// Given the store contains a done todo
+// When  Change is called for its identifier with done false only
+// Then  the result is the todo, not-done, text unchanged
+//
+//	(The card's edit story: the reopen UNLOCKS editing — the title
+//	direction then succeeds on the same todo.)
+func TestReopenDoneTodoUnlocksTitleEditing(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "store.db"))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer store.Close()
+
+	created, err := store.Create("Pay electricity bill")
+	if err != nil {
+		t.Fatalf("seed Create: %v", err)
+	}
+	done := true
+	if _, err := store.Change(created.ID, ChangeFields{Done: &done}); err != nil {
+		t.Fatalf("seed Change(done=true): %v", err)
+	}
+
+	// Editing is frozen while done — the rule from todos/06.
+	frozen := "Pay the water bill"
+	if _, err := store.Change(created.ID, ChangeFields{Title: &frozen}); !errors.Is(err, ErrDoneFrozen) {
+		t.Fatalf("Change(title) on done todo: err = %v, want ErrDoneFrozen", err)
+	}
+
+	// Reopen: done false only — text unchanged, todo not-done.
+	undone := false
+	got, err := store.Change(created.ID, ChangeFields{Done: &undone})
+	if err != nil {
+		t.Fatalf("Change(done=false): %v", err)
+	}
+	if got.ID != created.ID || got.Title != "Pay electricity bill" || got.Done {
+		t.Errorf("reopen = %+v, want {ID:%d Title:Pay electricity bill Done:false}", got, created.ID)
+	}
+
+	// The unlock: the title direction now succeeds on the reopened todo.
+	title := "Pay electricity bill in person"
+	got, err = store.Change(created.ID, ChangeFields{Title: &title})
+	if err != nil {
+		t.Fatalf("Change(title) after reopen: %v, want the freeze lifted", err)
+	}
+	if got.Title != title || got.Done {
+		t.Errorf("Change(title) after reopen = %+v, want {Title:%q Done:false}", got, title)
+	}
+}
