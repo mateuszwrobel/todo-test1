@@ -116,4 +116,4 @@ Every statement must have exactly one clear path. Do not include alternatives, "
 
 ## Output format
 Use the template from `.agents/skills/tdd-workplan/WORKPLAN_TEMPLATE.md` (co-located with this skill).
-Save the workplan as: `workplan_{module}_{feature}.md`.
+Save the workplan as: `workplans/workplan_{module}_{feature}.md`.
