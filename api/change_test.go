@@ -82,3 +82,24 @@ func TestPatchDoneStateEitherDirection(t *testing.T) {
 		t.Fatalf("store after toggles = %+v, want the todo not-done with title unchanged", list)
 	}
 }
+
+// Card api/08 — Change missing todo.
+// Given no todo exists with identifier X
+// When  a PATCH /todos/X arrives
+// Then  the response is 404 with { "error": "no such todo" }
+func TestPatchMissingTodoIs404(t *testing.T) {
+	srv := httptest.NewServer(NewHandler(openStore(t)))
+	defer srv.Close()
+
+	resp, body := patchTodo(t, srv.URL, 999, `{"done": true}`)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("PATCH missing id status = %d, want 404 (body %s)", resp.StatusCode, body)
+	}
+	var errBody map[string]string
+	if err := json.Unmarshal([]byte(body), &errBody); err != nil {
+		t.Fatalf("error body is not JSON: %v (body %s)", err, body)
+	}
+	if errBody["error"] != "no such todo" {
+		t.Errorf("error body = %s, want {\"error\": \"no such todo\"}", body)
+	}
+}

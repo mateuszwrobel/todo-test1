@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -35,6 +36,11 @@ func handleChange(store TodoStore) http.HandlerFunc {
 		fields := todos.ChangeFields{Title: req.Title, Done: req.Done}
 		updated, err := store.Change(id, fields)
 		if err != nil {
+			// Outcome mapping fixed by the api workplan: not-found → 404.
+			if errors.Is(err, todos.ErrNotFound) {
+				errorJSON(w, http.StatusNotFound, "no such todo")
+				return
+			}
 			http.Error(w, "failed to change todo", http.StatusInternalServerError)
 			return
 		}
