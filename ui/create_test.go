@@ -138,3 +138,43 @@ func TestCreateAppendsWithoutReload(t *testing.T) {
 		t.Errorf("api contract state = %+v, want the created todo appended not-done", api.todos)
 	}
 }
+
+// Card ui/06 — Rejected create states the reason.
+// Given the page shows the list
+// When  the user submits empty or whitespace-only text
+// Then  no todo is created
+//
+//	And the create area states that the text is required
+//	And the typed text stays in the input for the correcting submit
+func TestRejectedCreateStatesTheReason(t *testing.T) {
+	api := &createAPI{maxTitle: 500}
+	api.todos = []todo{{ID: 1, Title: "existing", Done: false}}
+	apiSrv := fakeAPI(t, api.serve())
+	uiSrv := uiServer(t, apiSrv.URL)
+
+	typed := "   "
+	status, frag := postCreateForm(t, uiSrv.URL, typed)
+	if status != http.StatusUnprocessableEntity {
+		t.Fatalf("POST /ui/todos status = %d, want 422 (body %s)", status, frag)
+	}
+
+	// No todo was created.
+	if len(api.todos) != 1 {
+		t.Fatalf("contract state changed on rejection: %+v", api.todos)
+	}
+	// The create area states the reason.
+	if !strings.Contains(frag, `id="create-error"`) {
+		t.Fatalf("rejected fragment states no error surface:\n%s", frag)
+	}
+	if !strings.Contains(frag, "title is required") {
+		t.Errorf("rejected fragment does not state the reason:\n%s", frag)
+	}
+	// The typed text stays in the input.
+	if !strings.Contains(frag, `name="title" value="   "`) {
+		t.Errorf("typed text did not survive in the input:\n%s", frag)
+	}
+	// And the fragment belongs to the create area (not a whole document).
+	if !strings.Contains(frag, `id="create-area"`) || strings.Contains(frag, "<html") {
+		t.Errorf("rejection answered a wrong surface:\n%s", frag)
+	}
+}
