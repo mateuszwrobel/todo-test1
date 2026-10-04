@@ -6,6 +6,12 @@ These journeys are derived from the acceptance scenarios in [workplan_todo_appli
 
 One single local user. No authentication, no roles — whoever holds the page acts on the same list. One browser page, served by the local server itself. Journeys assume one browser session editing at a time (workplan Assumptions); J6 covers what the user sees when that assumption breaks.
 
+## Interaction decision — in-flight control blocking
+
+The control that triggers an operation — the Add button, the per-row toggle, the row's Save while editing, the delete control — is disabled from the moment the request leaves until the response arrives. The create input and Add button return to ready per J2's ready-state rule. This is a UI decision layered on the workplan, not a new app behavior: one mutation per page action stays fully inside the existing contract — no new endpoints, no new fields.
+
+Consequence: the page never issues a second mutation for an operation already in flight from that page. Same-tab double-clicks cannot produce two requests — Delete clicked twice no longer means a second request hitting 404. The page serializes its own operations per control.
+
 ## J1 — Browse the list
 
 **Goal:** see the current todos, each one's done state, and controls for all four operations.
@@ -53,7 +59,7 @@ One single local user. No authentication, no roles — whoever holds the page ac
 
 **UI design hooks:**
 - The page must be able to show the new todo at the end of the list without requiring a full reload to become correct.
-- The create input must have a ready state — before the first todo, after a success, and after a rejection — so the user can immediately create the next one.
+- The create input and Add button must have a ready state — before the first todo, after a success, and after a rejection — so the user can immediately create the next one: after each response, success or rejection, input and button return to ready. While the create request is in flight both are disabled (in-flight blocking).
 - Rejections must surface the stated reason (text required / over the limit) attached to the create control. Whether the rejected text stays in the input for the correcting submit is a UI design decision (Open Questions).
 
 ## J3 — Change done state (mark done / reopen)
@@ -78,6 +84,7 @@ One single local user. No authentication, no roles — whoever holds the page ac
 **UI design hooks:**
 - One per-row control must carry both directions, and its current position must be readable — the user can tell done from not-done without acting.
 - Toggling must leave list order and the row's text untouched.
+- The toggle is disabled from request until response (in-flight blocking) — a second click cannot reach the server while the toggle is in flight.
 
 ## J4 — Edit a todo's text
 
@@ -103,6 +110,7 @@ One single local user. No authentication, no roles — whoever holds the page ac
 - Editing must be reachable per row and the result shown in place — inline vs a separate input is a UI decision (Open Questions).
 - A rejected edit must surface its stated reason tied to that row, while the row itself keeps displaying the original text.
 - The row's done state stays visible throughout the edit.
+- The row's Save control is disabled from request until response (in-flight blocking) — a second click cannot reach the server while the save is in flight.
 
 ## J5 — Delete a todo
 
@@ -126,11 +134,12 @@ One single local user. No authentication, no roles — whoever holds the page ac
 **UI design hooks:**
 - The page must be able to drop exactly one row and leave the rest rendered unchanged.
 - Whether delete acts immediately or asks for confirmation is a UI decision — the workplan requires neither (Open Questions).
+- The delete control is disabled from request until response (in-flight blocking) — a second click cannot reach the server while the delete is in flight.
 - The post-delete list may be empty; the empty state must cover that arrival path too.
 
 ## J6 — Operate on a todo that no longer exists
 
-**Goal / context:** the edge of the single-user assumption. The page is stale — it shows a todo that no longer exists because another tab removed it, or a reload/restart changed what this page never knew. This is the workplan's Assumptions/Risks territory: last write wins, a concurrent edit can be lost. The app does not merge or revive anything — the operation simply does not take effect. (Noted once here; not repeated in J3–J5 beyond their error flows.)
+**Goal / context:** the edge of the single-user assumption. The page is stale — it shows a todo that no longer exists. Double-submit from this page is now closed: the in-flight control blocking decision disables the triggered control until its response arrives, so a second mutation of an operation already in flight never leaves this page — the double-clicked Delete whose second request hit 404 is no longer a reachable path. The paths that remain: a second browser tab acting from its own page snapshot, a server restart against a different or emptied data file (workplan Assumptions/Risks), and direct edits of the data file. Last write wins; a concurrent edit can be lost. The app does not merge or revive anything — the operation simply does not take effect. (Noted once here; not repeated in J3–J5 beyond their error flows.)
 
 **Entry state:** a stale page showing at least one todo whose identifier no longer exists.
 
@@ -168,6 +177,7 @@ Every observable page/app state the journeys require:
 | Error surface "over the 500-character limit" | J2 |
 | Error surface "todo does not exist" | J6 (and J3/J4/J5 error flows) |
 | Create input ready — initial / after success / after rejection | J2 |
+| Control in-flight — triggered control disabled, response pending | J2, J3, J4, J5 |
 | Row unchanged except the field just acted on | J3, J4, J5 |
 
 \* Empty-list and load-failure states are derived page necessities, not workplan scenarios — the GET /todos contract documents only 200. The page still cannot render the truth without telling these three list outcomes apart.
