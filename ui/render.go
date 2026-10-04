@@ -6,8 +6,10 @@ import (
 	"net/http"
 )
 
-// Page surfaces rendered by this module: the list, the stated empty state,
-// and the stated load-failure state. Template-per-surface; procedural.
+// Page surfaces rendered by this module: the shell (with the always-ready
+// create control), the list (rows carry their done state and controls), the
+// stated empty state, and the stated load-failure state. Template-per-
+// surface; procedural.
 var pageTmpl = template.Must(template.New("page").Parse(`<!doctype html>
 <html lang="en">
 <head>
@@ -18,7 +20,11 @@ var pageTmpl = template.Must(template.New("page").Parse(`<!doctype html>
 <body>
 <main>
 <h1>Todos</h1>
-{{.}}
+{{.State}}
+<form id="create-form">
+<input type="text" name="title" placeholder="What needs doing?">
+<button type="submit">Add</button>
+</form>
 </main>
 </body>
 </html>
@@ -26,7 +32,13 @@ var pageTmpl = template.Must(template.New("page").Parse(`<!doctype html>
 
 var listTmpl = template.Must(template.New("list").Parse(`<ul id="todo-list">
 {{- range .}}
-<li id="todo-{{.ID}}">{{.Title}}</li>
+<li id="todo-{{.ID}}" data-state="{{if .Done}}done{{else}}not-done{{end}}">
+<label class="done-toggle"><input type="checkbox" {{if .Done}}checked{{end}}>
+<span>{{if .Done}}done{{else}}not done{{end}}</span></label>
+<span class="title">{{.Title}}</span>
+{{if not .Done}}<button type="button" class="edit">Edit</button>{{end}}
+<button type="button" class="delete">Delete</button>
+</li>
 {{- end}}
 </ul>`))
 
@@ -36,8 +48,8 @@ var emptyTmpl = template.Must(template.New("empty").Parse(
 var failedTmpl = template.Must(template.New("failed").Parse(
 	`<div id="load-error">Could not load todos.</div>`))
 
-func renderPage(w http.ResponseWriter, surface template.HTML) {
-	_ = pageTmpl.Execute(w, surface)
+func renderPage(w http.ResponseWriter, state template.HTML) {
+	_ = pageTmpl.Execute(w, struct{ State template.HTML }{state})
 }
 
 func renderList(w http.ResponseWriter, todos []todo) {
