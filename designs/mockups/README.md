@@ -21,3 +21,9 @@ with `{"model":"ming-image","width":1024,"height":1024,"steps":12,"cfg":1,"sampl
 
 `jq -r .images[0] resp.json | base64 -d > out.png` — captions are Ming-Image structured
 Figma-style JSON; each prompt file holds the exact caption used, so every rendered string is reproducible.
+
+## Known rendering artifacts
+
+- These are AI-generated diffusion references (ming-image-design): text rendering is imperfect; a stray duplicate label may appear (04 shows a small stray "Save" under row 4 — ignore it; the edit row's Save button is the real one).
+- Strikethrough lines on done rows may extend past the text or cross the checkbox (visual artifact only; the checkbox itself is the done indicator).
+- 06 depicts three todos while other mockups show four — deliberate simplification after the renderer duplicated rows; journeys use four as illustrative copy only.
