@@ -60,3 +60,37 @@ make e2e-w3
 3. **Done persists across reload** — after a full reload the row shows done,
    read from the store.
 4. **Reopen persists across reload** — not-done likewise.
+
+# W2 e2e — create
+
+Browser-driven check of the composed server for wave W2: the create feature
+end to end, re-executing the parent scenarios "Create todo" and
+"Reject empty todo text".
+
+## Run
+
+From the repo root:
+
+```sh
+make e2e-w2
+```
+
+Or directly (the script also builds its own binary):
+
+```sh
+NODE_PATH=$(npm root -g) node e2e/w2-create.js
+```
+
+## What it asserts
+
+1. **Create appends without reload** — form submit through htmx adds the row
+   as last, marked not-done; a window marker survives every swap, proving no
+   navigation or full reload happened; the input is reset, ready for the
+   next todo.
+2. **Rejected create states the reason** — blank submit → the create area
+   states "title is required", the typed text stays in the input, nothing is
+   created, still no navigation.
+3. **Over-limit create states the limit** — a 501-character submit states the
+   500-character limit, nothing is created.
+4. **Reload shows persistence** — a real reload (marker clears, proving the
+   reload happened) renders exactly the created todos from the data file.

@@ -29,3 +29,11 @@ e2e-w5:
 	go build -o e2e/bin/todo ./cmd/todo
 	go build -o e2e/bin/seed ./e2e/testdata
 	NODE_PATH=$$(npm root -g) node e2e/w5-delete.js
+
+# W2 e2e: the create feature driven through a real browser against the
+# composed server. See e2e/README.md.
+.PHONY: e2e-w2
+e2e-w2:
+	@mkdir -p e2e/bin
+	go build -o e2e/bin/todo ./cmd/todo
+	NODE_PATH=$$(npm root -g) node e2e/w2-create.js
