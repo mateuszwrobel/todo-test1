@@ -18,3 +18,14 @@ e2e-w3:
 	go build -o e2e/bin/todo ./cmd/todo
 	go build -o e2e/bin/seed ./e2e/testdata
 	NODE_PATH=$$(npm root -g) node e2e/w3-toggle.js
+
+.PHONY: e2e-w5
+
+# W5 e2e: real-browser delete acceptance — click delete removes the row via
+# an htmx swap (no navigation), reload shows persistence, deleting the last
+# row lands the empty state.
+e2e-w5:
+	@mkdir -p e2e/bin
+	go build -o e2e/bin/todo ./cmd/todo
+	go build -o e2e/bin/seed ./e2e/testdata
+	NODE_PATH=$$(npm root -g) node e2e/w5-delete.js

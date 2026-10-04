@@ -57,3 +57,15 @@ all internal/infrastructure references. Copy it into your own projects and adapt
   example of the included tool-specific skill (`.agents/skills/hotpath-mcp/SKILL.md`).
 - All watchers follow long-drill discipline (MILE UTC heartbeats, deadlines, machine-readable
   verdicts) — see `.agents/skills/long-drill/SKILL.md` for the full doctrine.
+
+## Todo application (this repo's product code)
+
+Modules: `todos` (SQLite-backed store), `api` (JSON contract), `ui` (htmx page),
+`cmd/todo` (composition root). Run: `go run ./cmd/todo --addr 127.0.0.1:8080 --db todos.db`.
+
+W5 — delete: rows carry a Delete control; the click issues an htmx DELETE to
+`/ui/todos/{id}`, which performs the api contract's `DELETE /todos/{id}` over HTTP
+(204; 404 `{"error":"no such todo"}` when gone) and swaps in the resulting list
+state — the row drops without a reload, deleting the last row lands the empty
+state, and deleted ids are never reused (schema autoincrement). Browser
+acceptance: `make e2e-w5` (also `make e2e-w1` for the foundation).
