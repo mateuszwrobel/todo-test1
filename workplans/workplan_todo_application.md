@@ -57,6 +57,7 @@ Then the operation does not take effect
 - The list is ordered by creation order, oldest first — Rationale: stable order the user can rely on after restart; identifier ordering is the natural read of "creation order". Rejected: done-last or mutable ordering, adds drag/reorder behavior nobody asked for.
 - No due dates, priorities, projects, or tags — Rationale: build only requested behavior; forecasting abstractions is forbidden by modular design principle 9. Rejected: adding them now.
 - The server also serves the browser page — Rationale: one process to start, no separate deploy target for the page. Rejected: separately served frontend, unnecessary boundary for a single-user local app.
+- Implementation stack: Go only, htmx for page interactivity, Playwright for integration/e2e, archspec as architecture-test gate — Rationale: user decision; recorded in ADR-001 — see docs/adr/ADR-001-stack-go-htmx-playwright-archspec.md.
 
 > Decomposition: this workplan is decomposed into sub-workplans only after all Open Questions below are resolved.
 
