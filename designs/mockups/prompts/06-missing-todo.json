@@ -42,39 +42,39 @@
       "color_specs": ["#D1D5DB", "#9CA3AF", "#2563EB", "#FFFFFF", "#6B7280"]
     },
     {
-      "description": "Rounded list container with a hairline border holding four todo rows stacked vertically with thin dividers, oldest at the top.",
+      "description": "Rounded list container with a hairline border holding exactly four todo rows stacked vertically with thin dividers, oldest at the top, and nothing below the fourth row; the list is not five rows and contains no extra rows.",
       "coordinates": "cx: 0.500, cy: 0.612, w: 0.500, h: 0.380",
-      "hierarchy_and_relation": "Inside the app card below the create row, spanning the card inner width; owns all four todo rows in creation order.",
+      "hierarchy_and_relation": "Inside the app card below the create row, spanning the card inner width; owns all four todo rows in creation order; the red notice under the fourth row belongs to that row, not to a row of its own.",
       "color_specs": ["#FFFFFF", "#E5E7EB"]
     },
     {
-      "description": "Todo row 1 of 4, first in creation order: a square checkbox at the left filled blue with a white checkmark, done todo text \"Buy milk\" in faded grey with a horizontal strikethrough, and two small grey text-buttons labeled \"Edit\" and \"Delete\" aligned at the right end of the row.",
+      "description": "Todo row 1 of 4, first in creation order, done: a checked blue box with white tick at the left, todo text \"Buy milk\" in faded grey crossed by a single thin horizontal strikethrough line crossing the middle of the text, and two small grey text-buttons labeled \"Edit\" and \"Delete\" aligned at the right end of the row.",
       "coordinates": "cx: 0.500, cy: 0.474, w: 0.460, h: 0.074",
       "hierarchy_and_relation": "First child of the list container; checkbox left-aligned, text left-aligned after the checkbox, action buttons right-aligned; same row layout grid as all other rows.",
       "color_specs": ["#2563EB", "#9CA3AF", "#4B5563"]
     },
     {
-      "description": "Todo row 2 of 4: a square checkbox at the left filled blue with a white checkmark, done todo text \"Pay electricity bill\" in faded grey with a horizontal strikethrough, and the same pair of small grey row action text-buttons as the first row aligned at the right end.",
+      "description": "Todo row 2 of 4, done: a checked blue box with white tick at the left, todo text \"Pay electricity bill\" in faded grey crossed by a single thin horizontal strikethrough line crossing the middle of the text, and the same pair of small grey row action text-buttons as the first row aligned at the right end.",
       "coordinates": "cx: 0.500, cy: 0.566, w: 0.460, h: 0.074",
       "hierarchy_and_relation": "Second child of the list container directly below the first row; identical layout grid to the first row.",
       "color_specs": ["#2563EB", "#9CA3AF", "#4B5563"]
     },
     {
-      "description": "Todo row 3 of 4: an empty unchecked square checkbox at the left, not-done todo text \"Walk the dog\" in normal dark text, and the same pair of small grey row action text-buttons as the first row aligned at the right end.",
+      "description": "Todo row 3 of 4, not-done: an empty unchecked box with a grey border at the left, todo text \"Walk the dog\" in solid dark text with no strikethrough line on this row, and the same pair of small grey row action text-buttons as the first row aligned at the right end.",
       "coordinates": "cx: 0.500, cy: 0.658, w: 0.460, h: 0.074",
       "hierarchy_and_relation": "Third child of the list container directly below the second row; identical layout grid to the first row.",
       "color_specs": ["#9CA3AF", "#374151", "#4B5563"]
     },
     {
-      "description": "Todo row 4 of 4, newest at the bottom, a slightly taller row otherwise rendered exactly like the other not-done rows: an empty unchecked square checkbox at the left, not-done todo text \"Read 20 pages\" in normal dark text, and the same pair of small grey row action text-buttons as the first row aligned at the right end.",
+      "description": "Todo row 4 of 4, newest at the bottom, not-done, a slightly taller row otherwise rendered exactly like the other not-done rows: an empty unchecked box with a grey border at the left, todo text \"Read 20 pages\" in solid dark text with no strikethrough line on this row, and the same pair of small grey row action text-buttons as the first row aligned at the right end.",
       "coordinates": "cx: 0.500, cy: 0.756, w: 0.460, h: 0.086",
-      "hierarchy_and_relation": "Fourth child of the list container, last in creation order; same layout grid as the first row with extra blank space reserved under the text for its inline notice.",
+      "hierarchy_and_relation": "Fourth and last child of the list container; same layout grid as the first row with extra blank space reserved under the text for the inline notice; nothing renders below this row.",
       "color_specs": ["#9CA3AF", "#374151", "#4B5563"]
     },
     {
-      "description": "Stale-operation error surface attached to the fourth todo row: small red text reading \"Todo does not exist\" in the blank space directly under that row's text, marking the failed operation on a todo that is no longer there while the row itself stays rendered unchanged.",
+      "description": "Stale-operation notice belonging to todo row 4, rendered inside that row's band as one small line of red text reading \"Todo does not exist\" directly under the row's text, left-aligned with the row's text; the notice has no checkbox, no divider and no controls of its own, and is not a row: the list shows exactly four rows.",
       "coordinates": "cx: 0.410, cy: 0.777, w: 0.280, h: 0.028",
-      "hierarchy_and_relation": "Owned by the fourth todo row, left-aligned with that row's text, contained within that row's band.",
+      "hierarchy_and_relation": "Owned by the fourth todo row, contained within that row's band under its text; the fourth row itself stays rendered unchanged with its checkbox and text above the notice.",
       "color_specs": ["#DC2626"]
     }
   ]

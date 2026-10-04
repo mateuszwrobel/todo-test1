@@ -42,40 +42,34 @@
       "color_specs": ["#D1D5DB", "#9CA3AF", "#2563EB", "#FFFFFF", "#6B7280"]
     },
     {
-      "description": "Rounded list container with a hairline border holding four todo rows stacked vertically with thin dividers, oldest at the top.",
-      "coordinates": "cx: 0.500, cy: 0.618, w: 0.500, h: 0.372",
-      "hierarchy_and_relation": "Inside the app card below the create row, spanning the card inner width; owns all four todo rows in creation order.",
+      "description": "Rounded list container with a hairline border holding exactly four todo rows stacked vertically with thin dividers, oldest at the top; exactly one of the four rows contains a text input, the other three rows show only checkbox, text and the standard pair of action text-buttons.",
+      "coordinates": "cx: 0.500, cy: 0.612, w: 0.500, h: 0.380",
+      "hierarchy_and_relation": "Inside the app card below the create row, spanning the card inner width; owns all four todo rows in creation order; only the third row holds an input or Save and Cancel controls.",
       "color_specs": ["#FFFFFF", "#E5E7EB"]
     },
     {
-      "description": "Todo row 1 of 4, first in creation order, shown in normal mode: a square checkbox at the left filled blue with a white checkmark, done todo text \"Buy milk\" in faded grey with a horizontal strikethrough, and two small grey text-buttons labeled \"Edit\" and \"Delete\" aligned at the right end of the row.",
-      "coordinates": "cx: 0.500, cy: 0.479, w: 0.460, h: 0.070",
-      "hierarchy_and_relation": "First child of the list container; checkbox left-aligned, text left-aligned after the checkbox, action buttons right-aligned; same row layout grid as the other normal rows.",
+      "description": "Todo row 1 of 4, first in creation order, done and in normal mode: a checked blue box with white tick at the left, todo text \"Buy milk\" in faded grey crossed by a single thin horizontal strikethrough line crossing the middle of the text, and two small grey text-buttons labeled \"Edit\" and \"Delete\" aligned at the right end of the row.",
+      "coordinates": "cx: 0.500, cy: 0.474, w: 0.460, h: 0.076",
+      "hierarchy_and_relation": "First child of the list container; checkbox left-aligned, text left-aligned after the checkbox, action buttons right-aligned; shows no input field and no other controls.",
       "color_specs": ["#2563EB", "#9CA3AF", "#4B5563"]
     },
     {
-      "description": "Todo row 2 of 4, a slightly taller row whose just-rejected text edit left everything intact: a square checkbox at the left filled blue with a white checkmark, the original done todo text \"Pay electricity bill\" still shown in faded grey with a horizontal strikethrough, and the same pair of small grey row action text-buttons as the first row aligned at the right end.",
-      "coordinates": "cx: 0.500, cy: 0.572, w: 0.460, h: 0.092",
-      "hierarchy_and_relation": "Second child of the list container directly below the first row; same layout grid as the first row with extra blank space reserved under the text for its error line.",
+      "description": "Todo row 2 of 4, done and in normal mode: a checked blue box with white tick at the left, todo text \"Pay electricity bill\" in faded grey crossed by a single thin horizontal strikethrough line crossing the middle of the text, and the same pair of small grey row action text-buttons as the first row aligned at the right end.",
+      "coordinates": "cx: 0.500, cy: 0.566, w: 0.460, h: 0.076",
+      "hierarchy_and_relation": "Second child of the list container directly below the first row; identical layout grid to the first row; shows no input field and no other controls.",
       "color_specs": ["#2563EB", "#9CA3AF", "#4B5563"]
     },
     {
-      "description": "Todo row 3 of 4 in inline edit mode: its empty unchecked square checkbox still visible at the left, the row text replaced by an inline single-line text input prefilled with the dark text \"Walk the dog in the park\", and at the right end a blue filled button labeled \"Save\" followed by a grey text-button labeled \"Cancel\".",
-      "coordinates": "cx: 0.500, cy: 0.668, w: 0.460, h: 0.076",
-      "hierarchy_and_relation": "Third child of the list container directly below the second row; the inline input fills the horizontal space where the row text was, aligned to the same text baseline, buttons right-aligned on the same line as the checkbox.",
+      "description": "Todo row 3 of 4, not-done and the only row in edit mode: its empty unchecked box with a grey border still visible at the left, the row text replaced by one inline single-line text input prefilled with the dark text \"Walk the dog in the park\", and at the right end of the same line a blue filled button labeled \"Save\" followed by a grey text-button labeled \"Cancel\".",
+      "coordinates": "cx: 0.500, cy: 0.658, w: 0.460, h: 0.076",
+      "hierarchy_and_relation": "Third child of the list container directly below the second row; the inline input fills the horizontal space where the row text was, buttons right-aligned on the same line as the checkbox; no other row shares these controls.",
       "color_specs": ["#9CA3AF", "#374151", "#D1D5DB", "#2563EB", "#4B5563"]
     },
     {
-      "description": "Todo row 4 of 4, newest at the bottom, shown in normal mode: an empty unchecked square checkbox at the left, not-done todo text \"Read 20 pages\" in normal dark text, and the same pair of small grey row action text-buttons as the first row aligned at the right end.",
-      "coordinates": "cx: 0.500, cy: 0.753, w: 0.460, h: 0.070",
-      "hierarchy_and_relation": "Fourth child of the list container, last in creation order; identical layout grid to the first row.",
+      "description": "Todo row 4 of 4, newest at the bottom, not-done and in normal mode: an empty unchecked box with a grey border at the left, todo text \"Read 20 pages\" in solid dark text with no strikethrough line on this row, and the same pair of small grey row action text-buttons as the first row aligned at the right end.",
+      "coordinates": "cx: 0.500, cy: 0.750, w: 0.460, h: 0.076",
+      "hierarchy_and_relation": "Fourth child of the list container, last in creation order; identical layout grid to the first row; shows plain text with no input field and no other controls.",
       "color_specs": ["#9CA3AF", "#374151", "#4B5563"]
-    },
-    {
-      "description": "Rejection error surface attached to the second todo row: small red text reading \"Text is required\" in the blank space directly under that row's original text, marking its rejected text edit while the row keeps its original text and done state.",
-      "coordinates": "cx: 0.410, cy: 0.604, w: 0.260, h: 0.028",
-      "hierarchy_and_relation": "Owned by the second todo row, left-aligned with that row's text, contained within that row's band.",
-      "color_specs": ["#DC2626"]
     }
   ]
 }
