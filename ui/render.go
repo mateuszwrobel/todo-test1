@@ -20,12 +20,22 @@ var pageTmpl = template.Must(template.New("page").Parse(`<!doctype html>
 <body>
 <main>
 <h1>Todos</h1>
-{{.State}}
-<form id="create-form">
-<input type="text" name="title" placeholder="What needs doing?">
-<button type="submit">Add</button>
-</form>
+<div id="todos-area">{{.State}}</div>
+{{.CreateArea}}
 </main>
+<script>
+// htmx swaps 2xx responses by default; a create refusal arrives as a 4xx
+// whose body is an already-rendered create-area fragment. Route it through
+// the same htmx swap engine — no browser-side rendering happens here.
+document.body.addEventListener('htmx:responseError', function (event) {
+  var elt = event.detail && event.detail.elt;
+  if (elt && elt.closest && elt.closest('#create-form')) {
+    htmx.swap(document.getElementById('create-area'),
+              event.detail.xhr.responseText,
+              { swapStyle: 'outerHTML' });
+  }
+});
+</script>
 </body>
 </html>
 `))
@@ -51,7 +61,10 @@ var failedTmpl = template.Must(template.New("failed").Parse(
 	`<div id="load-error">Could not load todos. <a id="retry" href="/">Retry</a></div>`))
 
 func renderPage(w http.ResponseWriter, state template.HTML) {
-	_ = pageTmpl.Execute(w, struct{ State template.HTML }{state})
+	_ = pageTmpl.Execute(w, struct {
+		State      template.HTML
+		CreateArea template.HTML
+	}{state, createAreaHTML(createAreaData{})})
 }
 
 func renderList(w http.ResponseWriter, todos []todo) {
