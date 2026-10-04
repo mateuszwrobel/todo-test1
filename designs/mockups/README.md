@@ -24,8 +24,11 @@ Figma-style JSON; each prompt file holds the exact caption used, so every render
 
 ## Known rendering artifacts
 
-- These are AI-generated diffusion references (ming-image-design): text rendering is imperfect; a stray duplicate label may appear (04 shows a small stray "Save" under row 4 — ignore it; the edit row's Save button is the real one).
-- Strikethrough lines on done rows may extend past the text or cross the checkbox (visual artifact only; the checkbox itself is the done indicator).
-- 06 depicts three todos while other mockups show four — deliberate simplification after the renderer duplicated rows; journeys use four as illustrative copy only.
-- Set regenerated for the frozen-done-text rule (`docs: done todos reject text edits`): done rows intentionally lack an Edit control — checked box + strikethrough + Delete only; not-done rows keep Edit + Delete.
-- Observed in this regeneration pass: stray duplicate labels ghosting into adjacent rows (01, 04), one empty phantom row under the list (03), and 06's done rows leaked an "Edit" label the caption forbids — ignore stray labels; checkbox state is the done indicator.
+Re-rolled per image over seeds 1–3 with frozen captions; the cleanest render was committed. Per the frozen-done-text rule, done rows intentionally lack Edit — checkbox + strikethrough + Delete only; not-done rows keep Edit + Delete.
+
+- `03` (seed 1): clean.
+- `01` (seed 3): one ghost band with stray "Edit"/"Delete" buttons and no checkbox or text sits between rows 2 and 3 — the real list is the four rows; ghost bands are the known diffusion leak, ignore them.
+- `04` (seed 2): one phantom band labeled "Edit" with plain Edit/Delete buttons sits between the edit row and "Read 20 pages" — the single real edit band is the one with the input and the blue Save button.
+- `06` (seed 1): one text-less ghost band with stray "Edit"/"Delete" buttons sits between rows 2 and 3 — the real list is exactly the three todos under the red banner.
+- Strikethrough on done rows may extend past the text; the checkbox is the done indicator.
+- `06` depicts three todos while others show four — deliberate simplification after the renderer duplicated rows; journeys use four as illustrative copy only.
