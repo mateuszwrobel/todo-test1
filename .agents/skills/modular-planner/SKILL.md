@@ -105,6 +105,14 @@ Order modules so that:
 
 Then create a TDD workplan (see the `skills/tdd-workplan` skill) per module.
 
+### Step 8: Scenario cards + dependency ledger (parallel work)
+
+When implementation will be parallelized, after the per-module workplans exist:
+
+1. **Decompose each module workplan into single-scenario cards** — `workplans/scenarios/<module>/<NN>-<slug>.md`, byte-identical scenario splits with mechanical proof. Format and rules: the `skills/tdd-workplan` skill, section "Decomposing for parallel implementation".
+2. **Create `workplans/dependencies.md`** — the companion artifact owning all ordering: contract-vs-code edges per card, per-module waves, lane listing, integration checkpoints. Workplans stay order-free; the ledger carries the order.
+3. **Parent scenarios are the whole-system view** — their e2e suite is the parent scenarios re-executed against the composed process after composition completes, never a separate lane of new Gherkin.
+
 ## Validation Checklist
 
 Before finalizing, verify every module passes these checks in order. If any check fails, fix it before continuing:
@@ -157,4 +165,4 @@ Each is independently testable, independently rewritable. `UploadModule` uses si
 ## Output
 
 Create a workplan file per module using the TDD workplan template at `.agents/skills/tdd-workplan/WORKPLAN_TEMPLATE.md`.
-Each workplan must be concrete enough that a coder agent (including small models) can implement the module independently, without needing to read other modules' internals.
+Each workplan must be concrete enough that a coder agent (including small models) can implement the module independently, without needing to read other modules' internals. When work is parallelized, add the scenario cards under `workplans/scenarios/` and the `workplans/dependencies.md` ledger alongside the per-module workplans.

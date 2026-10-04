@@ -117,3 +117,38 @@ Every statement must have exactly one clear path. Do not include alternatives, "
 ## Output format
 Use the template from `.agents/skills/tdd-workplan/WORKPLAN_TEMPLATE.md` (co-located with this skill).
 Save the workplan as: `workplans/workplan_{module}_{feature}.md`.
+
+## Decomposing for parallel implementation
+
+When implementation will be parallelized across lanes, the workplan is accompanied by two companion artifacts: scenario cards and a dependency ledger. Workplans themselves stay exactly the six core sections plus partials — cards and ledger carry everything else.
+
+### Scenario cards
+
+When implementation will be parallelized, each acceptance scenario gets one card at `workplans/scenarios/<module>/<NN>-<kebab-slug>.md`, where `NN` is the scenario's order of appearance in the module workplan. Card content, nothing else:
+
+- Title — module plus scenario name
+- Source — link to the module workplan section
+- The verbatim Given/When/Then block
+- Done when — the stated behavior observably holds for the module's contract, and the repo architecture gate is green
+
+No dependencies, no test names, no notes on a card. Cards are planning artifacts, not test plans — the behavior/implementation dividing line applies unchanged.
+
+### Verbatim split rule
+
+Cards are byte-identical splits of the source scenarios. Proof before committing: `cmp` each card's scenario block against the source block, and per module `grep -c '^### Scenario' <module workplan>` equals the card count. Draft generated card content into files in the worktree; delegate only copy + cmp + commit — never pass bulk generated content through a delegation prompt (prompts truncate silently).
+
+### Dependency ledger
+
+Workplans forbid implementation order; parallel lanes still need a dependency DAG. It lives in `workplans/dependencies.md` — the companion artifact owning all ordering, never in a workplan:
+
+- Per-card edges of two kinds: a **contract edge** (the consumer defines a port plus an in-test fake against the published contract — work starts immediately, the contract is committed) and a **code edge** (the card needs the real implementation — work waits).
+- Per-module waves and the lane listing (what runs concurrently).
+- Integration checkpoints `CP1..CPn`: when depended-on code merges, contract fakes retire against the real dependency and drift surfaces there. Integration is a checkpoint event, never an in-flight card requirement; a card never claims an integration result it could not observe.
+
+### Parent-scenario traceability
+
+A parent (whole-system) workplan's scenarios duplicate module scenarios by design — they are the whole-system view of the same behaviors, not new work. The e2e suite is the parent scenarios re-executed by the repo's end-to-end tooling against the composed process after composition completes: acceptance, never new Gherkin. Do not derive an e2e lane of new behavior from parent scenarios.
+
+### Where dependencies live
+
+Dependency information lives in the ledger only. Cards deliberately carry none — card format stays behavior-only.
