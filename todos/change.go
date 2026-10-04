@@ -11,6 +11,10 @@ import (
 // the api module's decision (workplan decision).
 var ErrNotFound = errors.New("todos: no such todo")
 
+// ErrNoFields is the typed invalid outcome for a Change that supplies
+// neither title nor done — an empty change is rejected before any lookups.
+var ErrNoFields = errors.New("todos: change supplies no fields")
+
 // ChangeFields carries the optional fields of a Change operation: at least
 // one must be supplied. A nil field means "leave this column alone"; the
 // update touches only the supplied columns, so a done-only change never
@@ -37,6 +41,9 @@ func (s *Store) Change(id int64, fields ChangeFields) (Todo, error) {
 			done = 1
 		}
 		args = append(args, done)
+	}
+	if len(sets) == 0 {
+		return Todo{}, ErrNoFields
 	}
 	query := fmt.Sprintf(`UPDATE todos SET %s WHERE id = ?`, strings.Join(sets, ", "))
 	res, err := s.db.Exec(query, append(args, id)...)

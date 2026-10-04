@@ -93,3 +93,31 @@ func TestChangeMissingIdentifier(t *testing.T) {
 		}
 	}
 }
+
+// Card todos/09 — Change with no fields is invalid.
+// Given the store is open (with a todo, to prove nothing moves)
+// When  Change is called with neither title nor done supplied
+// Then  the result is an invalid outcome and no state changes
+func TestChangeWithNoFieldsIsInvalid(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "store.db"))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer store.Close()
+
+	created, err := store.Create("untouched")
+	if err != nil {
+		t.Fatalf("seed Create: %v", err)
+	}
+	before := mustList(t, store)
+
+	_, err = store.Change(created.ID, ChangeFields{})
+	if !errors.Is(err, ErrNoFields) {
+		t.Fatalf("Change(no fields) err = %v, want ErrNoFields", err)
+	}
+
+	after := mustList(t, store)
+	if len(after) != 1 || after[0] != before[0] {
+		t.Fatalf("state changed on invalid change: before %+v after %+v", before, after)
+	}
+}
