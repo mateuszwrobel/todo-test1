@@ -37,7 +37,7 @@ var listTmpl = template.Must(template.New("list").Parse(`<ul id="todo-list">
 <span>{{if .Done}}done{{else}}not done{{end}}</span></label>
 <span class="title">{{.Title}}</span>
 {{if not .Done}}<button type="button" class="edit">Edit</button>{{end}}
-<button type="button" class="delete">Delete</button>
+<button type="button" class="delete" hx-delete="/ui/todos/{{.ID}}" hx-target="#todo-list" hx-swap="outerHTML">Delete</button>
 </li>
 {{- end}}
 </ul>`))

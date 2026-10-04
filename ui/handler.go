@@ -36,6 +36,7 @@ func NewHandler(apiBase string) http.Handler {
 	mux.HandleFunc("GET /", p.handleIndex)
 	mux.HandleFunc("GET /static/htmx.min.js", p.handleHTMX)
 	mux.HandleFunc("PATCH /ui/todos/{id}", p.handleToggle)
+	mux.HandleFunc("DELETE /ui/todos/{id}", p.handleDelete)
 	return mux
 }
 
