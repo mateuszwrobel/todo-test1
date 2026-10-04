@@ -2,7 +2,10 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
+
+	"todo/todos"
 )
 
 // handleCreate implements POST /todos: parse `{ "title": string }`, call the
@@ -31,7 +34,14 @@ func handleCreate(store TodoStore) http.HandlerFunc {
 		}
 		created, err := store.Create(req.Title)
 		if err != nil {
-			http.Error(w, "failed to create todo", http.StatusInternalServerError)
+			// Outcome → transport mapping is this module's decision (api
+			// workplan): the store owns the rule, this switch states it.
+			switch {
+			case errors.Is(err, todos.ErrTitleRequired):
+				respondError(http.StatusUnprocessableEntity, "title is required")
+			default:
+				http.Error(w, "failed to create todo", http.StatusInternalServerError)
+			}
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")

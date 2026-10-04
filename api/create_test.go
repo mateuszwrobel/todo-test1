@@ -98,3 +98,41 @@ func assertCreateError(t *testing.T, body []byte, want string) {
 		t.Errorf("error = %q, want %q (body %s)", got["error"], want, body)
 	}
 }
+
+// Card api/02 — Create with blank title.
+// When  a POST /todos with empty or whitespace-only title arrives
+// Then  the response is 422 with `{ "error": "title is required" }`
+//
+//	And no todo is created
+func TestPostTodosBlankTitle(t *testing.T) {
+	store := openStore(t)
+	srv := httptest.NewServer(NewHandler(store))
+	defer srv.Close()
+
+	for _, body := range []string{
+		`{"title": ""}`,       // empty
+		`{"title": " \t\n "}`, // whitespace-only
+		`{}`,                  // missing — the contract states the same refusal
+	} {
+		resp, err := http.Post(srv.URL+"/todos", "application/json", strings.NewReader(body))
+		if err != nil {
+			t.Fatalf("POST /todos (%s): %v", body, err)
+		}
+		respBody, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			t.Fatalf("read body: %v", err)
+		}
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Fatalf("status = %d for body %s, want 422", resp.StatusCode, body)
+		}
+		assertCreateError(t, respBody, "title is required")
+	}
+
+	// And no todo is created.
+	if list, err := store.List(); err != nil {
+		t.Fatalf("store.List: %v", err)
+	} else if len(list) != 0 {
+		t.Errorf("blank-title requests created todos: %+v", list)
+	}
+}
