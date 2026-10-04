@@ -201,3 +201,59 @@ func TestInlineEditUpdatesInPlace(t *testing.T) {
 		t.Errorf("page carries no edit-band display rule (li.editing .edit-form):\n%s", page)
 	}
 }
+
+// Card ui/10 — Done rows carry no edit control.
+// Given the page freshly loads a list containing a done todo
+// Then  that row shows no edit affordance
+//
+//	And its text can only change after reopening via the toggle.
+//
+// This pins W1's render rule with a dedicated test — and now the rule
+// covers the whole edit band, not just the Edit button.
+func TestDoneRowsCarryNoEditControl(t *testing.T) {
+	fapi := &editAPI{todos: []todo{
+		{ID: 3, Title: "settled task", Done: true},
+		{ID: 7, Title: "open task", Done: false},
+	}}
+	api := fakeAPI(t, fapi.ServeHTTP)
+	uiSrv := uiServer(t, api.URL)
+
+	status, page := getPage(t, uiSrv.URL+"/")
+	if status != http.StatusOK {
+		t.Fatalf("GET / status = %d, want 200", status)
+	}
+
+	// The done row: its toggle and delete controls are there, no edit
+	// control anywhere — no Edit button, no edit form, no band input.
+	doneRow := findRow(t, page, "3")
+	if !strings.Contains(doneRow, `data-state="done"`) {
+		t.Fatalf("row 3 does not show done:\n%s", doneRow)
+	}
+	for _, forbidden := range []string{`class="edit"`, `class="edit-form"`, `name="title"`} {
+		if strings.Contains(doneRow, forbidden) {
+			t.Errorf("done row 3 carries an edit affordance %s:\n%s", forbidden, doneRow)
+		}
+	}
+	// The not-done row shows the control beside it renders fine, so the
+	// absence above is the rule, not a template accident.
+	if editForm(t, page, "7") == "" {
+		t.Errorf("not-done row 7 carries no edit form:\n%s", findRow(t, page, "7"))
+	}
+
+	// The text can only change after reopening via the toggle: an edit
+	// PATCH against the still-done todo is refused by the contract and the
+	// row re-renders done with its original text…
+	status, frag := patchTitleFragment(t, uiSrv.URL, 3, "sneaky rewrite")
+	if status != http.StatusUnprocessableEntity {
+		t.Fatalf("title PATCH on done row status = %d, want 422 (body %s)", status, frag)
+	}
+	assertRowState(t, frag, "3", "done", "settled task")
+
+	// …and once the toggle reopens the row, the edit band is back.
+	if status, frag = patchFragment(t, uiSrv.URL+"/ui/todos/3", "false"); status != http.StatusOK {
+		t.Fatalf("reopen status = %d, want 200 (body %s)", status, frag)
+	}
+	if editForm(t, frag, "3") == "" {
+		t.Errorf("reopened row 3 carries no edit form:\n%s", findRow(t, frag, "3"))
+	}
+}
