@@ -1,7 +1,9 @@
 package todos
 
 import (
+	"errors"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -48,3 +50,48 @@ func TestChangeTitleOfNotDoneKeepsDoneState(t *testing.T) {
 	}
 	t.Fatalf("List lost the changed todo (id %d)", created.ID)
 }
+
+// Card todos/06 — Change title on a done todo is refused.
+// Given the store contains a done todo
+// When  Change is called for its identifier with a title
+// Then  the result is a done-frozen outcome
+//
+//	And the todo's text and done state are unchanged
+func TestChangeTitleOnDoneTodoIsRefused(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "store.db"))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer store.Close()
+
+	created, err := store.Create("Buy milk")
+	if err != nil {
+		t.Fatalf("seed Create: %v", err)
+	}
+	done := true
+	if _, err := store.Change(created.ID, ChangeFields{Done: &done}); err != nil {
+		t.Fatalf("seed Change(done=true): %v", err)
+	}
+	before := mustList(t, store)
+
+	// A title supplied for a done todo is the frozen case — refused before
+	// any column update; even carried alongside done, the refusal stands.
+	title := "Buy oat milk"
+	for name, fields := range map[string]ChangeFields{
+		"title only":      {Title: &title},
+		"title with done": {Title: &title, Done: &done},
+	} {
+		got, err := store.Change(created.ID, fields)
+		if !errors.Is(err, ErrDoneFrozen) {
+			t.Errorf("Change(%s) on a done todo: err = %v, got %+v; want the done-frozen outcome", name, err, got)
+		}
+	}
+
+	// And nothing changed: text and done state are exactly as before.
+	if after := mustList(t, store); !reflect.DeepEqual(before, after) {
+		t.Errorf("state changed by a frozen change:\nbefore: %+v\nafter:  %+v", before, after)
+	}
+}
+
+// The freeze is about the TITLE direction only: a done-only change (the
+// reopen) stays allowed on a done todo — exercised by todos/07 below.
