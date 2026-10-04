@@ -178,3 +178,27 @@ func TestRejectedCreateStatesTheReason(t *testing.T) {
 		t.Errorf("rejection answered a wrong surface:\n%s", frag)
 	}
 }
+
+// Card ui/07 — Over-limit create states the limit.
+// When  the user submits text longer than 500 characters
+// Then  no todo is created
+//
+//	And the create area states the 500-character limit
+func TestOverLimitCreateStatesTheLimit(t *testing.T) {
+	api := &createAPI{maxTitle: 500}
+	api.todos = []todo{{ID: 1, Title: "existing", Done: false}}
+	apiSrv := fakeAPI(t, api.serve())
+	uiSrv := uiServer(t, apiSrv.URL)
+
+	typed := strings.Repeat("x", 501)
+	status, frag := postCreateForm(t, uiSrv.URL, typed)
+	if status != http.StatusUnprocessableEntity {
+		t.Fatalf("POST /ui/todos status = %d, want 422", status)
+	}
+	if len(api.todos) != 1 {
+		t.Fatalf("contract state changed on rejection: %+v", api.todos)
+	}
+	if !strings.Contains(frag, `id="create-error"`) || !strings.Contains(frag, "500-character limit") {
+		t.Errorf("over-limit rejection does not state the 500-character limit:\n%s", frag)
+	}
+}
