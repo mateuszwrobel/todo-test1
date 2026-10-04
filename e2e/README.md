@@ -121,3 +121,38 @@ make e2e-w7
    only after the signal (the handler sits mid-flight): the response still
    arrives with 200, the process exits 0, the listener stops, and a fresh
    start on the same file shows the completed change.
+
+# W4 e2e — edit
+
+Browser-driven check of the edit feature for wave W4: title editing through
+the Change operation and the frozen-done rule, against the composed server.
+
+## Run
+
+From the repo root:
+
+```sh
+make e2e-w4
+```
+
+## What it asserts
+
+1. **Done rows expose no edit control** — the done row has no Edit button and
+   no edit band in the DOM at all; the not-done rows each have one (the ui/10
+   pin: done freezes the title, so no affordance is offered).
+2. **Edit opens in place** — clicking Edit swaps the title for a band:
+   visible and prefilled with the current title. No navigation.
+3. **Save applies the new title in place** — htmx swaps the list fragment:
+   the row shows the new text with the band collapsed, position and done
+   state are stable, the URL never changes, and a reload shows the new title
+   (the value survives).
+4. **Cancel collapses the band** — typed-but-unsaved text is discarded, the
+   original title stays, and a reload confirms nothing was written.
+5. **An edit saved after the todo was done behind the page's back is refused
+   visibly** — marking the row done through the API and then saving an edit
+   from the stale page states "cannot edit a done todo" on the row; the todo
+   keeps its original title, the row now renders done with no edit control
+   left, and a reload confirms the same.
+6. **An empty edit is refused with the stated reason** — clearing the title
+   and saving states "title is required"; the todo itself is intact (a reload
+   shows the original title back).

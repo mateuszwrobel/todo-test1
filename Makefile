@@ -47,3 +47,16 @@ e2e-w7:
 	go build -o e2e/bin/todo ./cmd/todo
 	go build -o e2e/bin/seed ./e2e/testdata
 	NODE_PATH=$$(npm root -g) node e2e/w7-lifecycle.js
+
+.PHONY: e2e-w4
+
+# W4 e2e: the edit feature driven through a real browser — edit band on
+# not-done rows only (done rows expose no control: the ui/10 pin), in-place
+# Save with no navigation and stable ordering, Cancel, the frozen-done
+# refusal stated visibly on a stale page, and the empty-title refusal with
+# the todo intact. See e2e/README.md.
+e2e-w4:
+	@mkdir -p e2e/bin
+	go build -o e2e/bin/todo ./cmd/todo
+	go build -o e2e/bin/seed ./e2e/testdata
+	NODE_PATH=$$(npm root -g) node e2e/w4-edit.js
