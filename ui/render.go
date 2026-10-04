@@ -45,8 +45,10 @@ var listTmpl = template.Must(template.New("list").Parse(`<ul id="todo-list">
 var emptyTmpl = template.Must(template.New("empty").Parse(
 	`<p id="empty-state">No todos yet.</p>`))
 
+// The failure state offers a retry: a GET on the page, which re-issues the
+// read — recovery stays inside GET semantics.
 var failedTmpl = template.Must(template.New("failed").Parse(
-	`<div id="load-error">Could not load todos.</div>`))
+	`<div id="load-error">Could not load todos. <a id="retry" href="/">Retry</a></div>`))
 
 func renderPage(w http.ResponseWriter, state template.HTML) {
 	_ = pageTmpl.Execute(w, struct{ State template.HTML }{state})
