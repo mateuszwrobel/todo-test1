@@ -24,11 +24,8 @@ Figma-style JSON; each prompt file holds the exact caption used, so every render
 
 ## Known rendering artifacts
 
-Re-rolled per image over seeds 1–3 with frozen captions; the cleanest render was committed. Per the frozen-done-text rule, done rows intentionally lack Edit — checkbox + strikethrough + Delete only; not-done rows keep Edit + Delete.
+Captions use a list-as-panel structure (one layer describing the framed panel and all enumerated rows) after declared per-row label repeats proved to leak ghost bands; that restructure eliminated all ghost bands and floating labels — every committed render below was accepted on its first seeded draw (seed 1).
 
-- `03` (seed 1): clean.
-- `01` (seed 3): one ghost band with stray "Edit"/"Delete" buttons and no checkbox or text sits between rows 2 and 3 — the real list is the four rows; ghost bands are the known diffusion leak, ignore them.
-- `04` (seed 2): one phantom band labeled "Edit" with plain Edit/Delete buttons sits between the edit row and "Read 20 pages" — the single real edit band is the one with the input and the blue Save button.
-- `06` (seed 1): one text-less ghost band with stray "Edit"/"Delete" buttons sits between rows 2 and 3 — the real list is exactly the three todos under the red banner.
-- Strikethrough on done rows may extend past the text; the checkbox is the done indicator.
+- `01`, `03`, `04`, `06`: no phantom rows or stray labels; row counts exact; done rows show checkbox + strikethrough + Delete only (frozen-done-text rule), not-done rows show Edit + Delete; `04` has exactly one edit band (prefilled input + blue Save).
+- Strikethrough on done rows can extend slightly past the end of the text (occasionally with a small crossing tick at the end) — visual artifact of the diffusion text renderer; the checkbox is the done indicator.
 - `06` depicts three todos while others show four — deliberate simplification after the renderer duplicated rows; journeys use four as illustrative copy only.

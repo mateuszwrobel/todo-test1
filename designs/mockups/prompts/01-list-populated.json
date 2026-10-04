@@ -12,21 +12,15 @@
       "color_specs": ["#F3F4F6"]
     },
     {
-      "description": "A desktop browser window with rounded corners and a soft drop shadow, white content area, occupying most of the canvas.",
+      "description": "A desktop browser window with rounded corners and a soft drop shadow, white content area, occupying most of the canvas; its chrome strip along the window top shows three small grey circular window buttons at the left and a wide rounded grey address bar holding the small grey web address \"localhost:3000\".",
       "coordinates": "cx: 0.500, cy: 0.500, w: 0.920, h: 0.700",
-      "hierarchy_and_relation": "Centered above the background; contains the browser chrome strip at its top edge and the web page content below.",
-      "color_specs": ["#FFFFFF", "#E5E7EB"]
+      "hierarchy_and_relation": "Centered above the background; the app card sits inside its white content area below the chrome strip.",
+      "color_specs": ["#FFFFFF", "#E5E7EB", "#F9FAFB", "#D1D5DB"]
     },
     {
-      "description": "Browser chrome strip along the window top: three small grey circular window buttons at the left and a wide rounded grey address bar holding the small grey web address \"localhost:3000\".",
-      "coordinates": "cx: 0.500, cy: 0.177, w: 0.920, h: 0.054",
-      "hierarchy_and_relation": "Owned by the browser window, docked to its top edge, spanning the full window width; the app card sits below it.",
-      "color_specs": ["#F9FAFB", "#D1D5DB", "#6B7280"]
-    },
-    {
-      "description": "A centered white application card with a thin light border, rounded corners and a subtle shadow; it holds the whole todo app.",
+      "description": "A centered white application card with a thin light border, rounded corners and a subtle shadow; it holds the whole todo app stacked top to bottom: header band, create row and list panel.",
       "coordinates": "cx: 0.500, cy: 0.530, w: 0.560, h: 0.600",
-      "hierarchy_and_relation": "Centered horizontally in the browser content area below the chrome; contains the card header, create row and list container stacked top to bottom.",
+      "hierarchy_and_relation": "Centered horizontally in the browser content area below the chrome; owns the header, create row and list panel as its only children.",
       "color_specs": ["#FFFFFF", "#E5E7EB"]
     },
     {
@@ -42,34 +36,10 @@
       "color_specs": ["#D1D5DB", "#9CA3AF", "#2563EB", "#FFFFFF", "#6B7280"]
     },
     {
-      "description": "Rounded list container with a hairline border holding exactly four todo rows stacked vertically with thin dividers, oldest at the top; the first two rows are done, the last two are not-done. The string \"Edit\" is rendered exactly 2 times, on rows 3 and 4; the string \"Delete\" is rendered on rows 1, 2, 3 and 4. Done rows show only the Delete button, no Edit button.",
+      "description": "Table-like list panel with a shared frame: one thin outer container with horizontal divider lines between rows; the list contains exactly 4 text-bearing rows and no empty bands, no rows without todo text, nothing below the fourth row. Each row is a horizontal band with a checkbox at the left, the todo text next to it, and buttons at the right. Row 1, done: checked blue checkbox with white tick, text \"Buy milk\" in faded grey crossed by a single thin strikethrough through the text middle, and one grey text-button \"Delete\" at the right with no Edit button. Row 2, done: checked blue checkbox with white tick, text \"Pay electricity bill\" in faded grey crossed by a single thin strikethrough through the text middle, and one grey text-button \"Delete\" at the right with no Edit button. Row 3, not-done: empty unchecked checkbox, text \"Walk the dog\" in solid dark with no strikethrough, and two grey text-buttons \"Edit\" and \"Delete\" at the right. Row 4, not-done, newest at the bottom: empty unchecked checkbox, text \"Read 20 pages\" in solid dark with no strikethrough, and two grey text-buttons \"Edit\" and \"Delete\" at the right. Every visible \"Edit\" and \"Delete\" label sits inside one of these 4 enumerated rows.",
       "coordinates": "cx: 0.500, cy: 0.612, w: 0.500, h: 0.380",
-      "hierarchy_and_relation": "Inside the app card below the create row, spanning the card inner width; owns all four todo rows in creation order.",
-      "color_specs": ["#FFFFFF", "#E5E7EB"]
-    },
-    {
-      "description": "Todo row 1 of 4, first in creation order, done: a checked blue box with white tick at the left, todo text \"Buy milk\" in faded grey crossed by a single thin horizontal strikethrough line crossing the middle of the text, and one small grey text-button labeled \"Delete\" aligned at the right end of the row; no Edit button on this row.",
-      "coordinates": "cx: 0.500, cy: 0.474, w: 0.460, h: 0.076",
-      "hierarchy_and_relation": "First child of the list container; checkbox left-aligned, text left-aligned after the checkbox, single button right-aligned; same row layout grid as all other rows.",
-      "color_specs": ["#2563EB", "#9CA3AF", "#4B5563"]
-    },
-    {
-      "description": "Todo row 2 of 4, done: a checked blue box with white tick at the left, todo text \"Pay electricity bill\" in faded grey crossed by a single thin horizontal strikethrough line crossing the middle of the text, and one small grey text-button labeled \"Delete\" aligned at the right end of the row; no Edit button on this row.",
-      "coordinates": "cx: 0.500, cy: 0.566, w: 0.460, h: 0.076",
-      "hierarchy_and_relation": "Second child of the list container directly below the first row; identical layout grid to the first row.",
-      "color_specs": ["#2563EB", "#9CA3AF", "#4B5563"]
-    },
-    {
-      "description": "Todo row 3 of 4, not-done: an empty unchecked box with a grey border at the left, todo text \"Walk the dog\" in solid dark text with no strikethrough line on this row, and two small grey text-buttons labeled \"Edit\" and \"Delete\" aligned at the right end of the row.",
-      "coordinates": "cx: 0.500, cy: 0.658, w: 0.460, h: 0.076",
-      "hierarchy_and_relation": "Third child of the list container directly below the second row; identical layout grid to the first row; its text stays clean and unmarked so the unchecked box and solid text read as not-done at a glance.",
-      "color_specs": ["#9CA3AF", "#374151", "#4B5563"]
-    },
-    {
-      "description": "Todo row 4 of 4, newest at the bottom, not-done: an empty unchecked box with a grey border at the left, todo text \"Read 20 pages\" in solid dark text with no strikethrough line on this row, and two small grey text-buttons labeled \"Edit\" and \"Delete\" aligned at the right end of the row.",
-      "coordinates": "cx: 0.500, cy: 0.750, w: 0.460, h: 0.076",
-      "hierarchy_and_relation": "Fourth child of the list container, last in creation order; identical layout grid to the first row; its text stays clean and unmarked so the unchecked box and solid text read as not-done at a glance.",
-      "color_specs": ["#9CA3AF", "#374151", "#4B5563"]
+      "hierarchy_and_relation": "Inside the app card below the create row, spanning the card inner width; the single owner of all list rows, dividers and row buttons.",
+      "color_specs": ["#FFFFFF", "#E5E7EB", "#2563EB", "#9CA3AF", "#374151", "#4B5563"]
     }
   ]
 }
