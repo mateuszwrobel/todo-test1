@@ -1,107 +1,139 @@
-# Scenario Dependencies — Parallel Work Graph
+# Scenario Dependencies — Feature Waves
 
-Companion to the scenario cards in `workplans/scenarios/`. States which tasks can run
-concurrently. Edges are behavioral (a task's Given needs another task's behavior), not
-process rules. Format: task → depends-on (all edges within one module unless the target
-names a module).
+Companion to the scenario cards in `workplans/scenarios/`. All ordering lives here (cards carry none). Work proceeds **feature by feature**: a wave delivers one feature vertically — store → contract translation → page — and ends with that feature integrated against the real code landed earlier in the same wave. No fake-then-replace staging, no module-by-module lanes: integration for a feature happens at its wave end, at the first moment all its pieces exist.
 
-## Cross-module edges (contract vs code)
+The standing law: **a module is never implemented wholesale.** Every increment is a functional/common-scenario slice — the thinnest cut through the modules that makes one feature observable end to end. Whole-module waves are forbidden; a module grows one feature per wave it appears in.
 
-| Edge kind | Meaning | Parallelism unlocked |
-|-----------|---------|----------------------|
-| contract edge — X → Y-contract | X's tests exercise Y through the **published contract** (Y's workplan API partial), with an in-test fake behind the consumer-defined port | X starts immediately; the contract is committed |
-| code edge — X → Y | X needs Y's **real implementation** wired | X lands only after Y |
+Card notation: `<module>/<NN>`. Every card appears in exactly one wave; intra-wave rows give each card's concrete dependencies.
 
-- api → todos **contract only** (injected port, fake in tests) — no code edge
-- ui → api **contract only** (tests run a fake contract server) — no code edge
-- server → todos + api + ui **code** (composition wires the real modules)
-- archspec gate: green requires the real package structure of all modules to exist
+## W1 — Foundation + browse
 
-## todos (internal code edges — same module, same package)
+The list is the first feature; composition wires from the start so every later wave has a real process to extend.
 
-| Task | Depends on | Why |
-|------|-----------|-----|
-| todos/01 create-assigns-fresh-identifier | — | root: Create |
-| todos/02 create-rejects-invalid-text | — | Create validation, no state prerequisite |
-| todos/13 fresh-file-opens-as-empty-valid-store | — | Open only |
-| todos/03 list-is-creation-order | 01 | List test seeds via Create |
-| todos/04 change-title-of-a-not-done-todo-keeps-done-state | 01 | needs an existing todo |
-| todos/05 change-done-state-keeps-title | 01 | needs an existing todo |
-| todos/10 delete-removes-and-identifier-is-never-reused | 01 | Delete + Create interplay |
-| todos/12 state-survives-reopen | 01 | seed via Create, reopen, read |
-| todos/14 completed-operation-survives-process-death | 01 | Create then kill |
-| todos/06 change-title-on-a-done-todo-is-refused | 01, 05 | needs a done todo (done-only change) |
-| todos/07 reopen-a-done-todo-by-done-only-change | 01, 05 | same |
-| todos/08 change-missing-identifier | 04, 05 | Change must exist to miss |
-| todos/09 change-with-no-fields-is-invalid | 04, 05 | Change must exist to reject empty |
-| todos/11 delete-missing-identifier | 10 | Delete must exist to miss |
-
-## api (all tasks: contract edge to todos only — fully parallel with todos)
-
-| Task | Depends on | Why |
-|------|-----------|-----|
-| api/01–11 (every card) | todos contract (committed) | translator tests use the injected port + fake; status mapping is api's own rule |
-
-Internal: none — the handler table (parse → call → map) is one cohesive change; cards
-are test-first increments of the same surface, safe to pair in one lane, order-free.
-
-## ui (all tasks: contract edge to api only — fully parallel with api and todos)
-
-| Task | Depends on | Why |
-|------|-----------|-----|
-| ui/01 page-shows-the-list-truthfully | api contract | page renders a GET result (fake server in tests) |
-| ui/02 empty-list-is-stated-not-blank | api contract | same, empty result |
-| ui/03 load-failure-is-stated-not-faked | api contract | unreachable/failing fake server |
+| Card | Depends on | Note |
+|------|-----------|------|
+| todos/13 fresh-file-opens-as-empty-valid-store | — | Open root |
+| todos/01 create-assigns-fresh-identifier | todos/13 | Create exists as the seed primitive; validation completes in W2 |
+| todos/03 list-is-creation-order | todos/01 | List seeds via Create |
+| api/04 list-todos | todos/03 | GET handler over the real store |
+| ui/01 page-shows-the-list-truthfully | api/04, server/01 | first real render |
+| ui/02 empty-list-is-stated-not-blank | ui/01 | render rule |
+| ui/03 load-failure-is-stated-not-faked | ui/01 | failure render |
 | ui/04 load-failure-recovers-by-retry | ui/03 | retry lives in the failure state |
-| ui/05 create-appends-without-reload | ui/01 | swap targets exist on the page first |
-| ui/06 rejected-create-states-the-reason | ui/05 | error surface attaches to the create area |
-| ui/07 over-limit-create-states-the-limit | ui/06 | same surface, other message |
-| ui/08 toggle-marks-done-and-reopens | ui/01 | row controls render first |
-| ui/09 inline-edit-updates-in-place | ui/01 | row edit control renders first |
-| ui/10 done-rows-carry-no-edit-control | ui/01 | render rule on the row |
-| ui/11 stale-edit-of-a-done-todo-is-refused-visibly | ui/09 | surfaces the edit rejection path |
-| ui/12 empty-edit-text-keeps-the-original | ui/09 | same |
-| ui/13 delete-drops-one-row | ui/01 | row delete control renders first |
-| ui/14 missing-todo-states-the-failure-for-any-operation | ui/08, ui/09, ui/13 | banner must serve all three operations |
-| ui/15 reload-matches-the-server | ui/01 | reload = full re-render |
-| ui/16 controls-serialize-operations-per-control | ui/05, ui/08, ui/09, ui/13 | blocking applies to the four real controls |
-
-## server (code edges — composition lands after todos + api + ui)
-
-| Task | Depends on | Why |
-|------|-----------|-----|
-| server/01 start-serves-both-surfaces | todos, api, ui (code) | wiring has nothing to wire otherwise |
+| ui/15 reload-matches-the-server | ui/01 | full re-render path |
+| server/01 start-serves-both-surfaces | todos/13, api/04, ui/01 | wiring lands now, not last |
 | server/02 fresh-path-starts-empty | server/01, todos/13 | startup on absent file |
-| server/03 restart-resumes-state | server/01, todos/12 | the restart story end to end |
-| server/04 clean-shutdown-completes-in-flight-work | server/01 | drain belongs to the listener root owns |
 | server/05 unusable-configuration-fails-loudly | server/01 | failure path of the same startup |
-| server/06 wiring-honors-the-dependency-directions | all modules (code) + archspec gate | the gate itself is the test |
+| server/06 wiring-honors-the-dependency-directions | all four packages wired | archspec gate goes green at wave end |
 
-## Parent scenarios — acceptance re-execution
+**Wave end:** page opens; list / empty / load-failure + retry render truthfully; archspec verify --strict green (structure complete). Parent view clauses satisfied.
 
-The 9 parent scenarios are the same BDD behaviors the module cards already state, seen whole. Nothing new is planned or built here: after server/01, Playwright replays the parent Gherkin against the composed process as end-to-end acceptance — the first real end-to-end moment for each feature.
+## W2 — Create
 
-## Parallel lanes (what runs at once)
+| Card | Depends on | Note |
+|------|-----------|------|
+| todos/02 create-rejects-invalid-text | todos/01 | validation completes the create feature |
+| api/01 create-succeeds | todos/01 | POST handler over the real store |
+| api/02 create-with-blank-title | api/01, todos/02 | outcome→422 mapping on the POST handler |
+| api/03 create-over-length-limit | api/02 | same handler, limit message |
+| ui/05 create-appends-without-reload | ui/01, api/01 | form + swap onto the existing page |
+| ui/06 rejected-create-states-the-reason | ui/05, api/02 | error surface on the create area |
+| ui/07 over-limit-create-states-the-limit | ui/06, api/03 | same surface, limit message |
 
-```
-lane-A (todos)   : wave1 {01, 02, 13} → wave2 {03, 04, 05, 10, 12, 14} → wave3 {06, 07, 08, 09, 11}
-lane-B (api)     : {01..11} immediately — contract fake, zero waiting
-lane-C (ui)      : wave1 {01, 02, 03} → wave2 {04, 05, 08, 09, 10, 13, 15} → wave3 {06, 07, 11, 12, 14, 16}
-lane-D (server)  : starts when A+B+C merged → {01} → {02, 03, 04, 05} ∥ {06 whenever structure exists}
-lane-E (e2e)     : acceptance re-execution of the 9 parent scenarios via Playwright after server/01
-```
+**Wave end:** create end-to-end. Parent scenarios "Create todo" + "Reject empty todo text" pass in the browser.
 
-## Integration checkpoints
+## W3 — Toggle done (+ the Change operation's foundation)
 
-Integration is not a completion rule for an in-flight card — it is a checkpoint that fires when the depended-on code exists:
+| Card | Depends on | Note |
+|------|-----------|------|
+| todos/05 change-done-state-keeps-title | todos/01 | Change exists, done direction |
+| todos/08 change-missing-identifier | todos/05 | not-found reporting needs Change |
+| todos/09 change-with-no-fields-is-invalid | todos/05 | empty-change rejection |
+| api/06 change-done-state-in-either-direction | todos/05 | PATCH handler, done direction |
+| api/08 change-missing-todo | api/06, todos/08 | 404 mapping |
+| api/09 change-with-empty-body | api/06, todos/09 | 422 mapping (defensive path) |
+| ui/08 toggle-marks-done-and-reopens | ui/01, api/06 | checkbox → PATCH done |
 
-- CP1 — todos code merged: api replaces contract fakes with the real store behind the injected port; drift between fakes and reality surfaces per operation.
-- CP2 — api code merged: ui fragment endpoints exercise the real contract against the real handler; page fakes retire.
-- CP3 — todos + api + ui merged (lane D start): composed-process checks + archspec verify --strict green.
-- Lane-E label kept for the Playwright acceptance re-execution of the parent BDD; it adds no new Gherkin — the parent file is the suite.
+**Wave end:** mark done / reopen end-to-end. Parent scenario "Mark todo done" passes.
+
+## W4 — Edit
+
+Text editing; the frozen-done rule reads the done flag, so it lands after the flag's toggle (W3) exists — its scenarios state done todos as Given.
+
+| Card | Depends on | Note |
+|------|-----------|------|
+| todos/04 change-title-of-a-not-done-todo-keeps-done-state | todos/01, todos/05 | title direction of Change |
+| todos/06 change-title-on-a-done-todo-is-refused | todos/04, todos/05 | frozen rule over real done state |
+| todos/07 reopen-a-done-todo-by-done-only-change | todos/05, todos/06 | reopen-unlocks-edit story |
+| api/05 change-text-of-a-not-done-todo | todos/04 | PATCH title direction |
+| api/07 title-edit-on-done-todo-refused | todos/06, api/06 | 422 "cannot edit a done todo" |
+| ui/09 inline-edit-updates-in-place | ui/01, api/05 | inline edit band + save |
+| ui/10 done-rows-carry-no-edit-control | ui/01, todos/06 | render rule: no edit affordance on done rows |
+| ui/11 stale-edit-of-a-done-todo-is-refused-visibly | ui/09, api/07 | stated refusal path |
+| ui/12 empty-edit-text-keeps-the-original | ui/09, api/05 | empty title → stated, original intact |
+
+**Wave end:** edit end-to-end including the frozen refusal. Parent scenarios "Edit todo text leaves done state alone" + "Done todo rejects text edits" pass.
+
+## W5 — Delete
+
+| Card | Depends on | Note |
+|------|-----------|------|
+| todos/10 delete-removes-and-identifier-is-never-reused | todos/01 | Delete + id non-reuse |
+| todos/11 delete-missing-identifier | todos/10 | not-found reporting |
+| api/10 delete | todos/10 | DELETE handler |
+| api/11 delete-missing-todo | api/10, todos/11 | 404 mapping |
+| ui/13 delete-drops-one-row | ui/01, api/10 | row removal swap |
+
+**Wave end:** delete end-to-end. Parent scenario "Delete todo" passes.
+
+## W6 — Stale page / missing todo
+
+| Card | Depends on | Note |
+|------|-----------|------|
+| ui/14 missing-todo-states-the-failure-for-any-operation | ui/08, ui/09, ui/13 | banner must serve toggle, edit, and delete |
+
+(api/todos 404 reporting for all three operations landed with W3–W5.)
+
+**Wave end:** parent scenario "Operation on missing todo" passes.
+
+## W7 — Lifecycle
+
+| Card | Depends on | Note |
+|------|-----------|------|
+| todos/12 state-survives-reopen | todos/01, todos/05 | mixed-state seed, close/reopen |
+| todos/14 completed-operation-survives-process-death | todos/01 | durability across kill |
+| server/03 restart-resumes-state | server/01, todos/12 | end-to-end restart story |
+| server/04 clean-shutdown-completes-in-flight-work | server/01 | drain + close |
+
+**Wave end:** parent scenario "Todos survive server restart" passes.
+
+## W8 — In-flight control serialization
+
+| Card | Depends on | Note |
+|------|-----------|------|
+| ui/16 controls-serialize-operations-per-control | ui/05, ui/08, ui/09, ui/13 | blocking applies to all four real controls |
+
+**Wave end:** parent scenario "Repeat activation while an operation is in flight" passes.
+
+## Wave dependencies (the parallel graph)
+
+| Wave | Requires | Can run parallel with |
+|------|----------|----------------------|
+| W1 foundation+browse | — | — |
+| W2 create | W1 | W5, W7 |
+| W3 toggle | W1 | W5, W7 |
+| W4 edit | W3 | W5 |
+| W5 delete | W1 | W2, W3, W4, W7 |
+| W6 stale | W3, W4, W5 | — |
+| W7 lifecycle | W3 | W2, W4, W5 |
+| W8 in-flight | W2, W3, W4, W5 | — |
+
+After W1 the widest parallel spread is {W2, W3∥W5, W7}; W4 follows W3; W6 and W8 are joins.
 
 ## Lane rules
-- Lanes land through separate worktrees; only the orchestrator merges ff-only, in merge order A, B, C (they touch disjoint packages — conflicts not expected).
-- Card-done gate: card test green against contract fakes + archspec findings that name only not-yet-landed packages. No card claims an integration result it could not observe.
-- Real-dependency verification happens at checkpoints, never as an in-flight card requirement; a lane stays valid while its dependencies are still landing.
-- archspec verify --strict runs in every lane; it goes fully green only at CP3; findings before that must name exactly the not-yet-landed packages.
+
+- One lane per wave-branch; lanes land through separate worktrees, orchestrator merges ff-only in wave order of the graph above.
+- A wave's cards land in dependency order inside the wave; the wave's integration check (real wiring of its cards + archspec green) gates the merge — integration is the wave end, never an in-flight card requirement.
+- No card claims an integration result its wave has not reached.
+- Parent scenarios re-executed by Playwright at each stated wave end are acceptance for that feature — the parent file is the suite, no new Gherkin.
+- archspec verify --strict runs in every lane; from W1 end it stays green (structure complete); findings before that name only not-yet-landed packages.
