@@ -96,3 +96,15 @@ e2e-w9:
 	@mkdir -p e2e/bin
 	go build -o e2e/bin/todo ./cmd/todo
 	NODE_PATH=$$(npm root -g) node e2e/w9-gallery.js
+
+# W10 e2e: the design-system layer in a real browser — the /__components
+# gallery carries the components block (all #c-* examples visible, above
+# the state sections), the frozen component states render (disabled,
+# checked, row--done), the #c-tokens chips match the --color-* inventory
+# parsed from the served tokens.css, the token layer is provably live
+# (var()-resolved computed colors), and the real page still renders.
+.PHONY: e2e-w10
+e2e-w10:
+	@mkdir -p e2e/bin
+	go build -o e2e/bin/todo ./cmd/todo
+	NODE_PATH=$$(npm root -g) node e2e/w10-components.js

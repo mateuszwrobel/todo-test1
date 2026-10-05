@@ -4,6 +4,8 @@ import (
 	"go/parser"
 	"go/token"
 	"net/http"
+	"os"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -126,6 +128,96 @@ func TestStoryGalleryInFlightControlsCarryDisabled(t *testing.T) {
 	} {
 		if !strings.Contains(section, want) {
 			t.Errorf("in-flight section missing disabled control %q\nsection: %s", want, section)
+		}
+	}
+}
+
+func TestGalleryComponentExamplesAnchorEveryPrimitive(t *testing.T) {
+	// W10 part 3 — one example per named component, each at its exact
+	// #c-* id, with the components block above the state sections and
+	// the page keeping its single-h1 shape.
+	_, page := galleryPage(t)
+
+	ids := []string{
+		"c-btn-primary", "c-btn-secondary", "c-btn-disabled",
+		"c-input-default", "c-input-focus",
+		"c-checkbox-unchecked", "c-checkbox-checked", "c-checkbox-disabled",
+		"c-row-not-done", "c-row-done",
+		"c-error-text", "c-banner", "c-hint", "c-empty-state",
+		"c-panel", "c-heading", "c-tokens",
+	}
+	for _, id := range ids {
+		if got := strings.Count(page, `id="`+id+`"`); got != 1 {
+			t.Errorf("example #%s appears %d times, want exactly 1", id, got)
+		}
+	}
+	if strings.Count(page, "<h1") != 1 {
+		t.Errorf("gallery no longer carries exactly one h1:\n%s", page)
+	}
+	componentsAt := strings.Index(page, `<section id="components"`)
+	statesAt := strings.Index(page, `<section id="state-list-populated"`)
+	if componentsAt < 0 || statesAt < 0 || componentsAt > statesAt {
+		t.Errorf("components block is not above the state sections (components at %d, states at %d)",
+			componentsAt, statesAt)
+	}
+}
+
+func TestGalleryComponentExamplesCarryFrozenStates(t *testing.T) {
+	_, page := galleryPage(t)
+	for _, want := range []string{
+		`id="c-btn-disabled" type="button" class="btn btn--secondary" disabled`,
+		`id="c-input-focus" class="input is-focus"`, // static focus stand-in
+		`id="c-checkbox-checked" type="checkbox" class="checkbox" checked`,
+		`id="c-checkbox-disabled" type="checkbox" class="checkbox" disabled`,
+		`id="c-row-not-done" class="row" data-state="not-done"`,
+		`id="c-row-done" class="row row--done" data-state="done"`,
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("component example missing %q", want)
+		}
+	}
+}
+
+func TestGalleryTokenChipsMatchTokensFile(t *testing.T) {
+	// Drift gate between the design system and its gallery: one labeled
+	// chip per --color-* token, names parsed straight from
+	// static/tokens.css — a token added or renamed there without a
+	// gallery chip (or a chip naming a token that no longer exists)
+	// fails here.
+	src, err := os.ReadFile("static/tokens.css")
+	if err != nil {
+		t.Fatalf("read tokens.css: %v", err)
+	}
+	var declared []string
+	for _, m := range regexp.MustCompile(`(?m)^\s*(--[a-z0-9-]+)\s*:`).FindAllStringSubmatch(string(src), -1) {
+		if strings.HasPrefix(m[1], "--color-") {
+			declared = append(declared, m[1])
+		}
+	}
+	if len(declared) == 0 {
+		t.Fatal("tokens.css declares no --color-* tokens")
+	}
+
+	_, page := galleryPage(t)
+	labeled := map[string]bool{}
+	for _, m := range regexp.MustCompile(`<code>(--[a-z0-9-]+)</code>`).FindAllStringSubmatch(page, -1) {
+		labeled[m[1]] = true
+	}
+	for _, name := range declared {
+		if !labeled[name] {
+			t.Errorf("token %s declared in tokens.css has no gallery chip", name)
+		}
+	}
+	for name := range labeled {
+		found := false
+		for _, d := range declared {
+			if d == name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("gallery chip %s names no token declared in tokens.css", name)
 		}
 	}
 }

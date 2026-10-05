@@ -222,3 +222,37 @@ make e2e-w9
 4. **The real page still works** — one create round-trip appends the row
    without a reload and survives a reload: the styling layer changed no
    behavior.
+
+# W10 e2e — design system: tokens, components, drift gates
+
+Browser-driven check of wave W10: the token layer (`/static/tokens.css`)
+and the named component primitives render in a real browser, and the
+`/__components` gallery's components block stays synced with both.
+CommonJS, global Playwright.
+
+## Run
+
+From the repo root:
+
+```sh
+make e2e-w10
+```
+
+## What it asserts
+
+1. **Every component example renders** — `GET /__components` is 200, the
+   `#components` block sits above the state sections, and all seventeen
+   `#c-*` examples (buttons incl. disabled, inputs incl. the static
+   `.is-focus` state, the three checkbox states, both row states, error
+   text, banner, hint, empty state, panel, heading, tokens) are present
+   and visible.
+2. **The frozen states render** — the disabled button and disabled
+   checkbox carry `disabled`, the checked checkbox is checked, and the
+   done row carries its `row--done` state class.
+3. **Chips match the token file** — the `--color-*` inventory parsed from
+   the served `tokens.css` and the labels of the `#c-tokens` chips are
+   the same set: a token added or renamed without its gallery chip fails
+   in the browser too (the same gate exists as a Go unit test).
+4. **The token layer is live** — the primary button's computed background
+   is the token's resolved color, and `style.css` consumes the tokens via
+   `var()`; the real page still renders through the layer.
