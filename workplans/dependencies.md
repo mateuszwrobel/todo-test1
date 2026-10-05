@@ -131,6 +131,14 @@ Text editing; the frozen-done rule reads the done flag, so it lands after the fl
 
 **Wave end:** every design value lives in `ui/static/tokens.css` and every styled primitive has a named class with a gallery example; parent scenarios unchanged — W1–W9 e2e stay green (class swap and token split are behavior- and pixel-frozen).
 
+## W11 — Visual regression: pixel snapshots of the gallery
+
+| Card | Depends on | Note |
+|------|-----------|------|
+| e2e/visual lane — `@playwright/test` `toHaveScreenshot` snapshots | ui/18 (the W10 design system) | committed baselines for all seventeen `#c-*` component examples + seven `#state-*` gallery sections; fully deterministic lane (fixed viewport, animations off, caret hidden, static focus, seeded deterministic db), zero product-code changes |
+
+**Wave end:** every gallery anchor carries a committed pixel baseline under `e2e/visual/__snapshots__`; `make e2e-visual` is reproducible — two back-to-back runs green with zero snapshot updates needed; W1–W10 e2e and `go test` stay green.
+
 ## Wave dependencies (the parallel graph)
 
 | Wave | Requires | Can run parallel with |

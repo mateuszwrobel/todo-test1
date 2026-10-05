@@ -256,3 +256,54 @@ make e2e-w10
 4. **The token layer is live** — the primary button's computed background
    is the token's resolved color, and `style.css` consumes the tokens via
    `var()`; the real page still renders through the layer.
+
+# W11 e2e — visual regression: pixel snapshots of the gallery
+
+Screenshot testing through Playwright's own `@playwright/test`
+(`toHaveScreenshot`): an element screenshot of every gallery anchor on
+`/__components` — the seventeen `#c-*` component examples and the seven
+`#state-*` state sections — compared against baselines committed under
+`e2e/visual/__snapshots__/` with `maxDiffPixelRatio: 0.001`. CommonJS
+config + spec; the global `@playwright/test` install runs it through the
+same `NODE_PATH` pattern the library-playwright lanes use.
+
+## Run
+
+From the repo root:
+
+```sh
+make e2e-visual
+```
+
+The lane builds its own binaries, seeds a fresh deterministic data file
+through the existing seed tool, and serves on a free port (globalSetup,
+`e2e/visual-server.js`) — the same self-contained pattern as w1..w10.
+The screenshots themselves come from `/__components`, which renders from
+compile-time fixtures (`ui/stories.go`): no store, no clock, no
+randomness — so no pixel can drift between runs.
+
+## Determinism contract
+
+- Fixed viewport 1280x900, `deviceScaleFactor: 1`, scale `css` — no DPI drift.
+- Animations disabled, caret hidden, `reducedMotion: 'reduce'`, light color
+  scheme — no transitions, no blinking caret, no theme drift.
+- Focus states are static markup (`.is-focus`); nothing is hovered or typed
+  into during a run.
+- `retries: 0`, one worker — a red run is a real diff, never noise.
+- Seeded db: fixed titles (unicode, a 485-char long title, a done mix) in a
+  fixed order — deterministic ids; invisible on the gallery page anyway.
+
+Reproducibility exit criterion: run `make e2e-visual` twice back-to-back —
+the second run must be green with zero snapshot updates needed.
+
+## Updating baselines deliberately
+
+Baselines only move when a visual change is intended:
+
+1. Make the styling change.
+2. `make e2e-visual PW_ARGS=--update-snapshots` — rewrites the affected PNGs.
+3. Review every changed PNG line by line (`git diff -- e2e/visual/__snapshots__`
+   rendered, or the `-diff.png` artifacts under `e2e/visual/.results/`): each
+   changed pixel must be explained by the intended change.
+4. Commit the baselines together with the change that moved them — never as
+   a separate "just refresh the snapshots" commit.
