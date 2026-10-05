@@ -84,3 +84,15 @@ e2e-w8:
 	go build -o e2e/bin/todo ./cmd/todo
 	go build -o e2e/bin/seed ./e2e/testdata
 	NODE_PATH=$$(npm root -g) node e2e/w8-inflight.js
+
+# W9 e2e: styling + story gallery in a real browser — GET /__components
+# answers 200 with all seven state containers present and visible (each a
+# real template rendering of a deterministic fixture, labelled by its
+# caption), style.css is served and in effect, and the real page still
+# works: one create round-trip with reload persistence proves the styling
+# layer changed no behavior.
+.PHONY: e2e-w9
+e2e-w9:
+	@mkdir -p e2e/bin
+	go build -o e2e/bin/todo ./cmd/todo
+	NODE_PATH=$$(npm root -g) node e2e/w9-gallery.js
