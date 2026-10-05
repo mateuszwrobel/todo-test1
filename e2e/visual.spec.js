@@ -32,8 +32,20 @@ const COMPONENT_ANCHORS = [
   'c-tokens',
 ];
 
-for (const id of COMPONENT_ANCHORS) {
-  test(`component #${id} matches its committed baseline`, async ({ page }) => {
+// Every observable-state section on the gallery, rendered from the same
+// compile-time fixtures (fixed row ids per section keep the DOM unique).
+const STATE_ANCHORS = [
+  'state-list-populated',
+  'state-empty',
+  'state-create-error',
+  'state-edit-band',
+  'state-load-failure',
+  'state-missing-todo',
+  'state-in-flight-disabled',
+];
+
+for (const id of [...COMPONENT_ANCHORS, ...STATE_ANCHORS]) {
+  test(`anchor #${id} matches its committed baseline`, async ({ page }) => {
     const resp = await page.goto(`${process.env.VISUAL_BASE_URL}/__components`);
     expect(resp.status()).toBe(200);
     await expect(page.locator(`#${id}`)).toHaveScreenshot(`${id}.png`, {
