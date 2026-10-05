@@ -123,6 +123,14 @@ Text editing; the frozen-done rule reads the done flag, so it lands after the fl
 
 **Wave end:** the page matches `designs/mockups/` and every state renders on one gallery page; parent scenarios unchanged — W1–W8 e2e stay green (styling is behavior-frozen).
 
+## W10 — Design system: tokens, components, gallery examples
+
+| Card | Depends on | Note |
+|------|-----------|------|
+| ui/18 design-system-tokens-and-components | ui/17 (the W9 feature) | behavior-frozen `tokens.css` token layer + named component classes consumed by the templates + `#c-*` gallery examples with token-drift gates |
+
+**Wave end:** every design value lives in `ui/static/tokens.css` and every styled primitive has a named class with a gallery example; parent scenarios unchanged — W1–W9 e2e stay green (class swap and token split are behavior- and pixel-frozen).
+
 ## Wave dependencies (the parallel graph)
 
 | Wave | Requires | Can run parallel with |
