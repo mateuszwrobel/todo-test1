@@ -108,3 +108,18 @@ e2e-w10:
 	@mkdir -p e2e/bin
 	go build -o e2e/bin/todo ./cmd/todo
 	NODE_PATH=$$(npm root -g) node e2e/w10-components.js
+
+# W11 e2e: visual regression via Playwright's own screenshot testing — an
+# element screenshot of every #c-* component example and every #state-* gallery
+# section on /__components, compared against the baselines committed under
+# e2e/visual/__snapshots__ with maxDiffPixelRatio 0.001. Fully deterministic:
+# fixed 1280x900 viewport, animations disabled, caret hidden, reduced motion,
+# static focus state; the lane builds its own binaries and serves a freshly
+# seeded deterministic db on a free port. Deliberately update baselines with:
+#   make e2e-visual PW_ARGS=--update-snapshots   (review diffs, commit PNGs)
+.PHONY: e2e-visual
+e2e-visual:
+	@mkdir -p e2e/bin
+	go build -o e2e/bin/todo ./cmd/todo
+	go build -o e2e/bin/seed ./e2e/testdata
+	NODE_PATH=$$(npm root -g) node $$(npm root -g)/@playwright/test/cli.js test --config e2e/playwright.visual.config.js $(PW_ARGS)
