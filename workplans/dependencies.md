@@ -115,6 +115,14 @@ Text editing; the frozen-done rule reads the done flag, so it lands after the fl
 
 **Wave end:** parent scenario "Repeat activation while an operation is in flight" passes.
 
+## W9 — Visual styling + story gallery
+
+| Card | Depends on | Note |
+|------|-----------|------|
+| ui/17 styling-to-mockups + component-story-gallery | ui/01–ui/16 (the W1–W8 features) | behavior-frozen style.css + /__components rendering every observable state from fixtures |
+
+**Wave end:** the page matches `designs/mockups/` and every state renders on one gallery page; parent scenarios unchanged — W1–W8 e2e stay green (styling is behavior-frozen).
+
 ## Wave dependencies (the parallel graph)
 
 | Wave | Requires | Can run parallel with |

@@ -189,3 +189,36 @@ make e2e-w6
 4. **Each reload shows the server truth** — after every failed operation a
    reload carries no banner and exactly the surviving (or empty) truth: the
    failure statement never outlives the reload.
+
+# W9 e2e — styling + story gallery
+
+Browser-driven check of wave W9: the page's visual layer (style.css) and the
+`/__components` story gallery render in a real browser, while the real page's
+behavior stays frozen. CommonJS, global Playwright.
+
+## Run
+
+From the repo root:
+
+```sh
+make e2e-w9
+```
+
+## What it asserts
+
+1. **Gallery answers with every state** — `GET /__components` is 200, all
+   seven state containers (`#state-list-populated`, `#state-empty`,
+   `#state-create-error`, `#state-edit-band`, `#state-load-failure`,
+   `#state-missing-todo`, `#state-in-flight-disabled`) are present and
+   visible, each labelled by its `state: …` caption.
+2. **Fixtures render the real fragments** — the populated fixture shows the
+   four mixed-state rows, the create-error and missing-todo fixtures state
+   the contract's own reasons ("title is required", "no such todo"), the
+   edit band is prefilled, the failure offers its retry, and every control
+   the in-flight window disables carries the `disabled` attribute.
+3. **The stylesheet is served and applied** — `/static/style.css` answers
+   200 and the rendered body carries the styled background, so the visual
+   layer is provably in effect.
+4. **The real page still works** — one create round-trip appends the row
+   without a reload and survives a reload: the styling layer changed no
+   behavior.
