@@ -8,7 +8,11 @@
 
    The --color-* names are drift-gated: the /__components gallery renders
    one labeled chip per --color-* token parsed from this file, so a token
-   added or renamed here without a gallery chip fails a unit test.
+   added here without a gallery chip fails a unit test. The chips track
+   this file's declarations only — a rename that leaves a stale var()
+   reference in style.css stays chip-green, and is caught instead by the
+   unit test pinning every style.css var() reference to a token declared
+   here.
 
    Values are the W9 stylesheet's palette verbatim — every token preserves
    its W9 pixel. The block beyond the named inventory carries the values

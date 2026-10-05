@@ -105,8 +105,11 @@ func storySections() []storySection {
 // emit. The heading example is a div, not an h1: the gallery pins itself
 // to one h1 (the frozen w9 e2e addresses it unambiguously), and .heading
 // carries the identical computed style either way. The #c-tokens block
-// shows one labeled chip per --color-* token parsed from tokens.css, so
-// the gallery cannot hide a token rename from its own color inventory.
+// shows one labeled chip per --color-* token parsed from tokens.css: the
+// chips mirror the declaration inventory, so the gallery cannot hide a
+// declaration change. Renames are pinned on the consumer side — a unit
+// test requires every var() reference in style.css to name a declared
+// token; the chips never see the references.
 func componentExamplesHTML() template.HTML {
 	var b bytes.Buffer
 	b.WriteString(`<p class="component-label">buttons</p>

@@ -181,9 +181,11 @@ func TestGalleryComponentExamplesCarryFrozenStates(t *testing.T) {
 func TestGalleryTokenChipsMatchTokensFile(t *testing.T) {
 	// Drift gate between the design system and its gallery: one labeled
 	// chip per --color-* token, names parsed straight from
-	// static/tokens.css — a token added or renamed there without a
-	// gallery chip (or a chip naming a token that no longer exists)
-	// fails here.
+	// static/tokens.css — a token added there without a gallery chip
+	// (or a chip naming a token that no longer exists) fails here. This
+	// gate tracks declarations only; the consumer side (every var()
+	// reference in style.css naming a declared token) is pinned by the
+	// token-layer test.
 	src, err := os.ReadFile("static/tokens.css")
 	if err != nil {
 		t.Fatalf("read tokens.css: %v", err)
