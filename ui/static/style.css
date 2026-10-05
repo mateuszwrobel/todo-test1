@@ -247,6 +247,41 @@ li.editing .title {
   margin-left: 6px;
 }
 
+/* Open band layout (mockup 04: wide prefilled input + Save): the band takes
+   a full-width line under the row's controls. The #todo-list prefix gives
+   this rule higher specificity than the shell's inline display rule — the
+   shell rule keeps naming the reveal condition (the .editing class), this
+   only decides how an already-revealed band flows. The row's Delete joins
+   the first line via order so the band line stays uncluttered. */
+#todo-list li.editing .edit-form {
+  display: flex;
+  flex-basis: 100%;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  order: 2;
+}
+
+#todo-list li.editing .edit-form input[type="text"] {
+  flex: 1;
+  width: auto;
+  max-width: none;
+}
+
+#todo-list li.editing .delete {
+  order: 1;
+}
+
+#todo-list li.editing .edit {
+  /* keeps the row's controls right-aligned on the first line (the hidden
+     title loses its flex push when the band is open) */
+  margin-left: auto;
+}
+
+#todo-list .edit-error {
+  order: 3;
+}
+
 /* --- stated states: empty panel (02), failure panel + retry (05) --- */
 
 #empty-state,
