@@ -15,11 +15,12 @@ var pageTmpl = template.Must(template.New("page").Parse(`<!doctype html>
 <head>
 <meta charset="utf-8">
 <title>Todo</title>
+<link rel="stylesheet" href="/static/style.css">
 <script src="/static/htmx.min.js" defer></script>
 </head>
 <body>
 <main>
-<h1>Todos</h1>
+<h1>My Todos</h1>
 <style>
 /* The row edit band stays hidden until the row's Edit control puts the
    row in edit mode — the list reads as text, not as inputs. */

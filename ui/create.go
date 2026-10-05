@@ -17,7 +17,11 @@ var createAreaTmpl = template.Must(template.New("create-area").Parse(
 	`<div id="create-area"{{if .OOB}} hx-swap-oob="outerHTML"{{end}}>
 <form id="create-form" hx-post="/ui/todos" hx-target="#todos-area" hx-swap="innerHTML" hx-disabled-elt="#create-form button[type=submit]">
 <input type="text" name="title" value="{{.Value}}" placeholder="What needs doing?">
-<button type="submit">Add</button>{{if .Error}}
+<button type="submit">Add</button>
+{{/* Hint wording mirrors the api contract's title limit (owned upstream by
+    todos.MaxTitleLength = 500; ui may not import todos, so this static
+    line matches the contract instead of deriving from the constant). */}}
+<p class="create-hint">Up to 500 characters</p>{{if .Error}}
 <p id="create-error">{{.Error}}</p>{{end}}
 </form>
 </div>`))

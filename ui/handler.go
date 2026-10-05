@@ -35,6 +35,8 @@ func NewHandler(apiBase string) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", p.handleIndex)
 	mux.HandleFunc("GET /static/htmx.min.js", p.handleHTMX)
+	mux.HandleFunc("GET /static/style.css", p.handleStyle)
+	mux.HandleFunc("GET /__components", p.handleStories)
 	mux.HandleFunc("POST /ui/todos", p.handleCreate)
 	mux.HandleFunc("PATCH /ui/todos/{id}", p.handleToggle)
 	mux.HandleFunc("DELETE /ui/todos/{id}", p.handleDelete)
@@ -66,5 +68,17 @@ func (p *page) handleHTMX(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/javascript")
+	_, _ = w.Write(asset)
+}
+
+// handleStyle serves the page's stylesheet from the same embedded asset tree
+// as the htmx asset.
+func (p *page) handleStyle(w http.ResponseWriter, r *http.Request) {
+	asset, err := staticFS.ReadFile("static/style.css")
+	if err != nil {
+		http.Error(w, "static asset unavailable", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/css")
 	_, _ = w.Write(asset)
 }
