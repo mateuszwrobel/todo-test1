@@ -24,7 +24,7 @@ var pageTmpl = template.Must(template.New("page").Parse(`<!doctype html>
 </head>
 <body>
 <main>
-<h1>My Todos</h1>
+<h1 class="heading">My Todos</h1>
 <style>
 /* The row edit band stays hidden until the row's Edit control puts the
    row in edit mode — the list reads as text, not as inputs. */
@@ -64,30 +64,30 @@ document.body.addEventListener('htmx:responseError', function (event) {
 </html>
 `))
 
-var listTmpl = template.Must(template.New("list").Parse(`<ul id="todo-list">
+var listTmpl = template.Must(template.New("list").Parse(`<ul id="todo-list" class="panel">
 {{- range .}}
-<li id="todo-{{.ID}}"{{if .Editing}} class="editing"{{end}} data-state="{{if .Done}}done{{else}}not-done{{end}}">
-<label class="done-toggle"><input type="checkbox" {{if .Done}}checked{{end}} hx-patch="/ui/todos/{{.ID}}" hx-vals='{"done": {{if .Done}}false{{else}}true{{end}}}' hx-target="#todos-area" hx-swap="innerHTML" hx-disabled-elt="this">
+<li id="todo-{{.ID}}" class="row{{if .Done}} row--done{{end}}{{if .Editing}} editing{{end}}" data-state="{{if .Done}}done{{else}}not-done{{end}}">
+<label class="done-toggle"><input type="checkbox" class="checkbox" {{if .Done}}checked{{end}} hx-patch="/ui/todos/{{.ID}}" hx-vals='{"done": {{if .Done}}false{{else}}true{{end}}}' hx-target="#todos-area" hx-swap="innerHTML" hx-disabled-elt="this">
 <span>{{if .Done}}done{{else}}not done{{end}}</span></label>
 <span class="title">{{.Title}}</span>
-{{if not .Done}}<button type="button" class="edit" hx-on:click="this.closest('li').classList.toggle('editing')">Edit</button>
+{{if not .Done}}<button type="button" class="btn btn--secondary edit" hx-on:click="this.closest('li').classList.toggle('editing')">Edit</button>
 <form class="edit-form" hx-patch="/ui/todos/{{.ID}}" hx-target="#todos-area" hx-swap="innerHTML" hx-disabled-elt="#todo-{{.ID}} .save">
-<input type="text" name="title" value="{{if .Editing}}{{.Typed}}{{else}}{{.Title}}{{end}}">
-<button type="submit" class="save">Save</button>
-<button type="button" class="cancel" hx-on:click="this.closest('li').classList.remove('editing')">Cancel</button>
-</form>{{end}}{{if .EditError}}<p id="edit-error-{{.ID}}" class="edit-error">{{.EditError}}</p>{{end}}
-<button type="button" class="delete" hx-delete="/ui/todos/{{.ID}}" hx-target="#todos-area" hx-swap="innerHTML" hx-disabled-elt="this">Delete</button>
+<input class="input" type="text" name="title" value="{{if .Editing}}{{.Typed}}{{else}}{{.Title}}{{end}}">
+<button type="submit" class="btn btn--primary save">Save</button>
+<button type="button" class="btn btn--secondary cancel" hx-on:click="this.closest('li').classList.remove('editing')">Cancel</button>
+</form>{{end}}{{if .EditError}}<p id="edit-error-{{.ID}}" class="edit-error error-text">{{.EditError}}</p>{{end}}
+<button type="button" class="btn btn--secondary delete" hx-delete="/ui/todos/{{.ID}}" hx-target="#todos-area" hx-swap="innerHTML" hx-disabled-elt="this">Delete</button>
 </li>
 {{- end}}
 </ul>`))
 
 var emptyTmpl = template.Must(template.New("empty").Parse(
-	`<p id="empty-state">No todos yet.</p>`))
+	`<p id="empty-state" class="empty-state panel">No todos yet.</p>`))
 
 // The failure state offers a retry: a GET on the page, which re-issues the
 // read — recovery stays inside GET semantics.
 var failedTmpl = template.Must(template.New("failed").Parse(
-	`<div id="load-error">Could not load todos. <a id="retry" href="/">Retry</a></div>`))
+	`<div id="load-error" class="panel">Could not load todos. <a id="retry" href="/">Retry</a></div>`))
 
 func renderPage(w http.ResponseWriter, state template.HTML) {
 	_ = pageTmpl.Execute(w, struct {

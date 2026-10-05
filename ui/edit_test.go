@@ -194,7 +194,7 @@ func TestInlineEditUpdatesInPlace(t *testing.T) {
 	// The edit control reveals the band: the Edit control stays on the row
 	// (W1's rule), and the page's style rules hide the band until the row
 	// is in edit mode, so the list reads as text until Edit is activated.
-	if !strings.Contains(findRow(t, page, "3"), `class="edit"`) {
+	if !strings.Contains(findRow(t, page, "3"), `class="btn btn--secondary edit"`) {
 		t.Errorf("not-done row 3 lost its Edit control:\n%s", findRow(t, page, "3"))
 	}
 	if !strings.Contains(page, `li.editing .edit-form`) {
@@ -229,7 +229,7 @@ func TestDoneRowsCarryNoEditControl(t *testing.T) {
 	if !strings.Contains(doneRow, `data-state="done"`) {
 		t.Fatalf("row 3 does not show done:\n%s", doneRow)
 	}
-	for _, forbidden := range []string{`class="edit"`, `class="edit-form"`, `name="title"`} {
+	for _, forbidden := range []string{`class="btn btn--secondary edit"`, `class="edit-form"`, `name="title"`} {
 		if strings.Contains(doneRow, forbidden) {
 			t.Errorf("done row 3 carries an edit affordance %s:\n%s", forbidden, doneRow)
 		}
@@ -294,7 +294,7 @@ func TestStaleEditOfDoneTodoRefusedVisibly(t *testing.T) {
 	if status != http.StatusUnprocessableEntity {
 		t.Fatalf("stale edit status = %d, want 422 (body %s)", status, frag)
 	}
-	if !strings.Contains(frag, `class="edit-error"`) ||
+	if !strings.Contains(frag, `class="edit-error error-text"`) ||
 		!strings.Contains(frag, "cannot edit a done todo") {
 		t.Errorf("refusal not stated visibly on the row:\n%s", frag)
 	}
@@ -329,7 +329,7 @@ func TestEmptyEditTextKeepsTheOriginal(t *testing.T) {
 			t.Fatalf("empty edit %q status = %d, want 422 (body %s)", typed, status, frag)
 		}
 		// The edit surface states the contract's required-text refusal.
-		if !strings.Contains(frag, `class="edit-error"`) ||
+		if !strings.Contains(frag, `class="edit-error error-text"`) ||
 			!strings.Contains(frag, "title is required") {
 			t.Errorf("edit %q: required text not stated on the row:\n%s", typed, frag)
 		}
@@ -342,7 +342,7 @@ func TestEmptyEditTextKeepsTheOriginal(t *testing.T) {
 			t.Fatalf("edit %q: row 3 band gone after the refusal:\n%s", typed, frag)
 		}
 		row := findRow(t, frag, "3")
-		if !strings.Contains(row, `class="editing"`) {
+		if !strings.Contains(row, `class="row editing"`) {
 			t.Errorf("edit %q: band not revealed after the refusal:\n%s", typed, row)
 		}
 		want := `value="` + typed + `"`

@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -82,16 +83,17 @@ func assertListFragment(t *testing.T, fragment string, want []fakeTodo) {
 		t.Fatalf("fragment is a full page, breaking the no-reload swap: %s", fragment)
 	}
 	for _, td := range want {
-		liOpen := `<li id="todo-` + strconv.FormatInt(td.ID, 10) + `" data-state="`
+		// Row open tag: id and data-state are the frozen contract; the
+		// class attribute between them names the component classes (row /
+		// row--done / editing) and may carry them in any combination.
+		wantState := "not-done"
 		if td.Done {
-			liOpen += `done`
-		} else {
-			liOpen += `not-done`
+			wantState = "done"
 		}
-		liOpen += `">`
-		if !strings.Contains(fragment, liOpen) {
-			t.Fatalf("row todo-%d missing (with its done state %q): %s",
-				td.ID, strings.TrimSuffix(strings.TrimPrefix(liOpen, `<li id="todo-`+strconv.FormatInt(td.ID, 10)+`" data-state="`), `">`), fragment)
+		liOpen := regexp.MustCompile(`<li id="todo-` + regexp.QuoteMeta(strconv.FormatInt(td.ID, 10)) +
+			`"[^>]*data-state="` + wantState + `">`)
+		if !liOpen.MatchString(fragment) {
+			t.Fatalf("row todo-%d missing (with its done state %q): %s", td.ID, wantState, fragment)
 		}
 		if !strings.Contains(fragment, td.Title) {
 			t.Fatalf("fragment lost the text of todo-%d: %s", td.ID, fragment)

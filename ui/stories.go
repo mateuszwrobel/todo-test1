@@ -31,7 +31,7 @@ var storiesTmpl = template.Must(template.New("stories").Parse(`<!doctype html>
 </head>
 <body class="stories">
 <main>
-<h1>Todo UI — components</h1>
+<h1 class="heading">Todo UI — components</h1>
 {{range .}}
 <p class="state-caption">state: {{.Caption}}</p>
 <section id="{{.ID}}">{{.HTML}}</section>
@@ -113,14 +113,14 @@ func storyEditingRows(idBase int64) []listRow {
 func storyInFlightHTML() template.HTML {
 	html := string(createAreaHTML(createAreaData{})) +
 		string(fragmentHTML(listTmpl, storyEditingRows(21)))
-	html = strings.ReplaceAll(html, `<button type="submit">Add</button>`,
-		`<button type="submit" disabled>Add</button>`)
+	html = strings.ReplaceAll(html, `<button type="submit" class="btn btn--primary">Add</button>`,
+		`<button type="submit" class="btn btn--primary" disabled>Add</button>`)
 	html = strings.ReplaceAll(html, `<input type="checkbox" `,
 		`<input type="checkbox" disabled `)
-	html = strings.ReplaceAll(html, `<button type="submit" class="save">`,
-		`<button type="submit" class="save" disabled>`)
-	html = strings.ReplaceAll(html, `<button type="button" class="delete" `,
-		`<button type="button" class="delete" disabled `)
+	html = strings.ReplaceAll(html, `<button type="submit" class="btn btn--primary save">`,
+		`<button type="submit" class="btn btn--primary save" disabled>`)
+	html = strings.ReplaceAll(html, `<button type="button" class="btn btn--secondary delete" `,
+		`<button type="button" class="btn btn--secondary delete" disabled `)
 	html = strings.Replace(html, `id="create-area"`, `id="create-area-in-flight"`, 1)
 	html = strings.Replace(html, `id="create-form"`, `id="create-form-in-flight"`, 1)
 	return template.HTML(html)

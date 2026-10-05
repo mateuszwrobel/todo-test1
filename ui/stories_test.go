@@ -98,7 +98,7 @@ func TestStoryGalleryFixturesAreContractTrue(t *testing.T) {
 		}},
 		{"state-empty", []string{`id="empty-state"`, "No todos yet."}},
 		{"state-create-error", []string{`id="create-error"`, "title is required"}},
-		{"state-edit-band", []string{`class="editing"`, "Walk the dog in the park"}},
+		{"state-edit-band", []string{`class="row editing"`, "Walk the dog in the park"}},
 		{"state-load-failure", []string{`id="load-error"`, "Could not load todos.", `id="retry"`}},
 		{"state-missing-todo", []string{`id="missing-todo-banner"`, "no such todo", `id="todo-list"`}},
 	}
@@ -119,10 +119,10 @@ func TestStoryGalleryInFlightControlsCarryDisabled(t *testing.T) {
 	// The four controls card ui/16 blocks while in flight: create Add,
 	// row checkbox, edit Save, row Delete.
 	for _, want := range []string{
-		`<button type="submit" disabled>Add</button>`,
+		`<button type="submit" class="btn btn--primary" disabled>Add</button>`,
 		`<input type="checkbox" disabled `,
-		`<button type="submit" class="save" disabled>`,
-		`<button type="button" class="delete" disabled `,
+		`<button type="submit" class="btn btn--primary save" disabled>`,
+		`<button type="button" class="btn btn--secondary delete" disabled `,
 	} {
 		if !strings.Contains(section, want) {
 			t.Errorf("in-flight section missing disabled control %q\nsection: %s", want, section)

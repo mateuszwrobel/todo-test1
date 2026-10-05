@@ -55,8 +55,10 @@ func TestReloadIsFullRerenderFromFreshRead(t *testing.T) {
 	if len(rows) != 2 || rows[0] != "1" || rows[1] != "2" {
 		t.Errorf("reload rows = %v, want exactly [1 2]:\n%s", rows, reloaded)
 	}
-	// And the done state of the fresh read is rendered, not a stale one.
-	if !strings.Contains(reloaded, `id="todo-1" data-state="done"`) {
+	// And the done state of the fresh read is rendered, not a stale one
+	// (the row's class attribute sits between id and data-state).
+	if doneRow := regexp.MustCompile(`(?s)<li id="todo-1"[^>]*data-state="done"[^>]*>`).
+		FindString(reloaded); doneRow == "" {
 		t.Errorf("reload kept a stale done state for todo 1:\n%s", reloaded)
 	}
 }

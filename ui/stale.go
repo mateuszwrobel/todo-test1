@@ -21,7 +21,7 @@ import (
 // Its text is the contract's own stated reason — the message's single owner
 // stays the api ("no such todo" for a 404).
 var bannerTmpl = template.Must(template.New("banner").Parse(
-	`<div id="missing-todo-banner" class="missing-todo" role="alert">{{.}}</div>`))
+	`<div id="missing-todo-banner" class="banner" role="alert">{{.}}</div>`))
 
 // writeMissingTodo answers a fragment endpoint with the stated missing-todo
 // failure: the contract's 404 status, the banner, and the current server

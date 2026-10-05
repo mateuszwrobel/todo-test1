@@ -47,11 +47,11 @@ func TestRowControlsCarryInFlightDisableWiring(t *testing.T) {
 	if !strings.Contains(form, `hx-disabled-elt="#todo-5 .save"`) {
 		t.Fatalf("edit-save is not blocked while in flight: %s", form)
 	}
-	if !strings.Contains(form, `class="save">Save`) {
+	if !strings.Contains(form, `class="btn btn--primary save">Save`) {
 		t.Fatalf("save button must carry the .save class the form's selector names: %s", form)
 	}
 	// The delete button blocks itself.
-	if want := lineWith(t, row, `class="delete"`); !strings.Contains(want, `hx-disabled-elt="this"`) {
+	if want := lineWith(t, row, `class="btn btn--secondary delete"`); !strings.Contains(want, `hx-disabled-elt="this"`) {
 		t.Fatalf("row delete control does not disable itself while in flight: %s", want)
 	}
 }

@@ -41,7 +41,7 @@ body > main {
   box-shadow: var(--shadow-card);
 }
 
-h1 {
+.heading {
   margin: 0;
   font-size: var(--text-xl);
   font-weight: 700;
@@ -66,9 +66,9 @@ main > #todos-area {
   gap: var(--space-4) var(--space-4);
 }
 
-#create-form input[type="text"] {
-  min-width: 0;
-  padding: 11px 14px; /* mockup-exact, off the scale */
+/* The input component: one field look everywhere it appears (create row,
+   edit band); context rules settle the per-surface measure only. */
+.input {
   border: 1px solid var(--color-border-field);
   border-radius: var(--radius-sm);
   font: inherit;
@@ -76,28 +76,36 @@ main > #todos-area {
   background: var(--color-bg-panel);
 }
 
+#create-form .input {
+  min-width: 0;
+  padding: 11px 14px; /* mockup-exact, off the scale */
+}
+
 #create-form button[type="submit"] {
   justify-self: end;
 }
 
-.create-hint,
+.hint,
 #create-error {
   grid-column: 1 / -1;
   margin: 0;
   font-size: var(--text-sm);
 }
 
-.create-hint {
+/* Stated text components: the grey contract hint, and the red error text
+   shared by the create-area refusal and the row-attached edit refusal. */
+.hint {
   color: var(--color-text-muted);
 }
 
-#create-error {
+.error-text {
+  margin: 0;
   color: var(--color-danger);
 }
 
-/* --- buttons: blue primary, grey secondary (mockups) --- */
+/* --- buttons: the .btn component, blue primary / grey secondary (mockups) --- */
 
-button {
+.btn {
   font: inherit;
   border: 0;
   border-radius: var(--radius-sm);
@@ -107,22 +115,24 @@ button {
   cursor: pointer;
 }
 
-button:hover {
+.btn--secondary {
+  background: var(--color-surface-secondary);
+}
+
+.btn:hover {
   background: var(--color-surface-secondary-hover);
 }
 
-#create-form button[type="submit"],
-.edit-form .save {
+.btn--primary {
   color: var(--color-on-primary);
   background: var(--color-primary);
 }
 
-#create-form button[type="submit"]:hover,
-.edit-form .save:hover {
+.btn--primary:hover {
   background: var(--color-primary-hover);
 }
 
-button[disabled] {
+.btn:disabled {
   opacity: 0.55;
   cursor: default;
 }
@@ -138,12 +148,12 @@ button[disabled] {
   margin: 0;
   padding: 0;
   list-style: none;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-bg-panel);
 }
 
-#todo-list li {
+/* The row component: controls, title, and any row-attached notice on one
+   wrapped line, separated by thin dividers (the panel's .panel border
+   frames the list itself). */
+.row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -152,7 +162,7 @@ button[disabled] {
   border-bottom: 1px solid var(--color-divider);
 }
 
-#todo-list li:last-child {
+.row:last-child {
   border-bottom: 0;
 }
 
@@ -165,7 +175,7 @@ button[disabled] {
   padding: 2px;
 }
 
-.done-toggle input[type="checkbox"] {
+.checkbox {
   width: 22px;
   height: 22px;
   margin: 0;
@@ -188,16 +198,16 @@ button[disabled] {
   overflow-wrap: break-word;
 }
 
-li[data-state="done"] .title {
+.row--done .title {
   color: var(--color-text-muted);
   text-decoration: line-through;
 }
 
-.edit-error {
+/* A row-attached refusal sits on its own line under the row's controls. */
+#todo-list .error-text {
   flex-basis: 100%;
-  margin: 0;
-  color: var(--color-danger);
   font-size: 14px; /* mockup-exact, between the scale steps */
+  order: 3;
 }
 
 /* --- inline edit band: prefilled input + blue Save (mockup 04) ---
@@ -215,15 +225,10 @@ li.editing .title {
   display: none;
 }
 
-.edit-form input[type="text"] {
+.edit-form .input {
   width: 300px;
   max-width: 60vw;
   padding: var(--space-4) 14px; /* mockup-exact vertical + off-scale horizontal */
-  border: 1px solid var(--color-border-field);
-  border-radius: var(--radius-sm);
-  font: inherit;
-  color: var(--color-text);
-  background: var(--color-bg-panel);
 }
 
 .edit-form .save,
@@ -246,7 +251,7 @@ li.editing .title {
   order: 2;
 }
 
-#todo-list li.editing .edit-form input[type="text"] {
+#todo-list li.editing .edit-form .input {
   flex: 1;
   width: auto;
   max-width: none;
@@ -262,13 +267,17 @@ li.editing .title {
   margin-left: auto;
 }
 
-#todo-list .edit-error {
-  order: 3;
-}
-
 /* --- stated states: empty panel (02), failure panel + retry (05) --- */
 
-#empty-state,
+/* The panel component: the bordered white surface the list and both
+   stated states sit in. */
+.panel {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-panel);
+}
+
+.empty-state,
 #load-error {
   display: flex;
   flex-direction: column;
@@ -278,9 +287,6 @@ li.editing .title {
   min-height: 320px;
   margin: 0;
   padding: 24px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-bg-panel);
   text-align: center;
 }
 
@@ -304,7 +310,7 @@ li.editing .title {
 
 /* --- missing-todo banner above the list (mockup 06) --- */
 
-.missing-todo {
+.banner {
   margin: 0 0 var(--space-5);
   padding: 13px var(--space-6);
   border: 1px solid var(--color-danger-border);

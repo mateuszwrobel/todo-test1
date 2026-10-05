@@ -101,7 +101,9 @@ func TestRestartResumesState(t *testing.T) {
 	page, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
 
-	rowRe := regexp.MustCompile(`(?s)<li id="todo-\d+" data-state="(done|not-done)">.*?<span class="title">([^<]*)</span>`)
+	// The row's class attribute (component classes) sits between the
+	// frozen id and data-state attributes.
+	rowRe := regexp.MustCompile(`(?s)<li id="todo-\d+"[^>]*data-state="(done|not-done)">.*?<span class="title">([^<]*)</span>`)
 	rows := rowRe.FindAllStringSubmatch(string(page), -1)
 	if len(rows) != len(before) {
 		t.Fatalf("page shows %d rows, want %d:\n%s", len(rows), len(before), page)
