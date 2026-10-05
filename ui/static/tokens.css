@@ -1,0 +1,66 @@
+/* ui/static/tokens.css — the design system's single source of values.
+
+   :root only: no selectors, no component rules here — style.css consumes
+   these tokens and carries no raw hex anywhere. Served at
+   /static/tokens.css and linked BEFORE /static/style.css in every page
+   shell, so every var() reference in style.css resolves at first paint
+   (the <link> order is the load order; see the page shells' comments).
+
+   The --color-* names are drift-gated: the /__components gallery renders
+   one labeled chip per --color-* token parsed from this file, so a token
+   added or renamed here without a gallery chip fails a unit test.
+
+   Values are the W9 stylesheet's palette verbatim — every token preserves
+   its W9 pixel. The block beyond the named inventory carries the values
+   the W9 layer already used that the inventory names didn't cover
+   (secondary-button surfaces, field borders, the banner inks, the sunken
+   failure panel, the gallery shadow): named here so style.css stays
+   literal-free rather than restating colors. */
+
+:root {
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --color-text: #111827;
+  --color-text-muted: #6b7280;
+  --color-danger: #dc2626;
+  --color-danger-bg: #fee2e2;
+  --color-border: #e5e7eb;
+  --color-divider: #eef0f3;
+  --color-bg-page: #f3f4f7;
+  --color-bg-panel: #ffffff;
+  --color-focus-ring: #2563eb;
+
+  /* Values carried over from the W9 stylesheet, named to keep style.css
+     hex-free. Each matches an existing pixel exactly. */
+  --color-on-primary: #ffffff;
+  --color-border-field: #d1d5db;
+  --color-surface-secondary: #e5e7eb;
+  --color-surface-secondary-hover: #d7dade;
+  --color-danger-ink: #b42318;
+  --color-danger-border: #fecaca;
+  --color-bg-sunken: #f7f8fa;
+
+  /* Space: the common gap/padding rhythm. Mockup-exact one-off paddings
+     (page card margins, panel insets) stay literal in style.css — pixel
+     anchors, not a scale step. */
+  --space-1: 4px;
+  --space-2: 6px;
+  --space-3: 8px;
+  --space-4: 10px;
+  --space-5: 16px;
+  --space-6: 18px;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+
+  --shadow-card: 0 10px 30px rgba(15, 23, 42, 0.08);
+  --shadow-soft: 0 6px 18px rgba(15, 23, 42, 0.06);
+
+  --text-sm: 13px;
+  --text-base: 16px;
+  --text-lg: 20px;
+  --text-xl: 28px;
+
+  --font-stack: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}

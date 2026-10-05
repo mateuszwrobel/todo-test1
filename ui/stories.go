@@ -25,6 +25,8 @@ var storiesTmpl = template.Must(template.New("stories").Parse(`<!doctype html>
 <head>
 <meta charset="utf-8">
 <title>Todo UI — components</title>
+{{/* Same contractual load order as the real page: token layer first. */}}
+<link rel="stylesheet" href="/static/tokens.css">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body class="stories">

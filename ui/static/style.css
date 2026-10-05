@@ -5,28 +5,12 @@
    (the edit-band reveal stays the shell's inline rule), carries no
    transitions or animations (pixel tests must render deterministically),
    and no selector here may depend on rendered TEXT — ids, data-state, and
-   class hooks are the contract-stable anchors. */
+   class hooks are the contract-stable anchors.
 
-:root {
-  --page-bg: #f3f4f7;
-  --panel-bg: #ffffff;
-  --ink: #111827;
-  --ink-muted: #6b7280;
-  --line: #e5e7eb;
-  --line-soft: #eef0f3;
-  --field-line: #d1d5db;
-  --primary: #2563eb;
-  --primary-hover: #1d4ed8;
-  --secondary-bg: #e5e7eb;
-  --secondary-hover: #d7dade;
-  --danger-ink: #dc2626;
-  --notice-bg: #fee2e2;
-  --notice-ink: #b42318;
-  --notice-line: #fecaca;
-  --radius-card: 16px;
-  --radius-panel: 12px;
-  --radius-field: 8px;
-}
+   Design system (W10): every color, radius, shadow, type size, and font
+   comes from tokens.css (loaded first by every page shell); this file
+   carries no raw hex at all. Where a mockup measurement is not a scale
+   step it stays a literal px — a pixel anchor, not a color. */
 
 *,
 *::before,
@@ -36,10 +20,10 @@
 
 body {
   margin: 0;
-  background: var(--page-bg);
-  color: var(--ink);
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  font-size: 16px;
+  background: var(--color-bg-page);
+  color: var(--color-text);
+  font-family: var(--font-stack);
+  font-size: var(--text-base);
   line-height: 1.45;
 }
 
@@ -51,15 +35,15 @@ body > main {
   max-width: 640px;
   margin: 48px auto;
   padding: 28px 32px 36px;
-  background: var(--panel-bg);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  background: var(--color-bg-panel);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
 }
 
 h1 {
   margin: 0;
-  font-size: 28px;
+  font-size: var(--text-xl);
   font-weight: 700;
   letter-spacing: -0.01em;
 }
@@ -79,17 +63,17 @@ main > #todos-area {
 #create-form {
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 10px 10px;
+  gap: var(--space-4) var(--space-4);
 }
 
 #create-form input[type="text"] {
   min-width: 0;
-  padding: 11px 14px;
-  border: 1px solid var(--field-line);
-  border-radius: var(--radius-field);
+  padding: 11px 14px; /* mockup-exact, off the scale */
+  border: 1px solid var(--color-border-field);
+  border-radius: var(--radius-sm);
   font: inherit;
-  color: var(--ink);
-  background: var(--panel-bg);
+  color: var(--color-text);
+  background: var(--color-bg-panel);
 }
 
 #create-form button[type="submit"] {
@@ -100,15 +84,15 @@ main > #todos-area {
 #create-error {
   grid-column: 1 / -1;
   margin: 0;
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .create-hint {
-  color: var(--ink-muted);
+  color: var(--color-text-muted);
 }
 
 #create-error {
-  color: var(--danger-ink);
+  color: var(--color-danger);
 }
 
 /* --- buttons: blue primary, grey secondary (mockups) --- */
@@ -116,26 +100,26 @@ main > #todos-area {
 button {
   font: inherit;
   border: 0;
-  border-radius: var(--radius-field);
-  padding: 10px 18px;
-  color: var(--ink);
-  background: var(--secondary-bg);
+  border-radius: var(--radius-sm);
+  padding: var(--space-4) var(--space-6);
+  color: var(--color-text);
+  background: var(--color-surface-secondary);
   cursor: pointer;
 }
 
 button:hover {
-  background: var(--secondary-hover);
+  background: var(--color-surface-secondary-hover);
 }
 
 #create-form button[type="submit"],
 .edit-form .save {
-  color: #ffffff;
-  background: var(--primary);
+  color: var(--color-on-primary);
+  background: var(--color-primary);
 }
 
 #create-form button[type="submit"]:hover,
 .edit-form .save:hover {
-  background: var(--primary-hover);
+  background: var(--color-primary-hover);
 }
 
 button[disabled] {
@@ -144,7 +128,7 @@ button[disabled] {
 }
 
 :focus-visible {
-  outline: 2px solid var(--primary);
+  outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;
 }
 
@@ -154,18 +138,18 @@ button[disabled] {
   margin: 0;
   padding: 0;
   list-style: none;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-panel);
-  background: var(--panel-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-panel);
 }
 
 #todo-list li {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px 14px;
-  padding: 16px 18px;
-  border-bottom: 1px solid var(--line-soft);
+  gap: var(--space-4) 14px;
+  padding: var(--space-5) var(--space-6);
+  border-bottom: 1px solid var(--color-divider);
 }
 
 #todo-list li:last-child {
@@ -185,7 +169,7 @@ button[disabled] {
   width: 22px;
   height: 22px;
   margin: 0;
-  accent-color: var(--primary);
+  accent-color: var(--color-primary);
   cursor: pointer;
 }
 
@@ -205,15 +189,15 @@ button[disabled] {
 }
 
 li[data-state="done"] .title {
-  color: var(--ink-muted);
+  color: var(--color-text-muted);
   text-decoration: line-through;
 }
 
 .edit-error {
   flex-basis: 100%;
   margin: 0;
-  color: var(--danger-ink);
-  font-size: 14px;
+  color: var(--color-danger);
+  font-size: 14px; /* mockup-exact, between the scale steps */
 }
 
 /* --- inline edit band: prefilled input + blue Save (mockup 04) ---
@@ -234,17 +218,17 @@ li.editing .title {
 .edit-form input[type="text"] {
   width: 300px;
   max-width: 60vw;
-  padding: 10px 14px;
-  border: 1px solid var(--field-line);
-  border-radius: var(--radius-field);
+  padding: var(--space-4) 14px; /* mockup-exact vertical + off-scale horizontal */
+  border: 1px solid var(--color-border-field);
+  border-radius: var(--radius-sm);
   font: inherit;
-  color: var(--ink);
-  background: var(--panel-bg);
+  color: var(--color-text);
+  background: var(--color-bg-panel);
 }
 
 .edit-form .save,
 .edit-form .cancel {
-  margin-left: 6px;
+  margin-left: var(--space-2);
 }
 
 /* Open band layout (mockup 04: wide prefilled input + Save): the band takes
@@ -257,8 +241,8 @@ li.editing .title {
   display: flex;
   flex-basis: 100%;
   align-items: center;
-  gap: 8px;
-  margin-top: 4px;
+  gap: var(--space-3);
+  margin-top: var(--space-1);
   order: 2;
 }
 
@@ -294,39 +278,39 @@ li.editing .title {
   min-height: 320px;
   margin: 0;
   padding: 24px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-panel);
-  background: var(--panel-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-panel);
   text-align: center;
 }
 
 #load-error {
-  background: #f7f8fa;
+  background: var(--color-bg-sunken);
 }
 
 #retry {
   display: inline-block;
-  padding: 9px 18px;
-  border: 1px solid var(--field-line);
-  border-radius: var(--radius-field);
-  background: var(--panel-bg);
-  color: var(--primary);
+  padding: 9px var(--space-6);
+  border: 1px solid var(--color-border-field);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-panel);
+  color: var(--color-primary);
   text-decoration: none;
 }
 
 #retry:hover {
-  border-color: var(--primary);
+  border-color: var(--color-primary);
 }
 
 /* --- missing-todo banner above the list (mockup 06) --- */
 
 .missing-todo {
-  margin: 0 0 16px;
-  padding: 13px 18px;
-  border: 1px solid var(--notice-line);
-  border-radius: var(--radius-field);
-  background: var(--notice-bg);
-  color: var(--notice-ink);
+  margin: 0 0 var(--space-5);
+  padding: 13px var(--space-6);
+  border: 1px solid var(--color-danger-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-danger-bg);
+  color: var(--color-danger-ink);
 }
 
 /* --- story gallery (/__components) --- */
@@ -336,16 +320,16 @@ body.stories > main {
 }
 
 .state-caption {
-  margin: 26px 4px 8px;
-  color: var(--ink-muted);
-  font-size: 13px;
+  margin: 26px var(--space-1) var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
 }
 
 .state-section {
-  margin: 0 0 12px;
+  margin: 0 0 12px; /* mockup-exact, off the scale */
   padding: 24px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-  background: var(--panel-bg);
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-panel);
+  box-shadow: var(--shadow-soft);
 }

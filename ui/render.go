@@ -15,6 +15,10 @@ var pageTmpl = template.Must(template.New("page").Parse(`<!doctype html>
 <head>
 <meta charset="utf-8">
 <title>Todo</title>
+{{/* Load order is contractual: tokens.css before style.css — style.css
+    consumes the design tokens via var(), so the token layer must parse
+    first (a later token sheet would flash unstyled pixels). */}}
+<link rel="stylesheet" href="/static/tokens.css">
 <link rel="stylesheet" href="/static/style.css">
 <script src="/static/htmx.min.js" defer></script>
 </head>

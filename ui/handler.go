@@ -35,7 +35,12 @@ func NewHandler(apiBase string) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", p.handleIndex)
 	mux.HandleFunc("GET /static/htmx.min.js", p.handleHTMX)
-	mux.HandleFunc("GET /static/style.css", p.handleStyle)
+	// tokens.css before style.css: style.css is pure var() consumption,
+	// so the token sheet must be parsed first. The <link> order in the
+	// page shells (render.go, stories.go) enforces that at load time;
+	// the routes themselves are order-independent.
+	mux.HandleFunc("GET /static/tokens.css", serveStaticCSS("static/tokens.css"))
+	mux.HandleFunc("GET /static/style.css", serveStaticCSS("static/style.css"))
 	mux.HandleFunc("GET /__components", p.handleStories)
 	mux.HandleFunc("POST /ui/todos", p.handleCreate)
 	mux.HandleFunc("PATCH /ui/todos/{id}", p.handleToggle)
@@ -71,14 +76,18 @@ func (p *page) handleHTMX(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(asset)
 }
 
-// handleStyle serves the page's stylesheet from the same embedded asset tree
-// as the htmx asset.
-func (p *page) handleStyle(w http.ResponseWriter, r *http.Request) {
-	asset, err := staticFS.ReadFile("static/style.css")
-	if err != nil {
-		http.Error(w, "static asset unavailable", http.StatusInternalServerError)
-		return
+// serveStaticCSS serves one stylesheet from the embedded asset tree that
+// also carries htmx and the page markup. tokens.css and style.css share
+// this path: the design system is two sheets, the token layer and its
+// consumer, served identically.
+func serveStaticCSS(name string) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		asset, err := staticFS.ReadFile(name)
+		if err != nil {
+			http.Error(w, "static asset unavailable", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/css")
+		_, _ = w.Write(asset)
 	}
-	w.Header().Set("Content-Type", "text/css")
-	_, _ = w.Write(asset)
 }
