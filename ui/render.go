@@ -53,15 +53,14 @@ var boardTmpl = template.Must(template.New("board").Parse(`<div id="board" class
 {{- range .}}
 <section id="column-{{.Anchor}}" class="column" data-column="{{.Title}}">
 <h2 class="column__title">{{.Title}}</h2>
-<ul class="column__cards">
-{{- range .Cards}}
+{{if .Cards}}<ul class="column__cards">{{- range .Cards}}
 <li id="card-{{.ID}}" class="card{{if .Done}} card--done{{end}}" data-card="{{.ID}}">
 <span class="card__title">{{.Title}}</span>
 <button type="button" class="btn btn--secondary card__edit">Edit</button>
 <button type="button" class="btn btn--secondary card__delete">Delete</button>
 </li>
 {{- end}}
-</ul>
+</ul>{{else}}<p class="column__empty" data-empty="true">No cards</p>{{end}}
 </section>
 {{- end}}
 </div>`))
