@@ -1,6 +1,7 @@
 # Scenario Dependencies — Feature Waves
 
 > **Status: superseded** by [workplan_kanban_application.md](workplan_kanban_application.md) — see [ADR-003](../docs/adr/ADR-003-kanban-pivot.md). Kept as history.
+> Kanban ordering now lives in [dependencies_kanban.md](dependencies_kanban.md).
 
 Companion to the scenario cards in `workplans/scenarios/`. All ordering lives here (cards carry none). Work proceeds **feature by feature**: a wave delivers one feature vertically — store → contract translation → page — and ends with that feature integrated against the real code landed earlier in the same wave. No fake-then-replace staging, no module-by-module lanes: integration for a feature happens at its wave end, at the first moment all its pieces exist.
 
