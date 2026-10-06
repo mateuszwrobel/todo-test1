@@ -22,7 +22,7 @@ Consequence: the page never issues a second mutation for an operation already in
 1. User opens (or reloads) the page → the board shows exactly three columns in the fixed order "To Do", "In Progress", "Done".
 2. Each column lists its cards top-to-bottom in stored position order — position is priority, so the top card is the highest-priority item of that column.
 3. Cards in "Done" render as done; cards in the other two columns render as not-done. No separate done indicator or control exists anywhere on the page — the column a card sits in is the whole done story.
-4. Each card exposes controls to edit its text and delete it; every card is also draggable within its column and into other columns. The create control sits with the board, not on a card.
+4. Each card exposes controls to edit its text and delete it; every card is also draggable within its column and into other columns. The create control sits with the board, not on a card (control placement is a page necessity — the contract has no per-card create operation).
 5. User reloads the page, or restarts the server and reloads → the same cards with the same texts, columns, and positions appear. Persistence is observable at this step.
 
 **Alternate/error flows:**
@@ -188,7 +188,7 @@ Consequence: the page never issues a second mutation for an operation already in
 
 ## J8 — Operate on a card that no longer exists
 
-**Goal / context:** the edge of the single-user assumption. The page is stale — it shows a card that no longer exists. Double-submit from this page is closed: the in-flight control blocking decision — required behavior, the workplan scenario "Repeat activation while an operation is in flight" — disables the triggered control until its response arrives, so a second mutation of an operation already in flight never leaves this page. The paths that remain: a second browser tab acting from its own snapshot, a server restart against a different or emptied data file (workplan Assumptions/Risks), and direct edits of the data file. Last write wins; a concurrent drag can be lost. The app does not merge or revive anything — the operation simply does not take effect. (Noted once here; not repeated in J3–J7 beyond their error flows.)
+**Goal / context:** the edge of the single-user assumption. The page is stale — it shows a card that no longer exists. Double-submit from this page is closed: the in-flight control blocking decision — required behavior, the workplan scenario "Repeat activation while an operation is in flight" — disables the triggered control until its response arrives, so a second mutation of an operation already in flight never leaves this page. The paths that remain: a second browser tab acting from its own snapshot (workplan Assumptions/Risks), or a server restart against a different data file, or direct edits of the data file — the latter two produce equivalent staleness but are not named in the kanban workplan's risk list. Last write wins; a concurrent drag can be lost. The app does not merge or revive anything — the operation simply does not take effect. (Noted once here; not repeated in J3–J7 beyond their error flows.)
 
 **Entry state:** a stale page showing at least one card whose identifier no longer exists.
 
