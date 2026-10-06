@@ -7,8 +7,6 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"testing"
-
-	"todo/todos"
 )
 
 // Card api/10 — Delete.
@@ -27,7 +25,7 @@ func TestDeleteExistingReturns204AndVanishesFromList(t *testing.T) {
 		t.Fatalf("seed Create: %v", err)
 	}
 
-	srv := httptest.NewServer(NewHandler(store))
+	srv := httptest.NewServer(NewHandler(store, openBoardStore(t)))
 	defer srv.Close()
 
 	req, err := http.NewRequest(http.MethodDelete, srv.URL+"/todos/"+strconv.FormatInt(gone.ID, 10), nil)
@@ -51,14 +49,12 @@ func TestDeleteExistingReturns204AndVanishesFromList(t *testing.T) {
 		t.Errorf("204 must carry no body, got %q", body)
 	}
 
-	getResp, err := http.Get(srv.URL + "/todos")
+	// The card's "later GET does not include it" now reads against the store
+	// directly: GET /todos retired with api/01, and GET /board answers the
+	// board store, not this one. The deletion's observable truth is List.
+	list, err := store.List()
 	if err != nil {
-		t.Fatalf("GET /todos after delete: %v", err)
-	}
-	defer getResp.Body.Close()
-	var list []todos.Todo
-	if err := json.NewDecoder(getResp.Body).Decode(&list); err != nil {
-		t.Fatalf("decode list: %v", err)
+		t.Fatalf("store List after delete: %v", err)
 	}
 	if len(list) != 1 || list[0] != keep {
 		t.Fatalf("list after delete = %+v, want exactly [%+v]", list, keep)
@@ -70,7 +66,7 @@ func TestDeleteExistingReturns204AndVanishesFromList(t *testing.T) {
 // When  a DELETE /todos/X arrives
 // Then  the response is 404 with { "error": "no such todo" }
 func TestDeleteMissingTodoReturns404(t *testing.T) {
-	srv := httptest.NewServer(NewHandler(openStore(t)))
+	srv := httptest.NewServer(NewHandler(openStore(t), openBoardStore(t)))
 	defer srv.Close()
 
 	const missing = 987654321
@@ -99,7 +95,7 @@ func TestDeleteMissingTodoReturns404(t *testing.T) {
 // A non-numeric id is unparseable input, not an invalid-but-parseable value:
 // the contract's DELETE section states 400 with {"error":"invalid request"}.
 func TestDeleteNonNumericIdReturns400(t *testing.T) {
-	srv := httptest.NewServer(NewHandler(openStore(t)))
+	srv := httptest.NewServer(NewHandler(openStore(t), openBoardStore(t)))
 	defer srv.Close()
 
 	req, err := http.NewRequest(http.MethodDelete, srv.URL+"/todos/not-a-number", nil)

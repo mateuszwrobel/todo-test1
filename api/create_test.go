@@ -22,7 +22,7 @@ import (
 // Tested against the real store: persistence is proven, not faked.
 func TestPostTodosCreates(t *testing.T) {
 	store := openStore(t)
-	srv := httptest.NewServer(NewHandler(store))
+	srv := httptest.NewServer(NewHandler(store, openBoardStore(t)))
 	defer srv.Close()
 
 	resp, err := http.Post(srv.URL+"/todos", "application/json",
@@ -70,7 +70,7 @@ func TestPostTodosCreates(t *testing.T) {
 // The POST contract states 400 `{"error": "invalid request"}` for malformed
 // JSON (transport error, distinct from the 422 rule refusals).
 func TestPostTodosMalformedJSONIs400(t *testing.T) {
-	srv := httptest.NewServer(NewHandler(openStore(t)))
+	srv := httptest.NewServer(NewHandler(openStore(t), openBoardStore(t)))
 	defer srv.Close()
 
 	resp, err := http.Post(srv.URL+"/todos", "application/json", strings.NewReader(`{"title": `))
@@ -96,7 +96,7 @@ func TestPostTodosMalformedJSONIs400(t *testing.T) {
 //	And no todo is created
 func TestPostTodosOverLimit(t *testing.T) {
 	store := openStore(t)
-	srv := httptest.NewServer(NewHandler(store))
+	srv := httptest.NewServer(NewHandler(store, openBoardStore(t)))
 	defer srv.Close()
 
 	long := strings.Repeat("x", todos.MaxTitleLength+1)
@@ -150,7 +150,7 @@ func assertCreateError(t *testing.T, body []byte, want string) {
 //	And no todo is created
 func TestPostTodosBlankTitle(t *testing.T) {
 	store := openStore(t)
-	srv := httptest.NewServer(NewHandler(store))
+	srv := httptest.NewServer(NewHandler(store, openBoardStore(t)))
 	defer srv.Close()
 
 	for _, body := range []string{

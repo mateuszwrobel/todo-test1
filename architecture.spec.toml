@@ -38,14 +38,14 @@ matches = { units = ["*/board"] }
 depend_on = []
 forbidden = ["api", "ui", "server"]
 
-# HTTP translation layer: only internal dependency is todos. The kanban pivot
-# (ADR-003) replaces this edge with board when the board endpoints land — the
-# edge is declared at the wave that first imports it, not before.
+# HTTP translation layer: internal dependencies are todos (until its endpoints
+# retire) and board (GET /board, workplan_api_board.md). The api→board edge is
+# declared at the wave that first imports board — KW1 api/01, not before.
 [[module]]
 name = "api"
 matches = { units = ["*/api"] }
 [module.allowed]
-depend_on = ["todos"]
+depend_on = ["todos", "board"]
 forbidden = ["ui", "server"]
 
 # Page module: coupling to api is HTTP at runtime (invisible to the driver), so
@@ -59,13 +59,14 @@ depend_on = []
 forbidden = ["todos", "board", "api", "server"]
 
 # Composition root: cmd/todo, package main — sanctioned wiring (go driver marks it
-# role `composition`), depends on all three modules. The board edge is declared
-# at the wave that first imports it (server/01 wiring), not before.
+# role `composition`), depends on all modules it composes. The server→board edge
+# is declared at the wave that first imports board — KW1 api/01, whose wiring
+# opens kanban.db beside todos.db.
 [[module]]
 name = "server"
 matches = { units = ["*/cmd/todo"] }
 [module.allowed]
-depend_on = ["todos", "api", "ui"]
+depend_on = ["todos", "board", "api", "ui"]
 
 # No dependency cycles among the declared modules.
 [[constraint]]

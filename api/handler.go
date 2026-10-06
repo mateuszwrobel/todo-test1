@@ -1,12 +1,14 @@
-// Package api exposes the todo application's JSON wire contract and
-// translates HTTP requests into todos-module operations. It owns no listener
-// and never renders HTML.
+// Package api exposes the application's JSON wire contract and translates
+// HTTP requests into board and todo module operations. It owns no listener
+// and never renders HTML. The board endpoints are the kanban contract
+// (workplan_api_board.md); the remaining /todos mutation endpoints serve the
+// superseded todo surface until their retirement cards land.
 package api
 
 import (
-	"encoding/json"
 	"net/http"
 
+	"todo/board"
 	"todo/todos"
 )
 
@@ -20,32 +22,22 @@ type TodoStore interface {
 	Delete(id int64) error
 }
 
-// NewHandler builds the handler for the /todos subtree. The composition root
-// mounts it on its listener.
-func NewHandler(store TodoStore) http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /todos", handleList(store))
-	mux.HandleFunc("POST /todos", handleCreate(store))
-	mux.HandleFunc("PATCH /todos/{id}", handleChange(store))
-	mux.HandleFunc("DELETE /todos/{id}", handleDelete(store))
-	return mux
+// BoardStore is this module's port onto the board contract: the read the
+// GET /board endpoint translates. Consumer-defined like TodoStore; the
+// composition root injects the concrete store.
+type BoardStore interface {
+	List() ([]board.ColumnCards, error)
 }
 
-// handleList maps GET /todos to the store's List operation: 200 with the JSON
-// array of todos ordered by identifier ascending (List's order).
-func handleList(store TodoStore) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		list, err := store.List()
-		if err != nil {
-			http.Error(w, "failed to read todos", http.StatusInternalServerError)
-			return
-		}
-		if list == nil {
-			list = []todos.Todo{} // the contract's empty list is [], never null
-		}
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(list); err != nil {
-			return // status already sent; nothing left to state
-		}
-	}
+// NewHandler builds the handler for the JSON contract: GET /board over the
+// board store, POST/PATCH/DELETE /todos over the todo store (GET /todos is
+// retired — the board read replaces the todo list surface). The composition
+// root mounts it on its listener.
+func NewHandler(todoStore TodoStore, boardStore BoardStore) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /board", handleBoard(boardStore))
+	mux.HandleFunc("POST /todos", handleCreate(todoStore))
+	mux.HandleFunc("PATCH /todos/{id}", handleChange(todoStore))
+	mux.HandleFunc("DELETE /todos/{id}", handleDelete(todoStore))
+	return mux
 }

@@ -45,7 +45,7 @@ func TestPatchDoneStateEitherDirection(t *testing.T) {
 		t.Fatalf("seed Create: %v", err)
 	}
 
-	srv := httptest.NewServer(NewHandler(store))
+	srv := httptest.NewServer(NewHandler(store, openBoardStore(t)))
 	defer srv.Close()
 
 	// Mark done.
@@ -89,7 +89,7 @@ func TestPatchDoneStateEitherDirection(t *testing.T) {
 // When  a PATCH /todos/X arrives
 // Then  the response is 404 with { "error": "no such todo" }
 func TestPatchMissingTodoIs404(t *testing.T) {
-	srv := httptest.NewServer(NewHandler(openStore(t)))
+	srv := httptest.NewServer(NewHandler(openStore(t), openBoardStore(t)))
 	defer srv.Close()
 
 	resp, body := patchTodo(t, srv.URL, 999, `{"done": true}`)
@@ -117,7 +117,7 @@ func TestPatchEmptyBodyIs422(t *testing.T) {
 	if err != nil {
 		t.Fatalf("seed Create: %v", err)
 	}
-	srv := httptest.NewServer(NewHandler(store))
+	srv := httptest.NewServer(NewHandler(store, openBoardStore(t)))
 	defer srv.Close()
 
 	for _, body := range []string{`{}`, ``} {
@@ -163,7 +163,7 @@ func TestPatchTitleOnNotDoneTodo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("seed Create: %v", err)
 	}
-	srv := httptest.NewServer(NewHandler(store))
+	srv := httptest.NewServer(NewHandler(store, openBoardStore(t)))
 	defer srv.Close()
 
 	// The happy direction: 200 with the updated todo, done still false.
@@ -237,7 +237,7 @@ func TestPatchTitleStoresTrimmedForm(t *testing.T) {
 	if err != nil {
 		t.Fatalf("seed Create: %v", err)
 	}
-	srv := httptest.NewServer(NewHandler(store))
+	srv := httptest.NewServer(NewHandler(store, openBoardStore(t)))
 	defer srv.Close()
 
 	resp, body := patchTodo(t, srv.URL, created.ID, `{"title": "   Buy milk\t"}`)
@@ -271,7 +271,7 @@ func TestPatchTitleOnDoneTodoRefused(t *testing.T) {
 	if _, err := store.Change(created.ID, todos.ChangeFields{Done: &done}); err != nil {
 		t.Fatalf("seed Change(done=true): %v", err)
 	}
-	srv := httptest.NewServer(NewHandler(store))
+	srv := httptest.NewServer(NewHandler(store, openBoardStore(t)))
 	defer srv.Close()
 
 	// Title carried — even alongside done — the frozen refusal answers.

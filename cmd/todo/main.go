@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"todo/api"
+	"todo/board"
 	"todo/todos"
 	"todo/ui"
 )
@@ -38,6 +39,7 @@ func run(args []string, stderr io.Writer) error {
 	fs.SetOutput(stderr)
 	addr := fs.String("addr", "127.0.0.1:8080", "listen address for page and JSON contract together")
 	dbPath := fs.String("db", "todos.db", "data file path for the store")
+	boardDBPath := fs.String("board-db", "kanban.db", "data file path for the board store")
 	if err := fs.Parse(args); err != nil {
 		return fmt.Errorf("malformed flags: %w", err)
 	}
@@ -56,7 +58,16 @@ func run(args []string, stderr io.Writer) error {
 	}
 	defer store.Close()
 
-	apiHandler := api.NewHandler(store)
+	// The board store lives beside the todo store under the same path
+	// convention (flag default beside the db default); an unopenable board
+	// file fails startup loudly, like the todo file.
+	boardStore, err := board.Open(*boardDBPath)
+	if err != nil {
+		return err
+	}
+	defer boardStore.Close()
+
+	apiHandler := api.NewHandler(store, boardStore)
 
 	ln, err := net.Listen("tcp", *addr)
 	if err != nil {
@@ -69,6 +80,7 @@ func run(args []string, stderr io.Writer) error {
 	mux := http.NewServeMux()
 	mux.Handle("/todos", apiHandler)  // JSON contract
 	mux.Handle("/todos/", apiHandler) // JSON contract: /todos/{id} items (change, delete)
+	mux.Handle("/board", apiHandler)  // JSON contract: board read
 	mux.Handle("/", uiHandler)        // page, fragments, static
 
 	fmt.Fprintf(stderr, "todo: serving on http://%s (db %s)\n", ln.Addr(), *dbPath)
