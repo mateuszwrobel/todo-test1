@@ -6,8 +6,9 @@
 # The KW1 lane covers "Board shows fixed columns" + "Start without todo
 # data"; the KW2 lane covers "Create card" + "Reject empty card text" +
 # "Reject over-long card text"; the KW3 lane covers "Edit card text keeps
-# place" + "Operation on missing card" (edit leg). The retired todo-app
-# lanes (w1..w11) deleted with the pivot's wave-end swap; the
+# place" + "Operation on missing card" (edit leg); the KW4 lane covers
+# "Delete card" + "Operation on missing card" (delete leg). The retired
+# todo-app lanes (w1..w11) deleted with the pivot's wave-end swap; the
 # visual-regression lane returns with KW7's baselines.
 .PHONY: e2e
 e2e:
@@ -17,3 +18,4 @@ e2e:
 	NODE_PATH=$$(npm root -g) node e2e/kw1-board.js
 	NODE_PATH=$$(npm root -g) node e2e/kw2-create.js
 	NODE_PATH=$$(npm root -g) node e2e/kw3-edit.js
+	NODE_PATH=$$(npm root -g) node e2e/kw4-delete.js

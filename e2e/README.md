@@ -98,6 +98,35 @@ board, port, and server (SIGTERM teardown), mirroring the KW1/KW2 lanes.
    GET /board unchanged, titles intact after reload); 501 characters state
    the character limit at the card, board untouched.
 
+## KW4 — Delete (`e2e/kw4-delete.js`)
+
+Re-executes the parent scenario "Delete card" and the delete leg of
+"Operation on missing card" (KW4 owns the DELETE surface), plus the stated
+empty treatment when a delete empties a column (card ui/02's rule reached
+through deletion). Each scenario gets its own seeded temp board, port, and
+server (SIGTERM teardown), mirroring the KW1–KW3 lanes.
+
+### What it asserts
+
+1. **Delete card** — on a board seeded across all three columns, deleting a
+   middle To Do card drops it *without a page reload* (window marker
+   survives), the column's remaining cards keep their relative order with no
+   gap (DOM order card-for-card equals GET /board order, whose positions are
+   contiguous 0..n-1), and every other card on the board is untouched;
+   deleting the Done card — a done card is as deletable as any other — empties
+   Done into its stated treatment; a reload still shows both cards gone, in
+   agreement with a fresh GET /board.
+2. **Operation on missing card — delete leg** — after the page is rendered,
+   the target card is removed server-side out-of-band (direct `sqlite3`
+   DELETE against the board data file from the lane process, keeping the page
+   stale). Clicking its Delete states "no such card" in the missing-card
+   banner without a reload, the card is gone from the page, the board under
+   the failure IS GET /board — nothing faked — and the statement never
+   survives a reload.
+3. **Delete a column's last card** — the emptied column shows its stated
+   empty treatment while every other column keeps its cards; no reload, and
+   the DOM mirrors GET /board, agreement intact after a reload.
+
 ## Seeding
 
 `e2e/testdata/` is a go tool (test-support, not served application code;
