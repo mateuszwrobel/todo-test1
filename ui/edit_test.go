@@ -99,11 +99,16 @@ func TestEditBandOnEveryCardEveryColumn(t *testing.T) {
 		}
 	}
 
-	// The delete affordance is still an inert placeholder (KW4 wires it):
-	// the plain button element and nothing more.
+	// The delete affordance is live since KW4 (card ui/07): the button
+	// issues its own DELETE through htmx at the card's fragment endpoint.
 	for _, id := range []int64{1, 2, 3, 4} {
-		if !strings.Contains(cardHTML(t, page, id), `<button type="button" class="btn btn--secondary card__delete">`) {
-			t.Errorf("card %d delete affordance carries wiring before KW4:\n%s", id, cardHTML(t, page, id))
+		card := cardHTML(t, page, id)
+		idStr := strconv.FormatInt(id, 10)
+		for _, want := range []string{`class="btn btn--secondary card__delete"`,
+			`hx-delete="/ui/cards/` + idStr + `"`, `hx-target="#board-area"`} {
+			if !strings.Contains(card, want) {
+				t.Errorf("card %s delete control missing %s:\n%s", idStr, want, card)
+			}
 		}
 	}
 	// The shell routes edit refusals into the swap engine — the no-reload

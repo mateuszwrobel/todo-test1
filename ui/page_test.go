@@ -163,14 +163,14 @@ func TestBoardRendersThreeFixedColumns(t *testing.T) {
 
 	// Every card carries its edit and delete affordance hooks. The edit
 	// band is live since KW3 (card ui/06 — every card, every column); the
-	// delete button stays an inert placeholder element — no request
-	// wiring — until KW4 (card ui/07).
+	// delete control is live since KW4 (card ui/07) — hx-delete wiring,
+	// pinned in full by delete_test.go.
 	for _, id := range []int64{1, 2, 3, 4} {
 		card := cardHTML(t, page, id)
 		if !strings.Contains(card, `class="btn btn--secondary card__edit"`) {
 			t.Errorf("card %d has no edit affordance element:\n%s", id, card)
 		}
-		if !strings.Contains(card, `class="btn btn--secondary card__delete"`) {
+		if !strings.Contains(card, `hx-delete="/ui/cards/`) {
 			t.Errorf("card %d has no delete affordance element:\n%s", id, card)
 		}
 	}

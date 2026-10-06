@@ -46,7 +46,9 @@ var pageTmpl = template.Must(template.New("page").Parse(`<!doctype html>
 // shell and scoped to the create control; the edit control's refusals join
 // this routing (422 states the reason at the re-rendered card, 404 states
 // the missing card above the truth without it — both bodies are the board
-// area). Delete and drag refusals join at their own cards (KW4, KW5).
+// area), and the delete control's 404 refusal joins it at KW4 (card ui/07):
+// the same banner-over-truth body, swapped the same way — one mechanism per
+// failure class. Drag refusals join at their own card (KW5).
 document.body.addEventListener('htmx:responseError', function (event) {
   var elt = event.detail && event.detail.elt;
   var text = event.detail.xhr.responseText;
@@ -54,10 +56,12 @@ document.body.addEventListener('htmx:responseError', function (event) {
     // A create refusal: the already-rendered create-area fragment.
     htmx.swap(document.getElementById('create-area'), text,
               { swapStyle: 'outerHTML' });
-  } else if (elt && elt.closest && elt.closest('.edit-form')) {
-    // An edit refusal: the already-rendered board area — the editing card
-    // with its original text and the stated reason, or the missing-card
-    // banner over the truth.
+  } else if (elt && elt.closest &&
+             (elt.closest('.edit-form') || elt.closest('.card__delete'))) {
+    // An edit or delete refusal: the already-rendered board area — the
+    // editing card with its original text and the stated reason, the
+    // missing-card banner over the truth, or (delete) the same truth after
+    // the card dropped out.
     htmx.swap(document.getElementById('board-area'), text,
               { swapStyle: 'innerHTML' });
   }
@@ -92,8 +96,12 @@ document.body.addEventListener('click', function (event) {
 // KW3 (card ui/06) — the Edit control reveals an inline form prefilled with
 // the card's title, and Save submits PATCH /ui/cards/{id} through htmx, on
 // every card in every column including Done (J6: done is just a column, a
-// done card's text is editable). The delete button stays an inert
-// placeholder — no wiring until KW4 (card ui/07).
+// done card's text is editable). The delete control is live since KW4 (card
+// ui/07): its click issues hx-delete DELETE /ui/cards/{id} through htmx — no
+// confirmation dialog, the card text states activation, not confirmation —
+// and the answer swaps the truth without the card into #board-area, on every
+// card in every column including Done (a done card is as deletable as any
+// other; done is just a column).
 var boardTmpl = template.Must(template.New("board").Parse(`<div id="board" class="board">
 {{- range .}}
 <section id="column-{{.Anchor}}" class="column" data-column="{{.Title}}">
@@ -107,7 +115,7 @@ var boardTmpl = template.Must(template.New("board").Parse(`<div id="board" class
 <button type="button" class="btn btn--secondary cancel">Cancel</button>
 </form>
 <button type="button" class="btn btn--secondary card__edit">Edit</button>
-<button type="button" class="btn btn--secondary card__delete">Delete</button>{{if .EditError}}
+<button type="button" class="btn btn--secondary card__delete" hx-delete="/ui/cards/{{.ID}}" hx-target="#board-area" hx-swap="innerHTML">Delete</button>{{if .EditError}}
 <p id="edit-error-{{.ID}}" class="error-text">{{.EditError}}</p>{{end}}
 </li>
 {{- end}}
