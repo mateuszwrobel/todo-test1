@@ -18,16 +18,18 @@ import (
 //	And the import completes on that next start if it had not landed
 //
 // The stop is exercised through the import's failure side, which is what a
-// hard stop leaves observable in either timing: Store.Import commits in one
-// transaction (board/14), so between Begin and Commit the only states a kill
-// can produce are committed-fully or untouched — the same all-or-nothing
+// hard stop leaves observable in either timing: Store.Import commits the
+// cards AND the import marker in one transaction (board/14 widened by the
+// marker fix), so between Begin and Commit the only states a kill can
+// produce are committed-fully or untouched — the same all-or-nothing
 // boundary a mid-validation stop hits, and the boundary this test drives
 // deterministically. A poisoned source row makes Import refuse before any
-// statement executes, so the "stopped during import" process is one whose
-// import never landed: startup fails loudly (the workplan's stated loud
-// failure — a stated error, no partially serving process), and what it
-// leaves behind must be provably a clean board, after which the next start
-// completes the import.
+// statement executes — no cards and, riding the same transaction, no marker
+// — so the "stopped during import" process is one whose import never
+// landed: startup fails loudly (the workplan's stated loud failure — a
+// stated error, no partially serving process), and what it leaves behind
+// must be provably a clean, UNMARKED board — the marker is what licenses
+// the retry — after which the next start completes the import.
 func TestInterruptedImportLeavesNoHalfBoard(t *testing.T) {
 	dir := t.TempDir()
 	boardPath := filepath.Join(dir, "kanban.db") // absent: the board has never been created

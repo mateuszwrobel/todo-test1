@@ -88,8 +88,10 @@ func TestFirstStartImportsExistingTodosOnce(t *testing.T) {
 	}
 
 	// Restart: the board is exactly as it was — card-for-card, identifiers
-	// included. A re-import would add duplicates with new ids; equality of
-	// the whole payload (ids stable across the store's close/reopen) is the
+	// included. The import marker committed with the first start's cards
+	// answers the guard, so the still-present source is past evidence. A
+	// re-import would add duplicates with new ids; equality of the whole
+	// payload (ids stable across the store's close/reopen) is the
 	// "no card is re-imported" pin.
 	terminateServer(t, srv)
 	startServer(t, addr, boardPath, "--todo-db", todoPath)
@@ -103,12 +105,14 @@ func TestFirstStartImportsExistingTodosOnce(t *testing.T) {
 	}
 }
 
-// Card server/02 (guard arm) — the todo source is ignored once the board has
-// been created. Given a board that holds cards and a todo data file that
-// appeared later, When the server starts, Then the todo file changes nothing:
-// the board stays exactly as it was and the file is untouched. This is the
-// once in "import once" read from the other side — the guard consults the
-// board, never the source.
+// Card server/02 (guard arm) — the todo source is ignored once the import
+// decision has been made. Given a board whose first start completed with no
+// todo file to import (the start records the marker even when it places
+// nothing) and a todo data file that appeared later, When the server starts,
+// Then the todo file changes nothing: the board stays exactly as it was and
+// the file is untouched. This is the once in "import once" read from the
+// other side — the guard consults the board's recorded decision, never the
+// source.
 func TestImportGuardIgnoresTodoSourceOfCreatedBoard(t *testing.T) {
 	dir := t.TempDir()
 	boardPath := filepath.Join(dir, "kanban.db")

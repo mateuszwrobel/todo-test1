@@ -59,20 +59,29 @@ type ColumnCards struct {
 	Cards []Card
 }
 
-// schema is created on open (create-if-not-exists); single table, no migration
-// framework. autoincrement rowids are never reused, even after delete. The
-// title CHECK is a storage-level belt only: SQLite's trim() strips spaces but
-// not tabs/newlines, so the observable validation behavior lives in Go
-// (validateText), which screens every candidate before any insert — a
-// constraint failure is never the reported outcome.
+// schema is created on open (create-if-not-exists); cards plus the board's
+// bookkeeping meta row-store, no migration framework. autoincrement rowids
+// are never reused, even after delete. The title CHECK is a storage-level
+// belt only: SQLite's trim() strips spaces but not tabs/newlines, so the
+// observable validation behavior lives in Go (validateText), which screens
+// every candidate before any insert — a constraint failure is never the
+// reported outcome.
 // "column" is quoted because COLUMN is a reserved word in SQLite.
+// The meta table holds the one-time import marker (Imported, MarkImported,
+// and Import's atomic marker write): a key/value row whose presence records
+// that the board's one-time import decision has been made. The composition
+// root's migration guard reads it; the board only stores it.
 const schema = `CREATE TABLE IF NOT EXISTS cards (
 	id integer primary key autoincrement,
 	title text not null check (trim(title) <> '' and length(title) <= 500),
 	"column" text not null check ("column" in ('todo','in_progress','done')),
 	position integer not null check (position >= 0)
 );
-CREATE INDEX IF NOT EXISTS cards_column_position ON cards ("column", position)`
+CREATE INDEX IF NOT EXISTS cards_column_position ON cards ("column", position);
+CREATE TABLE IF NOT EXISTS meta (
+	key text primary key,
+	value text not null
+)`
 
 // Store is an open handle on the board data file. One process opens one file
 // at a time; the composition root owns the handle's lifecycle and the path.
@@ -629,8 +638,15 @@ type SeedBatch struct {
 // text is read means a bad column wins over text faults. An accepted import
 // runs in one transaction (each column's count, then one insert per text)
 // and commits once: every column gains every card in order, or nothing at
-// all. An empty batches list — or one whose batches hold no texts — is a
-// no-op answered with nil: nothing is read, nothing is written.
+// all. The same transaction writes the one-time import marker (Imported
+// reads it): an import that committed is recorded forever, an import that
+// never committed — refused, rolled back, or stopped mid-flight — recorded
+// nothing, so a migration guard that consults the marker may retry. The
+// marker does not gate this operation: Import answers its contract
+// regardless of the marker's state, and a successful import leaves the
+// marker set exactly as it already was. An empty batches list — or one
+// whose batches hold no texts — is a no-op answered with nil: nothing is
+// read, nothing is written, not even the marker.
 func (s *Store) Import(batches []SeedBatch) error {
 	// Enum guard first, across all batches: Seed's "the guard answers
 	// before the texts are read" widened to the batch dimension, so a bad
@@ -687,8 +703,57 @@ func (s *Store) Import(batches []SeedBatch) error {
 			position++
 		}
 	}
+	// The marker rides this same transaction: committed cards imply a
+	// committed marker, and an import that never committed leaves the
+	// marker exactly as it was — the retry arm the migration guard needs.
+	// INSERT OR IGNORE keeps the write idempotent for a repeat import.
+	if _, err := tx.Exec(
+		`INSERT OR IGNORE INTO meta (key, value) VALUES (?, '1')`, importMarkerKey,
+	); err != nil {
+		return fmt.Errorf("import: %w", err)
+	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("import: %w", err)
+	}
+	return nil
+}
+
+// importMarkerKey is the meta row that records the board's one-time import
+// decision. The name belongs to the storage detail the marker ops hide;
+// callers never address it.
+const importMarkerKey = "imported"
+
+// Imported reports whether the board's one-time import decision is on
+// record — the migration guard's observation, the presence or absence of a
+// single meta row. It is the durable answer to "has this board file been
+// through the import decision", independent of what the board holds now: a
+// board emptied after importing still answers true. The read touches no
+// card state; it never fails because the marker is absent — absence is the
+// false answer, not an error.
+func (s *Store) Imported() (bool, error) {
+	var one int
+	err := s.db.QueryRow(`SELECT 1 FROM meta WHERE key = ?`, importMarkerKey).Scan(&one)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("read import marker: %w", err)
+	}
+	return true, nil
+}
+
+// MarkImported records the board's one-time import decision without
+// placing any card — the marker write for a first start that ran the
+// decision and imported nothing (a source that holds no rows, or none at
+// all). The write is idempotent: marking a board that is already marked
+// changes nothing and answers nil. Import carries its own marker inside the
+// import transaction; this op exists for the decision-complete-without-
+// import path, so the guard's answer never depends on card counts.
+func (s *Store) MarkImported() error {
+	if _, err := s.db.Exec(
+		`INSERT OR IGNORE INTO meta (key, value) VALUES (?, '1')`, importMarkerKey,
+	); err != nil {
+		return fmt.Errorf("mark imported: %w", err)
 	}
 	return nil
 }

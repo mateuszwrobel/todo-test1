@@ -26,7 +26,12 @@
 //     empty, cards under FRESH identifiers (the fixture's gapped ids do not
 //     survive), board.db now holds the cards, and the fixture's sha256 is
 //     unchanged — the reader is mode=ro. A restart re-shows the identical
-//     payload (ids included): the import does not run twice.
+//     payload (ids included): the import does not run twice. Then the
+//     delete-all legs — every card removed through the page, one more
+//     restart with the fixture STILL present — pin that an emptied board
+//     does not resurrect the imported todos: the recorded import marker,
+//     not the card count, is the guard (the live-reproduced resurrection
+//     defect, fixed 2026-10-07).
 //  3. REPEAT ACTIVATION — four legs on four seeded boards, each holding the
 //     endpoint in flight with a delayed route so the second activation
 //     genuinely lands before the first response: double-clicked Delete →
@@ -652,9 +657,46 @@ async function scenarioMigration(browser) {
   assert.strictEqual(fileSHA256(fixture), hashBefore,
     'the restart modified the superseded todo data file');
 
+  // Delete-all legs: the user clears the imported board through the page —
+  // every card, every column — and the process restarts ONCE MORE with the
+  // SAME superseded source still present. The deleted todos must stay
+  // deleted. This is the resurrection defect pinned where it was live: an
+  // emptiness guard reads the now-empty board as "never created" and
+  // re-imports everything with fresh ids; the recorded import marker answers
+  // the guard instead, whatever the board holds.
+  for (const col of again) {
+    for (const card of col.cards) {
+      await deleteCard(page2, cardById(page2, card.id));
+      await waitForCardGone(page2, card.id);
+    }
+  }
+  const cleared = await snapshot(page2);
+  assert.strictEqual(cleared.reduce((n, col) => n + col.cards.length, 0), 0,
+    'the delete-all legs must leave the page holding nothing');
+
+  const exit2 = await stopServer(srv);
+  assert.strictEqual(exit2.code, 0, `SIGTERM before the post-delete-all restart must exit 0, saw ${JSON.stringify(exit2)}`);
+  srv = startServer(port, dbs.board, fixture);
+  await waitForHTTP(`http://127.0.0.1:${port}/board`);
+  const page3 = await browser.newPage();
+  await page3.goto(`http://127.0.0.1:${port}/`);
+  const revived = await snapshot(page3);
+  assert.strictEqual(revived.reduce((n, col) => n + col.cards.length, 0), 0,
+    'deleted todos resurrected after the post-delete-all restart — the import ran a second time');
+  for (const anchor of ['to-do', 'in-progress', 'done']) {
+    const empty = page3.locator(EMPTY_STATEMENT(anchor));
+    assert.strictEqual(await empty.count(), 1, `column "${anchor}" must state its emptiness after the post-delete-all restart`);
+    assert.ok(await empty.isVisible(), `the "${anchor}" emptiness statement must be visible after the post-delete-all restart`);
+  }
+  assert.strictEqual(boardCardCount(dbs.board), 0,
+    'the post-delete-all restart wrote card rows into the board data file — a re-import ran');
+  assert.strictEqual(fileSHA256(fixture), hashBefore,
+    'the post-delete-all restart modified the superseded todo data file');
+
   await stopServer(srv);
   await page.close();
   await page2.close();
+  await page3.close();
 }
 
 // ————— scenario 3: "Repeat activation while an operation is in flight" —————
@@ -969,7 +1011,7 @@ async function main() {
     console.log('scenario 1 (board survives server restart — create/edit/drag, SIGTERM exit 0, respawn truth + one more op): OK');
 
     await scenarioMigration(browser);
-    console.log('scenario 2 (migrate existing todos on first start — creation-order mapping, fresh ids, source untouched, restart never re-imports): OK');
+    console.log('scenario 2 (migrate existing todos on first start — creation-order mapping, fresh ids, source untouched, restart never re-imports, delete-all + restart stays empty): OK');
 
     await scenarioRepeatActivation(browser);
     console.log('scenario 3 (repeat activation in flight — one DELETE per double-click, one silent POST per double-Enter, one PATCH per double-drag + third op works, controls restored after 404): OK');
