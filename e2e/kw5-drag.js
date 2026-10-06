@@ -563,14 +563,15 @@ async function main() {
     // Done): done is membership, so an edit must keep text, place,
     // identifier and treatment — one PATCH to the card endpoint, a swap,
     // no reload. The assertion runs on the fresh truth render (after a
-    // reload — the surface kw3's coverage rides, and the state the drop
-    // promises the page ends in). The post-drop fragment's INTERACTION
-    // WIRING is additionally witnessed, not asserted: this lane's run
-    // found the drag's fetch swap (raw innerHTML in render.go, and the
-    // bundled htmx 2.0.6 has no MutationObserver auto-scan) leaves the
-    // injected cards' edit/delete controls unwired — a PRODUCT BUG,
-    // reported verbatim in the run output and __log__; the fix belongs
-    // to the drag lane's swap site, not to this file.
+    // reload), and the post-drop fragment's INTERACTION WIRING is then
+    // PINNED HARD: after a further drop, an edit Save on the fetch-injected
+    // markup must be exactly one PATCH to the card endpoint with no page
+    // navigation, and a Delete there exactly one DELETE with the card gone.
+    // (This block previously WITNESSED a product bug — the drag's fetch
+    // swap assigned raw innerHTML and htmx 2.0.6 auto-processes nothing it
+    // did not swap, leaving post-drop controls unwired; render.go's swap
+    // site now calls htmx.process on the swapped region, so the kw3
+    // behavior is asserted on the post-drop markup too, not reported.)
     const dbs3x = tmpPaths('done-edit-crosscheck');
     run(seedBin, ['--db', dbs3x.board, '--titles', 'Prepare the demo,File the expense claim', '--in-progress', '0']);
     const port3x = await freePort();
@@ -605,36 +606,72 @@ async function main() {
     assert.strictEqual(await page3x.evaluate(() => window.__kw5NoReloadMarker), 'alive',
       'the edit must stay a fragment swap, not a page reload');
 
-    // Post-drop wiring WITNESS (not asserted — see the product-bug note
-    // above): drag the card again so the fetch swap injects fresh markup,
-    // then attempt an edit on THAT markup and record exactly what the page
-    // does with it.
+    // Post-drop wiring PINNED (the block that previously witnessed the
+    // product bug): drag the card so the fetch swap injects fresh markup,
+    // then EDIT that markup — Save must be exactly one PATCH to the card
+    // endpoint, must not navigate the page (an unwired form submits
+    // natively: GET /?title=..., a full navigation, edit discarded), and
+    // must update the title. The edit's own swap is htmx-mediated, so the
+    // DELETE pin needs a drop of its own to re-inject the fetch markup:
+    // drag the card again, then Delete it — exactly one DELETE to the card
+    // endpoint, no navigation, the card gone from the page.
+    const deleteLog = [];
+    page3x.on('request', (req) => {
+      if (req.method() === 'DELETE') deleteLog.push({ url: req.url() });
+    });
     log3x.reset();
     await dragTo(page3x, cardById(page3x, demoX.id), await pointOn(page3x.locator('#column-to-do li.card').first(), 0.75));
-    await waitForCardIn(page3x, demoX.id, 'To Do'); // the drag machinery is body-level JS — unaffected by the wiring gap
+    await waitForCardIn(page3x, demoX.id, 'To Do');
     const urlBefore = await page3x.evaluate(() => location.href);
+    const renamedPostDrop = 'Renamed on fetch-swapped markup';
     await page3x.locator(`li.card[data-card="${demoX.id}"] .card__edit`).click();
-    await page3x.locator(`li.card[data-card="${demoX.id}"] .edit-form .input`).fill('Witness probe');
+    await page3x.locator(`li.card[data-card="${demoX.id}"] .edit-form .input`).fill(renamedPostDrop);
     log3x.reset();
     await page3x.locator(`li.card[data-card="${demoX.id}"] .edit-form .save`).click();
-    await page3x.waitForTimeout(800);
-    const urlAfter = await page3x.evaluate(() => location.href);
-    const titleAfter = await page3x
+    // A buggy native submit navigates, which Playwright survives by
+    // re-attaching to the fresh page — the title then never changes and
+    // this wait times out; the assertions below state the failure.
+    await page3x
       .locator(`li.card[data-card="${demoX.id}"] .card__title`)
-      .textContent()
-      .catch(() => '<unresolvable>');
-    witnesses.push(
-      'scenario 3 post-drop edit-wiring witness (PRODUCT BUG — htmx wiring is lost on markup the drag fetch-swap injected; ' +
-      'render.go assigns the fragment via innerHTML and htmx 2.0.6 auto-processes nothing): ' +
-      `PATCHes after Save = ${JSON.stringify(log3x.patches.map((p) => p.url))}, ` +
-      `page navigated = ${urlBefore !== urlAfter}${urlBefore !== urlAfter ? ` (navigated to ${urlAfter})` : ''}, ` +
-      `title after Save = ${JSON.stringify(titleAfter)}`
+      .waitForFunction((el, t) => el.textContent === t, renamedPostDrop, { timeout: 10000 })
+      .catch(() => {});
+    assert.strictEqual(log3x.patches.length, 1,
+      `the post-drop edit must be exactly one PATCH to the card endpoint, saw ${JSON.stringify(log3x.patches.map((p) => p.url))}`);
+    assert.ok(log3x.patches[0].url.endsWith(`/ui/cards/${demoX.id}`),
+      `the post-drop edit must address the card endpoint, not a move: ${log3x.patches[0].url}`);
+    assert.strictEqual(page3x.url(), urlBefore,
+      'the post-drop edit must not navigate the page — an unwired form submits natively (GET /?title=...)');
+    assert.strictEqual(
+      await page3x.locator(`li.card[data-card="${demoX.id}"] .card__title`).textContent(),
+      renamedPostDrop,
+      'the post-drop edit must update the card title'
     );
-    witnesses.push(
-      'scenario 3 post-drop delete-wiring check: the same gap makes the Delete button on fetch-injected markup inert ' +
-      '(htmx 2.x removed the MutationObserver auto-scan — hx-delete never binds); verified in-lane development via probe, ' +
-      'reported here rather than asserted to keep the contract scenarios reporting independently'
+
+    // Re-run the fetch swap over the card so the Delete control under test
+    // is one the fetch swap injected: an in-place re-order drop (the card
+    // lands where it sits — accepted, one PATCH, the truth swaps back).
+    // The gesture targets the mid-viewport To Do card like every other drop
+    // in this lane — the empty Done placeholder sits too near the bottom
+    // edge, where the taller post-edit page auto-scrolls mid-drag and the
+    // release lands outside every column. The detached-node wait proves the
+    // swap landed before the Delete click — no racing the fetch response.
+    await cardById(page3x, demoX.id).evaluate((el) => { window.__preDropCard = el; });
+    log3x.reset();
+    await dragTo(page3x, cardById(page3x, demoX.id), await pointOn(page3x.locator('#column-to-do li.card').first(), 0.75));
+    await page3x.waitForFunction(() => window.__preDropCard && !window.__preDropCard.isConnected, null, { timeout: 10000 });
+    deleteLog.length = 0;
+    await page3x.locator(`li.card[data-card="${demoX.id}"] .card__delete`).click();
+    await page3x.waitForFunction(
+      (cardId) => !document.querySelector(`li.card[data-card="${cardId}"]`),
+      demoX.id,
+      { timeout: 10000 }
     );
+    assert.strictEqual(deleteLog.length, 1,
+      `the post-drop delete must be exactly one DELETE request, saw ${deleteLog.length}: ${JSON.stringify(deleteLog.map((d) => d.url))}`);
+    assert.ok(deleteLog[0].url.endsWith(`/ui/cards/${demoX.id}`),
+      `the post-drop delete must address the card endpoint: ${deleteLog[0].url}`);
+    assert.strictEqual(page3x.url(), urlBefore,
+      'the post-drop delete must not navigate the page — an unwired hx-delete control issues nothing or navigates');
 
     await stopServer(srv3x);
     await page3x.close();

@@ -169,7 +169,23 @@ what the lane counts.
    markup, no done/toggle button or link. A cross-check block then
    re-exercises kw3's "editing a Done card keeps the treatment" on a card
    the DRAG placed in Done — asserted on the fresh truth render (one PATCH
-   to the card endpoint, no reload, treatment kept).
+   to the card endpoint, no reload, treatment kept) — and pins the
+   post-drop wiring hard: on markup the drag's fetch swap injected, an
+   edit Save is exactly one PATCH to the card endpoint with no navigation,
+   and a Delete is exactly one DELETE with the card gone.
+
+### Post-drop interaction wiring (asserted)
+
+Markup a DROP re-rendered arrives through the drag's own fetch, not
+through an htmx request, and htmx 2.0.6 auto-processes nothing it did not
+swap itself (the MutationObserver auto-scan is gone) — so render.go's swap
+site calls `htmx.process` on the swapped region. The scenario 3
+cross-check pins this: Edit Save and Delete on fetch-injected cards take
+the same one-request htmx path as htmx-swapped markup — no native form
+navigation, no inert controls. (Before the fix this was a witnessed
+product bug: raw `innerHTML` left post-drop controls unwired until the
+next full render — see `__log__/2026-10-06-kw5-e2e-drag.md` and
+`__log__/2026-10-06-kw5-drag-swap-htmx-fix.md`.)
 4. **Operation on missing card — move leg** — staged with two browser
    contexts on one server: context A deletes the card through its Delete
    control, context B's never-refreshed page stays genuinely stale and still
