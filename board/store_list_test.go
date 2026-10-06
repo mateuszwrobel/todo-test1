@@ -96,11 +96,11 @@ func columnIndex(t *testing.T, board []ColumnCards, name Column) int {
 
 // seedBoard places a fixture board. The todo column is filled through Create —
 // the real append primitive. The in_progress and done fixtures are placed by
-// direct insert: the contract operation that relocates cards to those columns
-// (Move) is board/06 in KW5, so until it lands an open store's contract cannot
-// populate them. The insert writes exactly the Given's state — column
-// membership with contiguous positions 0..n-1 — through the same schema and
-// constraints Create uses.
+// direct insert: the Given's state is a column holding specific cards at
+// specific positions, and an open store's contract (Create, Move) could reach
+// that state only by way of moves a test may itself want to observe, so the
+// insert writes exactly the Given — column membership with contiguous
+// positions 0..n-1 — through the same schema and constraints Create uses.
 func seedBoard(t *testing.T, store *Store, fixtures []columnFixture) {
 	t.Helper()
 	for _, fixture := range fixtures {

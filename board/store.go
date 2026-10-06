@@ -177,19 +177,19 @@ func validateText(text string) (string, error) {
 	return trimmed, nil
 }
 
-// ErrCardNotFound reports a change or delete that targets an identifier no
-// card holds — the store's "no such card" outcome. The existence check is a
-// read inside the transaction that runs before any write, so a rejected
-// change or delete leaves the board exactly as it was and consumes no
-// identifier (neither operation inserts on the miss). Callers map it with
-// errors.Is.
+// ErrCardNotFound reports a change, move, or delete that targets an
+// identifier no card holds — the store's "no such card" outcome. The
+// existence check is a read inside the transaction that runs before any
+// write, so a rejected operation leaves the board exactly as it was and
+// consumes no identifier (none of the three inserts on the miss). Callers map
+// it with errors.Is.
 var ErrCardNotFound = errors.New("board: no card with that identifier")
 
-// ErrInvalidColumn reports a column direction naming something outside the
-// module's fixed enum (todo, in_progress, done) — the store's "column
-// invalid" outcome. The guard runs before the transaction opens, so a
-// rejected value touches no storage: the board is exactly as it was. Callers
-// map it with errors.Is.
+// ErrInvalidColumn reports a column value outside the module's fixed enum
+// (todo, in_progress, done) — the store's "column invalid" outcome, named by
+// Change's column direction and by Move's target alike. The guard runs before
+// the transaction opens, so a rejected value touches no storage: the board is
+// exactly as it was. Callers map it with errors.Is.
 var ErrInvalidColumn = errors.New("board: column must be one of todo, in_progress, done")
 
 // Change applies the given directions to the card identified by id in one
@@ -212,10 +212,10 @@ var ErrInvalidColumn = errors.New("board: column must be one of todo, in_progres
 // failure — then moves the card to the bottom of the target column and
 // closes the gap in the source column, so every column's positions stay
 // contiguous 0..n-1 inside the same transaction. A requested column equal to
-// the card's current one places nothing — Change never reorders within a
-// column here; neighbor-ordering semantics (insert at an index, same-column
-// reorder) are dedicated operations in their own cards (board/06, board/07,
-// KW5).
+// the card's current one places nothing — Change carries no position
+// direction, so it never reorders within a column. The neighbor-ordering
+// semantics the KW3 note scheduled (insert at an index, same-column reorder)
+// arrived as Move, in board/06 and board/07.
 //
 // An identifier no card holds comes back as ErrCardNotFound: the existence
 // read is the transaction's first statement, before any write, so a rejected
@@ -287,6 +287,124 @@ func (s *Store) Change(id int64, title *string, column *Column) (Card, error) {
 
 	if err := tx.Commit(); err != nil {
 		return Card{}, fmt.Errorf("change card %d: %w", id, err)
+	}
+	return card, nil
+}
+
+// Move places the card identified by id at the given index of the target
+// column and returns the card as it now stands — one transaction, everything
+// decided before the first write or after the last read inside it. This is
+// the store's placement operation (board/06, board/07): the card lands at
+// exactly index position of column, every other card keeps its relative order
+// — the uninvolved neighbors above the index stay above it, those below stay
+// below, in their previous order — and a source column the card departs
+// closes its gap, so every column's positions stay contiguous 0..n-1.
+//
+// position indexes the target column AFTER the moved card is removed from it.
+// Cross-column (board/06) that is the target as it stands: moving B into
+// [X, Y] at 1 yields [X, B, Y]. Same-column (board/07) it is the column minus
+// the card, so a move is remove-then-insert: A at position 2 of [A, B, C]
+// yields [B, C, A], and a position equal to the card's own index splices it
+// back where it was — the column is provably unchanged. Change's column
+// direction keeps its bottom-append meaning beside this: Move is the explicit
+// index direction, and a position at (or past) the end reproduces exactly
+// what Change's append places.
+//
+// The cards say nothing about out-of-range indexes, so the index clamps into
+// the valid insertion range [0, remaining count] instead of failing: negative
+// lands at the top, past the end lands at the bottom. Move is a total
+// function over positions — one outcome for the drag layer to reason about —
+// and the ends of the range are the card's own index-0 and bottom placements.
+//
+// Validation is board-style: the target column is screened against the fixed
+// enum BEFORE the transaction opens (ErrInvalidColumn, no statement
+// executed), and the card's existence is the transaction's first read — its
+// miss is ErrCardNotFound before any write, so a rejected move touches nothing
+// and consumes no identifier. The card's identifier and text are untouched by
+// a move — placement is the only thing a move changes.
+func (s *Store) Move(id int64, column Column, position int) (Card, error) {
+	if !validColumn(column) {
+		return Card{}, fmt.Errorf("move card %d: column %q is not todo, in_progress, or done: %w",
+			id, string(column), ErrInvalidColumn)
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return Card{}, fmt.Errorf("move card %d: %w", id, err)
+	}
+	defer tx.Rollback() // no-op after Commit
+
+	var card Card
+	err = tx.QueryRow(
+		`SELECT id, title, "column", position FROM cards WHERE id = ?`, id,
+	).Scan(&card.ID, &card.Title, &card.Column, &card.Position)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Card{}, fmt.Errorf("move card %d: %w", id, ErrCardNotFound)
+	}
+	if err != nil {
+		return Card{}, fmt.Errorf("move card %d: %w", id, err)
+	}
+
+	// Departure first for a cross-column move: flipping the column lets the
+	// source renormalize see the card as gone and close its gap; the arrival
+	// row still carries its old position value, which the placement write
+	// below overwrites.
+	if column != card.Column {
+		if _, err := tx.Exec(`UPDATE cards SET "column" = ? WHERE id = ?`, string(column), id); err != nil {
+			return Card{}, fmt.Errorf("move card %d: %w", id, err)
+		}
+		if err := renormalize(tx, card.Column); err != nil {
+			return Card{}, fmt.Errorf("move card %d: %w", id, err)
+		}
+	}
+
+	// The target's remaining cards top-to-bottom, the moved card excluded —
+	// removal precedes insertion in both directions, same-column included.
+	rows, err := tx.Query(
+		`SELECT id FROM cards WHERE "column" = ? AND id <> ? ORDER BY position ASC, id ASC`,
+		string(column), id,
+	)
+	if err != nil {
+		return Card{}, fmt.Errorf("move card %d: %w", id, err)
+	}
+	var rest []int64
+	for rows.Next() {
+		var other int64
+		if err := rows.Scan(&other); err != nil {
+			rows.Close()
+			return Card{}, fmt.Errorf("move card %d: %w", id, err)
+		}
+		rest = append(rest, other)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return Card{}, fmt.Errorf("move card %d: %w", id, err)
+	}
+	rows.Close()
+
+	// Clamp into the valid insertion range, then splice: neighbors keep
+	// their relative order around the landing card by construction.
+	index := position
+	if index < 0 {
+		index = 0
+	}
+	if index > len(rest) {
+		index = len(rest)
+	}
+	ordered := make([]int64, 0, len(rest)+1)
+	ordered = append(ordered, rest[:index]...)
+	ordered = append(ordered, id)
+	ordered = append(ordered, rest[index:]...)
+
+	for pos, placed := range ordered {
+		if _, err := tx.Exec(`UPDATE cards SET position = ? WHERE id = ?`, pos, placed); err != nil {
+			return Card{}, fmt.Errorf("move card %d: %w", id, err)
+		}
+	}
+	card.Column, card.Position = column, index
+
+	if err := tx.Commit(); err != nil {
+		return Card{}, fmt.Errorf("move card %d: %w", id, err)
 	}
 	return card, nil
 }
