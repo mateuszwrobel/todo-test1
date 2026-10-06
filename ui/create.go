@@ -18,7 +18,7 @@ import (
 
 var createAreaTmpl = template.Must(template.New("create-area").Parse(
 	`<div id="create-area"{{if .OOB}} hx-swap-oob="outerHTML"{{end}}>
-<form id="create-form" hx-post="/ui/cards" hx-target="#board-area" hx-swap="innerHTML" hx-disabled-elt="#create-form button[type=submit]">
+<form id="create-form" hx-post="/ui/cards" hx-target="#board-area" hx-swap="innerHTML" hx-disabled-elt="#create-form .input, #create-form button[type=submit]">
 <input class="input" type="text" name="title" value="{{.Value}}" placeholder="What needs doing?">
 <button type="submit" class="btn btn--primary">Add</button>
 {{/* Hint wording mirrors the api contract's title limit (owned upstream by

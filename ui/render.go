@@ -106,6 +106,16 @@ document.body.addEventListener('click', function (event) {
 // payload, it does not second-guess accepted drops.
 var draggedCard = null;   // the <li> mid-drag; null when no drag is active
 var dropIndicator = null; // the insertion line, parked at the landing gap
+// In-flight blocking (card ui/12, journeys' interaction decision): the
+// control that triggers an operation is disabled from the moment the request
+// leaves until the response arrives. The htmx controls state theirs in the
+// markup — hx-disabled-elt on the create form, the edit form and the delete
+// control — and htmx restores each one on every settled path: success, 4xx
+// stated failure (responseError's swap is still a response), transport
+// failure (sendError). Only the fetch path has no library to lean on, so
+// dragPending names the card whose drop request is unanswered; drop sets it
+// and the promise's single finally below clears it.
+var dragPending = null;
 
 function ensureDropIndicator() {
   if (!dropIndicator) {
@@ -143,6 +153,12 @@ function endDragVisuals() {
 document.body.addEventListener('dragstart', function (event) {
   var card = event.target.closest ? event.target.closest('.card') : null;
   if (!card) return;
+  // A repeat activation while the card's drop request is in flight starts
+  // nothing (card ui/12): cancelled here, the fetch site stays unreachable.
+  if (card === dragPending) {
+    event.preventDefault();
+    return;
+  }
   draggedCard = card;
   event.dataTransfer.effectAllowed = 'move';
   event.dataTransfer.setData('text/plain', card.dataset.card);
@@ -195,8 +211,15 @@ document.body.addEventListener('drop', function (event) {
   var id = draggedCard.dataset.card;
   var position = dropPosition(column, draggedCard);
   var target = column.dataset.column;
+  var pending = draggedCard; // endDragVisuals clears draggedCard; keep the element
   endDragVisuals(); // the slot, line, and chip are drag chrome; the swap
   // below replaces the markup with the server's truth
+  // The drop's request leaves right here: the dragged card — the triggered
+  // control for this operation — goes inactive at that moment (card ui/12),
+  // both natively (draggable off, so no drag event even starts on it) and by
+  // the dragstart guard above.
+  dragPending = pending;
+  pending.draggable = false;
   fetch('/ui/cards/' + id + '/move', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -225,6 +248,14 @@ document.body.addEventListener('drop', function (event) {
     // the last server truth (the stale-failure surface owns the 404 class)
   }).catch(function () {
     // Transport failure: the board still shows the last server truth.
+  }).finally(function () {
+    // The ONE settle path of the in-flight block: success, stated failure and
+    // the swallowed transport leg all land here, so the dragged card becomes
+    // ready again exactly when the response arrives — never before. A swap
+    // that already replaced the markup makes the restore a no-op on the fresh
+    // element: it renders draggable, which is the ready state.
+    pending.draggable = true;
+    dragPending = null;
   });
 });
 
@@ -261,13 +292,13 @@ var boardTmpl = template.Must(template.New("board").Parse(`<div id="board" class
 {{if .Cards}}<ul class="column__cards">{{- range .Cards}}
 <li id="card-{{.ID}}" class="card{{if .Done}} card--done{{end}}" data-card="{{.ID}}" draggable="true">
 <span class="card__title">{{.Title}}</span>
-<form class="edit-form" hx-patch="/ui/cards/{{.ID}}" hx-target="#board-area" hx-swap="innerHTML">
+<form class="edit-form" hx-patch="/ui/cards/{{.ID}}" hx-target="#board-area" hx-swap="innerHTML" hx-disabled-elt="#card-{{.ID}} .save">
 <input class="input" type="text" name="title" value="{{.Title}}">
 <button type="submit" class="btn btn--primary save">Save</button>
 <button type="button" class="btn btn--secondary cancel">Cancel</button>
 </form>
 <button type="button" class="btn btn--secondary card__edit">Edit</button>
-<button type="button" class="btn btn--secondary card__delete" hx-delete="/ui/cards/{{.ID}}" hx-target="#board-area" hx-swap="innerHTML">Delete</button>{{if .EditError}}
+<button type="button" class="btn btn--secondary card__delete" hx-delete="/ui/cards/{{.ID}}" hx-target="#board-area" hx-swap="innerHTML" hx-disabled-elt="this">Delete</button>{{if .EditError}}
 <p id="edit-error-{{.ID}}" class="error-text">{{.EditError}}</p>{{end}}
 </li>
 {{- end}}
