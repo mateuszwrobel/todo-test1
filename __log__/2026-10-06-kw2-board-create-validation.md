@@ -1,3 +1,14 @@
 ```json
-{"task": "KW2 board store — cards board/03 create rejects blank text, board/04 create rejects over-long text", "status": "in-progress", "date": "2026-10-06", "workplan": "workplans/workplan_board_store.md", "ledger": "workplans/dependencies_kanban.md#kw2", "base": "5ea9b9d"}
+{"task": "KW2 board store — cards board/03 create rejects blank text, board/04 create rejects over-long text", "status": "done", "date": "2026-10-06", "workplan": "workplans/workplan_board_store.md", "ledger": "workplans/dependencies_kanban.md#kw2", "base": "5ea9b9d"}
 ```
+
+Create's rejection half of the store contract lands, one commit per card. What changed and why:
+
+- **Single rule function** — `validateText(text) (string, error)` is the module's one text-rule source (workplan Decisions: validation lives here, every path gets the guarantee). It trims Unicode whitespace, rejects blank with `ErrTextRequired`, rejects trimmed text over `MaxTextLen` (500) characters — counted as runes, not bytes — with `ErrTextTooLong`, and returns the trimmed text for storage. Create calls it; board/14's Seed will call the same function when it lands, so no entry point can drift from the rule. The KW1 note about the schema CHECK's trim() stripping only spaces (not tabs/newlines) is resolved by locating the observable behavior in Go: `strings.TrimSpace` handles the full Unicode set, the CHECK stays a storage-level belt that Create's callers never reach.
+- **Typed outcomes** — two exported sentinel errors (`errors.Is`-mappable), messages stating required vs limit semantics, so callers (api/02's POST handler later) map them to their contract without string matching. Create wraps them as `create card: %w` like its other failures. The schema CHECK was deliberately *not* tightened: it can't retroactively cover already-created files, and a constraint failure must never be the observable — every rejection is decided before any SQL runs.
+- **Rejection before insert** — Create runs `validateText` as its first statement, before `db.Begin()`, so a rejected card issues no INSERT at all. That ordering is what keeps autoincrement from burning an id on the failed statement; `TestRejectedCreateDoesNotConsumeIdentifier` and `TestOverLongCreateDoesNotConsumeIdentifier` pin it (next accepted create carries exactly prev id + 1), alongside board-unchanged assertions after rejections.
+- **Trim becomes observable** — Create now stores the trimmed text (whitespace-padded text enters clean, inner whitespace untouched); the board/02 append tests are unaffected.
+
+Tests derive from the two cards' Gherkin as tables over the general contract: blank/whitespace-only rows incl. tabs, newlines, NBSP; exactly-500 passes / 501 rejected; multibyte rows pin rune-not-byte length both directions; whitespace never pushes a valid card over the limit. No api/, ui/, cmd/ or todos/ changes — nothing on the wire maps these errors until api/02.
+
+Verified on the final commit: `go build ./...`, `go vet ./...`, `go test ./... -count=1` (api, board, cmd/todo, todos, ui all ok), `gofmt -l` clean, `archspec verify --strict` green (5 modules, 1 constraint).
