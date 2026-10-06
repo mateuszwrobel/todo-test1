@@ -23,13 +23,13 @@ func repoRoot(t *testing.T) string {
 	return root
 }
 
-// Card server/06 — Wiring honors the dependency directions.
-// Given the composed server is running
-// When  any page operation is performed
-// Then  page requests reach todos data exclusively through the api contract
+// Card server/08 — Wiring honors the dependency directions.
+// Given all four packages (board, api, ui, server) are present
+// When  the architecture gate runs
+// Then  the dependency directions of the parent plan hold: ui→api via HTTP
 //
-//	over HTTP
-//	And no module other than the store's own code opens the data file
+//	only, api→board in-process, server composing all, nothing importing
+//	server or reading data files outside its owner
 func TestArchspecGateGreen(t *testing.T) {
 	if _, err := exec.LookPath("archspec"); err != nil {
 		t.Fatalf("archspec is part of the stack (ADR-001) but not on PATH: %v", err)
@@ -43,9 +43,15 @@ func TestArchspecGateGreen(t *testing.T) {
 	t.Logf("archspec: %s", strings.TrimSpace(string(out)))
 }
 
-// The same card proven statically on imports: ui imports no internal module
-// (its coupling to api is HTTP at runtime only), and the SQLite driver —
-// the opener of the data file — appears only in the todos module.
+// The same card (server/08) proven statically on imports. The directions
+// pinned: ui imports no project package at all (its coupling to the api is
+// HTTP at runtime only — the pre-kanban pin checked api/todos, ui may now
+// import none); data-file opening is per-owner, so the SQLite driver
+// appears only in the modules that own a data file — board (kanban.db) and,
+// transitionally, todos (todos.db), because the surviving todo endpoints
+// keep the todos package referenced until they retire at KW4
+// (dependencies_kanban.md); after KW4 this arm tightens to board alone.
+// And nothing imports the composition root (server, i.e. cmd/todo).
 func TestDependencyDirectionsOnImports(t *testing.T) {
 	root := repoRoot(t)
 	imports := sourceImports(t, root)
@@ -54,14 +60,17 @@ func TestDependencyDirectionsOnImports(t *testing.T) {
 	}
 
 	for file, imps := range imports {
-		inUI := strings.HasPrefix(file, "ui/")
-		inTodos := strings.HasPrefix(file, "todos/")
+		inDataOwner := strings.HasPrefix(file, "board/") ||
+			strings.HasPrefix(file, "todos/") // transitional until KW4 retirement
 		for _, imp := range imps {
-			if inUI && (imp == "todo/api" || imp == "todo/todos") {
-				t.Errorf("%s imports %q: ui must reach api/todos over HTTP only", file, imp)
+			if strings.HasPrefix(file, "ui/") && strings.HasPrefix(imp, "todo/") {
+				t.Errorf("%s imports %q: ui imports no project packages — it reaches the api over HTTP only", file, imp)
 			}
-			if !inTodos && strings.HasPrefix(imp, "modernc.org/sqlite") {
-				t.Errorf("%s imports %q: only the todos module opens the data file", file, imp)
+			if strings.HasPrefix(imp, "modernc.org/sqlite") && !inDataOwner {
+				t.Errorf("%s imports %q: only data-file owners open data files (board; todos until its endpoints retire at KW4)", file, imp)
+			}
+			if imp == "todo/cmd/todo" {
+				t.Errorf("%s imports %q: nothing imports the composition root (server)", file, imp)
 			}
 		}
 	}

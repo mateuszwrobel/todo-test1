@@ -1,84 +1,72 @@
 package main
 
 import (
-	"encoding/json"
-	"io"
-	"net/http"
 	"path/filepath"
-	"regexp"
-	"strings"
 	"syscall"
 	"testing"
 
-	"todo/todos"
+	"todo/board"
 )
 
-// Card server/03 — Restart resumes state.
-// Given todos exist in the data file
-// When  the command is stopped and started again with the same path
-// Then  the page and the JSON contract report the same todos with the same
+// Card server/08 lane disposition of this old todo-flavored restart test:
+// it asserted restart resumption through GET /todos, retired at KW1 (api/01).
+// Rewritten to the restart state that is real now — board state survives a
+// restart at the same paths, the board store persisting to SQLite, so a
+// reopen replays exactly what was committed. The full board-restart scenario
+// (cards in a mix of columns and positions) is kanban card server/04, which
+// re-executes this story at KW6: until the move operation (board/06, KW5)
+// lands, every seeded card legitimately sits in the todo column, and the
+// page-side resume assertion (todo rows rendered after restart) retires with
+// the todo page — board page rendering across restart is the ui lane's.
 //
-//	states
-//
-// A real process is started, driven over HTTP, stopped, and started again on
-// the same data file. Note: POST /todos is not mounted yet (W2 create is a
-// pending replay), so mid-run state changes here go through the toggle PATCH
-// over already-seeded todos — the same stand-in the W3 e2e uses.
+// Scenario kept minimal and honest: seeded cards → run 1 reads them over
+// HTTP → SIGTERM → run 2 at the same paths lists the same cards with the
+// same identifiers, titles, columns, and positions.
 func TestRestartResumesState(t *testing.T) {
-	dbPath := filepath.Join(t.TempDir(), "restart.db")
-	boardPath := filepath.Join(t.TempDir(), "restart-board.db")
-	store, err := todos.Open(dbPath)
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "todos.db")
+	boardPath := filepath.Join(dir, "kanban.db")
+
+	// Seed the board file directly while no server holds it (the
+	// single-process assumption, as the todo store seeding did).
+	store, err := board.Open(boardPath)
 	if err != nil {
-		t.Fatalf("seed Open: %v", err)
+		t.Fatalf("seed board Open: %v", err)
 	}
-	want := []todos.Todo{
-		{ID: 1, Title: "write report", Done: false},
-		{ID: 2, Title: "water plants", Done: true},
-		{ID: 3, Title: "buy milk", Done: false},
-	}
-	for _, td := range want {
-		created, err := store.Create(td.Title)
-		if err != nil {
-			t.Fatalf("seed Create %q: %v", td.Title, err)
-		}
-		want[created.ID-1].ID = created.ID
-		if td.Done {
-			done := true
-			if _, err := store.Change(created.ID, todos.ChangeFields{Done: &done}); err != nil {
-				t.Fatalf("seed Change %d: %v", created.ID, err)
-			}
-			want[created.ID-1].Done = true
+	titles := []string{"write report", "water plants", "buy milk"}
+	for _, title := range titles {
+		if _, err := store.Create(title); err != nil {
+			t.Fatalf("seed board Create %q: %v", title, err)
 		}
 	}
-	store.Close()
+	if err := store.Close(); err != nil {
+		t.Fatalf("seed board Close: %v", err)
+	}
 
 	addr := freeAddr(t)
 
-	// Run 1: drive a toggle through the live HTTP surface, read the state.
+	// Run 1: read the board through the live HTTP surface.
 	srv := startServer(t, addr, dbPath, boardPath)
-	req, err := http.NewRequest(http.MethodPatch, "http://"+addr+"/todos/1", strings.NewReader(`{"done":true}`))
-	if err != nil {
-		t.Fatalf("build PATCH: %v", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("PATCH /todos/1: %v", err)
-	}
-	respBody, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("PATCH status = %d (%s), want 200", resp.StatusCode, respBody)
-	}
-	want[0].Done = true
+	before := getBoard(t, addr)
 
-	before := getTodos(t, addr)
-	if !todosEqual(before, want) {
-		t.Fatalf("after toggle GET /todos = %+v, want %+v", before, want)
+	// Non-vacuity: run 1 really shows the seeded cards, in List's fixed
+	// column and position order.
+	var seeded []board.Card
+	for _, col := range before.Columns {
+		seeded = append(seeded, col.Cards...)
+	}
+	if len(seeded) != len(titles) {
+		t.Fatalf("run 1 board holds %d cards, want %d: %+v", len(seeded), len(titles), seeded)
+	}
+	for i, title := range titles {
+		if seeded[i].Title != title {
+			t.Errorf("run 1 card %d title = %q, want %q", i, seeded[i].Title, title)
+		}
 	}
 
-	// Stop the command (SIGTERM), then start it again on the same path.
-	// The exit status itself is server/04's contract — here the restart story.
+	// Stop the command (SIGTERM), then start it again at the same paths.
+	// The exit status itself is the shutdown card's contract — here the
+	// restart story.
 	if err := srv.Process.Signal(syscall.SIGTERM); err != nil {
 		t.Fatalf("SIGTERM: %v", err)
 	}
@@ -88,67 +76,24 @@ func TestRestartResumesState(t *testing.T) {
 
 	startServer(t, addr, dbPath, boardPath)
 
-	// The JSON contract reports the same todos with the same states.
-	after := getTodos(t, addr)
-	if !todosEqual(after, before) {
-		t.Fatalf("JSON contract changed across restart:\nbefore %+v\n after %+v", before, after)
+	// Run 2: the board lists the same cards with the same texts, columns,
+	// and positions.
+	after := getBoard(t, addr)
+	if len(after.Columns) != len(before.Columns) {
+		t.Fatalf("board columns changed across restart:\nbefore %+v\n after %+v", before.Columns, after.Columns)
 	}
-
-	// The page reports the same todos with the same states too.
-	resp, err = http.Get("http://" + addr + "/")
-	if err != nil {
-		t.Fatalf("GET / after restart: %v", err)
-	}
-	page, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
-
-	// The row's class attribute (component classes) sits between the
-	// frozen id and data-state attributes.
-	rowRe := regexp.MustCompile(`(?s)<li id="todo-\d+"[^>]*data-state="(done|not-done)">.*?<span class="title">([^<]*)</span>`)
-	rows := rowRe.FindAllStringSubmatch(string(page), -1)
-	if len(rows) != len(before) {
-		t.Fatalf("page shows %d rows, want %d:\n%s", len(rows), len(before), page)
-	}
-	for i, td := range before {
-		state := "not-done"
-		if td.Done {
-			state = "done"
+	for i := range before.Columns {
+		b, a := before.Columns[i], after.Columns[i]
+		if a.Title != b.Title {
+			t.Errorf("column %d title changed across restart: %q, want %q", i, a.Title, b.Title)
 		}
-		if rows[i][1] != state {
-			t.Errorf("page row %d state = %q, want %q", i, rows[i][1], state)
+		if len(a.Cards) != len(b.Cards) {
+			t.Fatalf("column %q card count changed across restart:\nbefore %+v\n after %+v", b.Title, b.Cards, a.Cards)
 		}
-		if !strings.Contains(rows[i][2], td.Title) {
-			t.Errorf("page row %d title = %q, want %q", i, rows[i][2], td.Title)
+		for j := range b.Cards {
+			if a.Cards[j] != b.Cards[j] {
+				t.Errorf("column %q card %d changed across restart: %+v, want %+v", b.Title, j, a.Cards[j], b.Cards[j])
+			}
 		}
 	}
-}
-
-func getTodos(t *testing.T, addr string) []todos.Todo {
-	t.Helper()
-	resp, err := http.Get("http://" + addr + "/todos")
-	if err != nil {
-		t.Fatalf("GET /todos: %v", err)
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("GET /todos status = %d, want 200", resp.StatusCode)
-	}
-	var got []todos.Todo
-	if err := json.Unmarshal(body, &got); err != nil {
-		t.Fatalf("GET /todos body %s: %v", body, err)
-	}
-	return got
-}
-
-func todosEqual(a, b []todos.Todo) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }
