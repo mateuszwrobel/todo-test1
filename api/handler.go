@@ -23,26 +23,29 @@ type TodoStore interface {
 }
 
 // BoardStore is this module's port onto the board contract: the read the
-// GET /board endpoint translates, the create POST /cards translates, and the
-// change PATCH /cards/{id} translates — the board operations the endpoints
-// exist to reach, nothing more. Consumer-defined like TodoStore; the
-// composition root injects the concrete store.
+// GET /board endpoint translates, the create POST /cards translates, the
+// change PATCH /cards/{id} translates, and the delete DELETE /cards/{id}
+// translates — the board operations the endpoints exist to reach, nothing
+// more. Consumer-defined like TodoStore; the composition root injects the
+// concrete store.
 type BoardStore interface {
 	List() ([]board.ColumnCards, error)
 	Create(text string) (board.Card, error)
 	Change(id int64, title *string, column *board.Column) (board.Card, error)
+	Delete(id int64) error
 }
 
 // NewHandler builds the handler for the JSON contract: GET /board,
-// POST /cards, and PATCH /cards/{id} over the board store, DELETE /todos over
-// the todo store (GET /todos retired at api/01, POST /todos at api/02, PATCH
-// /todos at api/05 — the board endpoints replace the todo surface). The
-// composition root mounts it on its listener.
+// POST /cards, PATCH /cards/{id}, and DELETE /cards/{id} over the board
+// store, DELETE /todos over the todo store (GET /todos retired at api/01,
+// POST /todos at api/02, PATCH /todos at api/05 — the board endpoints
+// replace the todo surface). The composition root mounts it on its listener.
 func NewHandler(todoStore TodoStore, boardStore BoardStore) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /board", handleBoard(boardStore))
 	mux.HandleFunc("POST /cards", handleCreate(boardStore))
 	mux.HandleFunc("PATCH /cards/{id}", handleCardChange(boardStore))
+	mux.HandleFunc("DELETE /cards/{id}", handleCardDelete(boardStore))
 	mux.HandleFunc("DELETE /todos/{id}", handleDelete(todoStore))
 	return mux
 }
