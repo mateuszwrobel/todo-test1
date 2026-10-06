@@ -18,14 +18,15 @@ import (
 // at one site keyed on the board's typed errors with errors.Is (the api
 // workplan's mapping-table decision). Success is 200 with the updated Card
 // encoded straight from board's JSON tags — the contract's four fields
-// (id, title, column, position).
+// (id, title, column, position). The table now covers the full board.Change
+// outcome enumeration (not-found api/07, invalid-column api/08) plus the
+// title class (api/05) and the shape-only empty-change refusal (api/09).
 //
 // The title direction reaches board's text rule — the same single rule
 // source create uses — so its refusals are worded identically across verbs:
 // ErrTextRequired → 422 "title is required", ErrTextTooLong → 422 stating
 // the limit with the number formatted from board.MaxTextLen, so PATCH and
-// POST cannot word the same error class differently. Remaining outcome
-// mappings arrive with their cards.
+// POST cannot word the same error class differently.
 //
 // Request validation is shape-only (the api workplan's decision): malformed
 // JSON, a known field present with a non-string type, and a non-numeric id
@@ -77,6 +78,19 @@ func handleCardChange(store BoardStore) http.HandlerFunc {
 				col := board.Column(name)
 				column = &col
 			}
+		}
+
+		// Card api/09 — the contract's "at least one field" clause is a
+		// request-shape rule, so this module states the refusal: an empty
+		// object — and every other no-fields body (absent keys, JSON null
+		// values, empty body, well-formed JSON that is not an object) — is
+		// rejected here, 422 with the rule stated. Unlike the title class,
+		// where the empty value is handed to board so its required outcome
+		// words the refusal once, no store outcome carries this rule; the
+		// both-nil call is never made and nothing reaches storage.
+		if title == nil && column == nil {
+			errorJSON(w, http.StatusUnprocessableEntity, "at least one field is required")
+			return
 		}
 
 		updated, err := store.Change(id, title, column)

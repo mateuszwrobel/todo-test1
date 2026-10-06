@@ -364,6 +364,47 @@ func TestPatchCardInvalidColumnIsStated422(t *testing.T) {
 	}
 }
 
+// Card api/09 — Patch empty body is a stated 422.
+// Given a card exists with identifier N
+// When  a client patches an empty JSON object to /cards/N
+// Then  the response is 422 stating that at least one field is required
+//
+//	And the card is unchanged
+//
+// The same refusal class covers every body that supplies no field: absent
+// keys, keys whose value is JSON null, no body at all, and well-formed JSON
+// that is not an object — all read as "field absent", so the at-least-one-
+// field clause is what fails. Nothing reaches the store; the List probe
+// shows the card exactly as it was.
+func TestPatchCardEmptyBodyIsStated422(t *testing.T) {
+	store := openBoardStore(t)
+	srv := httptest.NewServer(NewHandler(openStore(t), store))
+	defer srv.Close()
+
+	card := createCardThroughAPI(t, srv.URL, "card standing pat")
+	id := int64(card["id"].(float64))
+	before := boardSnapshot(t, store)
+
+	for _, body := range []string{
+		`{}`,                              // the card's empty JSON object
+		``,                                // no body at all
+		`{"title": null, "column": null}`, // keys present but null — no field supplied
+		`null`,                            // well-formed JSON, not an object
+		`"just a string"`,                 // same: carries no fields
+	} {
+		resp, got := patchCard(t, srv.URL, id, body)
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Fatalf("status = %d for body %q, want 422 (body %s)", resp.StatusCode, body, got)
+		}
+		assertCreateError(t, []byte(got), "at least one field is required")
+	}
+
+	assertBoardUnchanged(t, store, before)
+	if list := boardSnapshot(t, store); len(list[0].Cards) != 1 || list[0].Cards[0].Title != "card standing pat" {
+		t.Errorf("card changed after the empty-body refusal: %+v", list[0].Cards)
+	}
+}
+
 // Shape violations are transport errors, not rule refusals — the module's
 // convention kept from create ("Malformed JSON is a transport error: 400
 // invalid request, distinct from the 422 rule refusals"; a field present but
