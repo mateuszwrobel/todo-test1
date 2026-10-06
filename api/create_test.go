@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"todo/board"
 )
 
 // Card api/02 — Create returns the card.
@@ -143,5 +145,109 @@ func TestPostCardsReturnsTrimmedTitle(t *testing.T) {
 	}
 	if len(list[0].Cards) != 1 || list[0].Cards[0].Title != "Buy milk" {
 		t.Errorf("board holds %+v, want the one trimmed card", list[0].Cards)
+	}
+}
+
+// Card api/03 — Create blank title is a stated 422.
+// Given an open board
+// When  a client posts an empty or whitespace-only title to /cards
+// Then  the response is 422 with the error "title is required"
+//
+//	And the board is unchanged
+//
+// The contract states the same refusal when the title is merely absent: an
+// empty object, no body at all, or well-formed JSON that is not an object.
+// The refusal is board's required outcome stated once at the mapping site —
+// the blank rule has one owner, not two.
+func TestPostCardsBlankOrAbsentTitleIsStated422(t *testing.T) {
+	store := openBoardStore(t)
+	srv := httptest.NewServer(NewHandler(openStore(t), store))
+	defer srv.Close()
+
+	for _, body := range []string{
+		`{"title": ""}`,       // empty
+		`{"title": " \t\n "}`, // whitespace-only
+		`{}`,                  // absent title key
+		``,                    // no body at all
+		`"just a string"`,     // well-formed JSON, not an object — carries no title
+	} {
+		resp, err := http.Post(srv.URL+"/cards", "application/json", strings.NewReader(body))
+		if err != nil {
+			t.Fatalf("POST /cards (%s): %v", body, err)
+		}
+		respBody, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			t.Fatalf("read body: %v", err)
+		}
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Fatalf("status = %d for body %s, want 422", resp.StatusCode, body)
+		}
+		assertCreateError(t, respBody, "title is required")
+	}
+
+	// And the board is unchanged: every column still holds nothing.
+	assertBoardEmpty(t, store)
+}
+
+// Malformed JSON stays a transport error — 400 `{"error": "invalid request"}`
+// — the module's convention from the retired POST /todos handler ("Malformed
+// JSON is a transport error: 400 invalid request, distinct from the 422 rule
+// refusals"), kept for POST /cards. A title that is present but not a string
+// is the same transport class: the body is not the contract's shape (the
+// todo handler answered that body 400 through its struct decode).
+func TestPostCardsMalformedJSONIs400(t *testing.T) {
+	store := openBoardStore(t)
+	srv := httptest.NewServer(NewHandler(openStore(t), store))
+	defer srv.Close()
+
+	for _, body := range []string{
+		`{"title": `,   // truncated mid-value — the body the todo-era pin exercised
+		`{bad`,         // broken syntax
+		`{"title": 5}`, // present but not a string — not the contract's body shape
+	} {
+		resp, err := http.Post(srv.URL+"/cards", "application/json", strings.NewReader(body))
+		if err != nil {
+			t.Fatalf("POST /cards (%s): %v", body, err)
+		}
+		respBody, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			t.Fatalf("read body: %v", err)
+		}
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("status = %d for body %s, want 400", resp.StatusCode, body)
+		}
+		assertCreateError(t, respBody, "invalid request")
+	}
+
+	assertBoardEmpty(t, store)
+}
+
+// assertCreateError asserts the contract's one error shape carries the stated
+// message verbatim.
+func assertCreateError(t *testing.T, body []byte, want string) {
+	t.Helper()
+	var got map[string]string
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("error body is not JSON: %v (body %s)", err, body)
+	}
+	if got["error"] != want {
+		t.Errorf("error = %q, want %q (body %s)", got["error"], want, body)
+	}
+}
+
+// assertBoardEmpty is the unchanged-board probe: after a rejection the List
+// read must show every column exactly as it was — nothing created.
+func assertBoardEmpty(t *testing.T, store *board.Store) {
+	t.Helper()
+	list, err := store.List()
+	if err != nil {
+		t.Fatalf("board store.List: %v", err)
+	}
+	for _, col := range list {
+		if len(col.Cards) != 0 {
+			t.Errorf("column %q holds %+v after a rejected create, want unchanged (empty)", col.Name, col.Cards)
+		}
 	}
 }
