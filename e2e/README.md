@@ -44,6 +44,29 @@ without todo data".
    columns each stating its emptiness; no cards render, and GET /board
    answers the three fixed columns, each empty.
 
+## KW2 — Create (`e2e/kw2-create.js`)
+
+Re-executes the parent scenarios "Create card", "Reject empty card text"
+and "Reject over-long card text". Each scenario gets its own seeded temp
+board, port, and server (SIGTERM teardown), mirroring the KW1 lane.
+
+### What it asserts
+
+1. **Create card** — on a seeded board, creating "Buy milk" through the
+   create band appends it at the bottom of To Do *without a page reload*
+   (a window-object marker survives the append — only a fragment swap keeps
+   page-owned state), previously stored cards keep their order above it,
+   the card renders without the done treatment, its identifier matches the
+   stored one in GET /board, and a later reload shows the same card at the
+   same place in agreement with a fresh GET /board.
+2. **Reject empty card text** — submitting whitespace-only text states the
+   contract's "title is required" at the create control, adds no card (DOM
+   and GET /board unchanged), and the control is ready again: the next
+   valid submit appends at To Do's bottom.
+3. **Reject over-long card text** — submitting 501 characters states the
+   character limit at the create control, adds no card, and leaves the
+   board unchanged.
+
 ## Seeding
 
 `e2e/testdata/` is a go tool (test-support, not served application code;
