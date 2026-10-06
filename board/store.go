@@ -7,7 +7,9 @@ package board
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
+	"strings"
 
 	_ "modernc.org/sqlite" // pure-Go, cgo-free SQLite driver
 )
@@ -44,8 +46,10 @@ type ColumnCards struct {
 
 // schema is created on open (create-if-not-exists); single table, no migration
 // framework. autoincrement rowids are never reused, even after delete. The
-// title CHECK is the minimal storage-level guard (non-blank, ≤500 chars); the
-// store's full validation behavior lands with the create-rejection cards.
+// title CHECK is a storage-level belt only: SQLite's trim() strips spaces but
+// not tabs/newlines, so the observable validation behavior lives in Go
+// (validateText), which screens every candidate before any insert — a
+// constraint failure is never the reported outcome.
 // "column" is quoted because COLUMN is a reserved word in SQLite.
 const schema = `CREATE TABLE IF NOT EXISTS cards (
 	id integer primary key autoincrement,
@@ -90,11 +94,17 @@ func (s *Store) Close() error {
 
 // Create inserts a card at the bottom of the todo column — position equals the
 // current todo count, so the column's positions stay contiguous 0..n-1 — with
-// a fresh store-assigned identifier, and returns the Card. The count and the
-// insert run in one transaction, so the append is all-or-nothing. The text is
-// stored as given; full text validation lands with the create-rejection cards
-// (board/03, board/04) — until then only the schema CHECK bounds it.
+// a fresh store-assigned identifier, and returns the Card. The text is trimmed
+// and screened by the module's text rule before storage is touched: blank text
+// comes back as ErrTextRequired with no insert attempted, so a rejected card
+// neither changes the board nor consumes an identifier. The count and the
+// insert run in one transaction, so the append is all-or-nothing.
 func (s *Store) Create(text string) (Card, error) {
+	title, err := validateText(text)
+	if err != nil {
+		return Card{}, fmt.Errorf("create card: %w", err)
+	}
+
 	tx, err := s.db.Begin()
 	if err != nil {
 		return Card{}, fmt.Errorf("create card: %w", err)
@@ -107,7 +117,7 @@ func (s *Store) Create(text string) (Card, error) {
 	}
 	res, err := tx.Exec(
 		`INSERT INTO cards (title, "column", position) VALUES (?, 'todo', ?)`,
-		text, position,
+		title, position,
 	)
 	if err != nil {
 		return Card{}, fmt.Errorf("create card: %w", err)
@@ -119,7 +129,24 @@ func (s *Store) Create(text string) (Card, error) {
 	if err := tx.Commit(); err != nil {
 		return Card{}, fmt.Errorf("create card: %w", err)
 	}
-	return Card{ID: id, Title: text, Column: Todo, Position: position}, nil
+	return Card{ID: id, Title: title, Column: Todo, Position: position}, nil
+}
+
+// ErrTextRequired reports card text that is empty or whitespace-only once
+// trimmed — the store's "required" outcome. Callers map it with errors.Is.
+var ErrTextRequired = errors.New("board: card text is required (empty or whitespace-only)")
+
+// validateText is the module's single text rule: every entry point into the
+// board (Create now, Seed with board/14) runs candidate text through it before
+// storage is touched, so one rule source covers all paths and a rejection is
+// always a named store outcome, never a storage-constraint failure. It returns
+// the normalized (trimmed) text to store.
+func validateText(text string) (string, error) {
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		return "", ErrTextRequired
+	}
+	return trimmed, nil
 }
 
 // List returns the board: the three fixed columns in the order todo,
