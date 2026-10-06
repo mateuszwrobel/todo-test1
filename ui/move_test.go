@@ -396,3 +396,85 @@ func TestDragReorderToTopOfColumnLandsFirst(t *testing.T) {
 	}
 	assertStorePositionsContiguous(t, store, board.Todo)
 }
+
+// Card ui/10 — Abandoned drag changes nothing.
+// Given the page shows the board
+// When  the user starts a drag and drops outside any valid target (or releases without a drop)
+// Then  no request is sent and the board renders unchanged
+//
+// Pinned at both halves the module owns. Server side: with no accepted drop
+// there is no path from a rendered page to the contract — reading the board
+// crosses exactly one GET /board and zero writes, and the truth stands
+// unchanged between loads. Client side: the abandonment legs never reach the
+// request site — the drop handler returns before the single fetch when the
+// release lands outside any .column, and dragend (the release-without-a-drop
+// leg: ESC cancels the drag natively and surfaces here) issues no requests
+// at all. The literal gesture proof — mouse released over the page gutter,
+// request counters staying at zero in a live browser — arrives with the
+// wave-end e2e lane.
+func TestAbandonedDragChangesNothing(t *testing.T) {
+	store, uiSrv, log := moveChain(t, "Write weekly report", "Fix login redirect")
+
+	// A board load with no accepted drop crosses no write at all.
+	_, before := getPage(t, uiSrv.URL+"/")
+	if got := log.patches(); len(got) != 0 {
+		t.Errorf("page load crossed writes %v, want none", got)
+	}
+
+	// And the rendered truth between two loads is the same truth: the drag
+	// phase the abandoned drag adds ends where it started.
+	_, after := getPage(t, uiSrv.URL+"/")
+	if before != after {
+		t.Errorf("board changed across an abandoned drag:\n%s\n---\n%s", before, after)
+	}
+	if got := cardTitles(t, store, board.Todo); len(got) != 2 ||
+		got[0] != "Write weekly report" || got[1] != "Fix login redirect" {
+		t.Errorf("store To Do column = %q, want untouched by an abandoned drag", got)
+	}
+
+	// The script shape that makes zero requests structural: the drop leg
+	// bails before the single fetch when no column accepts the release, and
+	// the dragend leg (release without drop / ESC cancel) contains no
+	// request site.
+	_, page := getPage(t, uiSrv.URL+"/")
+	script := page[strings.LastIndex(page, "<script>"):]
+	dropLeg := script[strings.Index(script, "addEventListener('drop'"):strings.Index(script, "addEventListener('dragend'")]
+	if bail := strings.Index(dropLeg, "if (!column) return;"); bail < 0 {
+		t.Errorf("drop leg lost its outside-any-column bail:\n%.400s", dropLeg)
+	} else if at := strings.Index(dropLeg, "fetch("); at >= 0 && at < bail {
+		t.Errorf("drop leg can request before checking the drop landed on a column")
+	}
+	dragEndLeg := script[strings.Index(script, "addEventListener('dragend'"):]
+	if strings.Contains(dragEndLeg, "fetch(") {
+		t.Errorf("dragend issues a request — an abandoned drag must send nothing")
+	}
+}
+
+// Card ui/10 (the verdict the card's text decides) — a drop that lands the
+// card exactly where it already sits is NOT an abandonment: the card defines
+// abandoning as dropping outside any valid target (or releasing without a
+// drop), and the source slot inside the source column is a valid target at
+// the card's own index. So it rides card ui/08's one-request rule — exactly
+// one real PATCH — and what makes the outcome match ui/10's Then-clause is
+// the answer: the server's re-normalized truth is identical, so the board
+// renders unchanged without the client suppressing anything. The client
+// computes; it does not second-guess accepted drops.
+func TestSamePositionDropIsOneRealRequestNotAQuietNoOp(t *testing.T) {
+	store, uiSrv, log := moveChain(t, "Write weekly report", "Fix login redirect", "Buy milk")
+
+	status, frag := dragMove(t, uiSrv.URL, 1, "To Do", 0)
+	if status != http.StatusOK {
+		t.Fatalf("PATCH /ui/cards/1/move status = %d, want 200 (body %s)", status, frag)
+	}
+
+	// One real request — accepted drop, one-PATCH rule, no client-side bail.
+	assertOneMoveRequest(t, log, 1, "todo", 0)
+
+	// The board renders unchanged: the same order back from the server.
+	assertColumnOrder(t, frag, "to-do", 1, 2, 3)
+	if got := cardTitles(t, store, board.Todo); len(got) != 3 ||
+		got[0] != "Write weekly report" || got[1] != "Fix login redirect" || got[2] != "Buy milk" {
+		t.Errorf("store To Do column = %q, want unchanged by the same-position drop", got)
+	}
+	assertStorePositionsContiguous(t, store, board.Todo)
+}
