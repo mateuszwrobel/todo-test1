@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -121,6 +122,112 @@ func TestDeleteCardAnswers204AndBoardOmitsIt(t *testing.T) {
 			t.Errorf("column %q holds %d cards, want none", col.Name, len(col.Cards))
 		}
 	}
+}
+
+// Card api/11 — Delete unknown id is a stated 404.
+// Given no card exists with identifier Z
+// When  a client sends DELETE /cards/Z
+// Then  the response is 404 with the error "no such card"
+//
+// Every unknown identifier reaches the same stated outcome by one path: the
+// board's existence read is the delete transaction's first statement
+// (board/12), so no unknown class is special and the rejected delete leaves
+// the board exactly as it was. The table aims at each class of unknown the
+// contract permits — zero, a negative, the never-used high value, one just
+// past the highest live id, one far past it, and an already-deleted id (the
+// gone card is an unknown card: delete twice, the second delete is this
+// scenario). The wording is PATCH's, byte for byte — one wording per error
+// class across verbs.
+func TestDeleteCardUnknownIDIsStated404(t *testing.T) {
+	store := openBoardStore(t)
+	srv := httptest.NewServer(NewHandler(openStore(t), store))
+	defer srv.Close()
+
+	kept := createCardThroughAPI(t, srv.URL, "kept card")
+	gone := createCardThroughAPI(t, srv.URL, "deleted once")
+	goneID := int64(gone["id"].(float64))
+
+	// The gone identifier becomes unknown through a real delete (api/10),
+	// so the deleted-twice row needs no contrivance — and this is the
+	// baseline the rejected deletes must leave untouched.
+	resp, body := deleteCard(t, srv.URL, goneID)
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("first DELETE /cards/%d status = %d, want 204 (body %s)", goneID, resp.StatusCode, body)
+	}
+	before := boardSnapshot(t, store)
+	if len(before[0].Cards) != 1 || before[0].Cards[0].ID != int64(kept["id"].(float64)) {
+		t.Fatalf("baseline after the real delete = %+v, want only the kept card", before[0].Cards)
+	}
+
+	const neverUsed = 987654321
+	for _, unknown := range []int64{
+		0,              // zero is outside the issued id space (autoincrement starts at 1)
+		-7,             // negative
+		goneID + 1,     // just past the highest live id
+		goneID + 1<<40, // far past it
+		neverUsed,      // never seen by this store
+		goneID,         // deleted once already — a gone card is an unknown card
+	} {
+		resp, body := deleteCard(t, srv.URL, unknown)
+		if resp.StatusCode != http.StatusNotFound {
+			t.Fatalf("DELETE /cards/%d status = %d, want 404 (body %s)", unknown, resp.StatusCode, body)
+		}
+		assertCreateError(t, []byte(body), "no such card")
+	}
+
+	assertBoardUnchanged(t, store, before)
+}
+
+// A non-numeric card id is unparseable input, not an unknown identifier:
+// the module's standing transport class — 400 with {"error":"invalid
+// request"}, the same refusal create and change state, reached before the
+// store is touched at all.
+func TestDeleteCardNonNumericIDIs400(t *testing.T) {
+	store := openBoardStore(t)
+	srv := httptest.NewServer(NewHandler(openStore(t), store))
+	defer srv.Close()
+
+	createCardThroughAPI(t, srv.URL, "untouched card")
+	before := boardSnapshot(t, store)
+
+	for _, bad := range []string{"not-a-number", "1x"} {
+		req, err := http.NewRequest(http.MethodDelete, srv.URL+"/cards/"+bad, nil)
+		if err != nil {
+			t.Fatalf("build DELETE /cards/%q request: %v", bad, err)
+		}
+		resp, err := srv.Client().Do(req)
+		if err != nil {
+			t.Fatalf("DELETE /cards/%q: %v", bad, err)
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("DELETE /cards/%q status = %d, want 400 (body %s)", bad, resp.StatusCode, body)
+		}
+		assertCreateError(t, body, "invalid request")
+	}
+
+	assertBoardUnchanged(t, store, before)
+}
+
+// deleteCard sends DELETE /cards/{id} and returns the response with its
+// body fully read (the 204 pin needs the body's exact emptiness).
+func deleteCard(t *testing.T, url string, id int64) (*http.Response, string) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodDelete, fmt.Sprintf("%s/cards/%d", url, id), nil)
+	if err != nil {
+		t.Fatalf("new DELETE request: %v", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("DELETE /cards/%d: %v", id, err)
+	}
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read response body: %v", err)
+	}
+	return resp, string(b)
 }
 
 // Card api/10 — Delete.

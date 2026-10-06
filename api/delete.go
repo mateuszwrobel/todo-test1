@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"todo/board"
 	"todo/todos"
 )
 
@@ -15,7 +16,10 @@ import (
 // same transaction that removed the row). A non-numeric id is unparseable
 // input → 400 "invalid request", the module's standing transport convention
 // kept from create and change. Outcome → transport mapping lives here, at
-// one site like change.go's; the not-found arm joins it with api/11.
+// one site like change.go's, keyed on the board's typed errors: an
+// identifier no card holds is the contract's stated 404 "no such card" —
+// the same wording class PATCH answers for it, one wording per error class
+// across verbs.
 func handleCardDelete(store BoardStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
@@ -24,7 +28,18 @@ func handleCardDelete(store BoardStore) http.HandlerFunc {
 			return
 		}
 		if err := store.Delete(id); err != nil {
-			http.Error(w, "failed to delete card", http.StatusInternalServerError)
+			// Outcome → transport mapping — one site, keyed on the board's
+			// typed outcomes (api workplan decision).
+			switch {
+			case errors.Is(err, board.ErrCardNotFound):
+				// Card api/11 — the contract's stated not-found body. The
+				// board's existence check is its transaction's first read
+				// (board/12), so the rejected delete left the board exactly
+				// as it was.
+				errorJSON(w, http.StatusNotFound, "no such card")
+			default:
+				http.Error(w, "failed to delete card", http.StatusInternalServerError)
+			}
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
