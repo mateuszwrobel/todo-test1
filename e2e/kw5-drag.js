@@ -494,6 +494,98 @@ async function main() {
     await page2.close();
     console.log('scenario 2 (drag reorder within a column — one PATCH, survives reload): OK');
 
+    // --- Scenario 2b: the DOWNWARD leg of "Drag reorder within a column" —
+    // the branch scenario 2's upward drag cannot reach. When the dragged
+    // card's slot sits ABOVE the landing gap, dropPosition must count PAST
+    // it (skipping the dragged card among the nodes ahead of the line) to
+    // carry the contract's index-after-removal (board.Move removes before
+    // inserting). A three-card column: dragging the TOP card to the BOTTOM
+    // (the last dragover parks the line below the last card) is EXACTLY ONE
+    // PATCH with position 2 — the raw count ahead of the line is 3, so 2 is
+    // only reachable by skipping the dragged card's own slot — and the
+    // column lands [B, C, A]. The reload proof stays scenario 2's; this leg
+    // adds the downward geometry and the counting-past assertion.
+    const dbs2b = tmpPaths('drag-reorder-down');
+    run(seedBin, [
+      '--db', dbs2b.board,
+      '--titles', 'Call the plumber,File the expense claim,Write the weekly report',
+    ]);
+    const port2b = await freePort();
+    const srv2b = startServer(port2b, dbs2b.board);
+    await waitForHTTP(`http://127.0.0.1:${port2b}/board`);
+    const page2b = await browser.newPage();
+    await page2b.goto(`http://127.0.0.1:${port2b}/`);
+    const log2b = instrumentPatches(page2b);
+
+    const before2b = await snapshot(page2b);
+    const todo2b = before2b.find((c) => c.column === 'To Do');
+    assert.strictEqual(todo2b.cards.length, 3,
+      'the downward leg needs a three-card column so index-after-removal (2) separates from the raw drop count (3)');
+    const head = todo2b.cards[0];
+    const middle = todo2b.cards[1];
+    const tail = todo2b.cards[2];
+
+    // Release BELOW the last card, inside the column — the mid-viewport card
+    // geometry (never a strip near the page's bottom edge, where the kw5 lane
+    // saw chromium auto-scroll mid-drag) extended past the list: once the
+    // indicator sits anywhere above the last card it reflows that card ~14px
+    // down (2px line + 6px margins), so a fixed fy on the card can hold a
+    // stable above-center equilibrium. A point past the card's bottom edge
+    // but clamped inside the section puts clientY past its midpoint in EVERY
+    // indicator layout, parking the line after the whole list.
+    const belowPoint = await page2b.locator('#column-to-do').evaluate((sec) => {
+      const ul = sec.querySelector('.column__cards');
+      const lastBox = ul.lastElementChild.getBoundingClientRect();
+      const secBox = sec.getBoundingClientRect();
+      return {
+        x: lastBox.x + lastBox.width / 2,
+        y: Math.min(lastBox.bottom + 8, secBox.bottom - 4),
+      };
+    });
+    log2b.reset();
+    let indicator2b;
+    await dragTo(page2b, cardById(page2b, head.id), belowPoint, {
+      beforeRelease: async (page) => { indicator2b = await readDropIndicator(page, 'To Do'); },
+    });
+    witnesses.push(`scenario 2b mid-gesture drop indicator: ${JSON.stringify(indicator2b)}`);
+    await page2b.waitForFunction(
+      (cardId) => {
+        const ul = document.querySelector('#column-to-do .column__cards');
+        return ul && ul.firstElementChild && ul.firstElementChild.dataset.card === String(cardId);
+      },
+      middle.id,
+      { timeout: 10000 }
+    );
+
+    // The counting-past-own-slot proof lives in this body: three rendered
+    // cards sit ahead of the landing line, one of them is the dragged card's
+    // own slot, and the payload must say 2 — position 3 would land the card
+    // past the bottom of the list after the removal.
+    const body2b = assertOneMoveRequest(log2b, head.id, 'the same-column downward drop');
+    assert.deepStrictEqual(body2b, { column: 'To Do', position: 2 },
+      'dragging the top card to the bottom must count past its own slot — position 2 (index-after-removal), not 3');
+
+    const after2b = await snapshot(page2b);
+    const expected2b = before2b.map((col) =>
+      col.column === 'To Do'
+        ? { ...col, cards: [...col.cards.filter((c) => c.id !== head.id), head] }
+        : col
+    );
+    assert.deepStrictEqual(after2b, expected2b,
+      'the downward reorder changed something beyond moving the top card to the bottom (the others lost their relative order)');
+    const json2b = await getJSON(`http://127.0.0.1:${port2b}/board`);
+    const rows2b = assertContiguousPositions(json2b, 'after the same-column downward drop');
+    assert.deepStrictEqual(rows2b['To Do'],
+      expected2b.find((c) => c.column === 'To Do').cards.map((card, i) => ({ title: card.title, id: card.id, position: i })),
+      'the downward-reordered DOM order does not agree with GET /board order and positions');
+    assert.deepStrictEqual(after2b, boardView(json2b),
+      'after the same-column downward drop the page does not mirror GET /board');
+    await assertNoDragChrome(page2b, 'after the same-column downward drop');
+
+    await stopServer(srv2b);
+    await page2b.close();
+    console.log('scenario 2b (drag reorder downward — one PATCH, position 2 past own slot, lands [B,C,A]): OK');
+
     // --- Scenario 3: "Done is column membership" — dragging the In Progress
     // card into Done renders it with the done treatment (a class off column
     // membership — the contract carries no done field), and dragging it back

@@ -187,6 +187,10 @@ func applyPatch(store BoardStore, id int64, title *string, column *board.Column,
 	case column != nil:
 		return store.Move(id, *column, *position)
 	default:
+		// Honest read-then-move window: a column change racing in between this
+		// List lookup and Move resolves last-write-wins per the parent
+		// contract, and the single-conn store (board/store.go MaxOpenConns(1))
+		// bounds the interleaving.
 		current, found, err := currentColumn(store, id)
 		if err != nil {
 			return board.Card{}, err
