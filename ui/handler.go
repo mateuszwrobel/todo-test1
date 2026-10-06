@@ -66,6 +66,10 @@ func NewHandler(apiBase string) http.Handler {
 	mux.HandleFunc("POST /ui/cards", p.handleCreate)
 	mux.HandleFunc("PATCH /ui/cards/{id}", p.handleEdit)
 	mux.HandleFunc("DELETE /ui/cards/{id}", p.handleDelete)
+	// Drag re-extends it at KW5 (cards ui/08–10): a dropped card's single
+	// per-drop request patches here and this module performs
+	// PATCH /cards/{id} over HTTP with the contract's column+position body.
+	mux.HandleFunc("PATCH /ui/cards/{id}/move", p.handleMove)
 	mux.HandleFunc("GET /static/htmx.min.js", p.handleHTMX)
 	// tokens.css before style.css: style.css is pure var() consumption,
 	// so the token sheet must be parsed first. The <link> order in the

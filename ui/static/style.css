@@ -276,6 +276,53 @@ li.editing .title {
   display: none;
 }
 
+/* --- drag states (kanban mockups k3/k4): the visual layer for the drag
+   machinery in the page shell — the classes the shell script toggles, no
+   interaction behavior restated here, colors all from the token layer. --- */
+
+/* The source slot: the dragged card's box rendered as the dashed empty
+   slot the chip lifted from (k3/k4) — same position, same height, content
+   hidden while the drag is live. */
+.card--source {
+  border: 1px dashed var(--color-border-field);
+  border-radius: var(--radius-sm);
+  background: transparent;
+}
+
+.card--source > * {
+  visibility: hidden;
+}
+
+/* The drop indicator: the thin solid blue insertion line marking the
+   landing gap before release — it shows exactly where the one request
+   will place the card. */
+.drop-indicator {
+  list-style: none;
+  height: 2px;
+  margin: var(--space-2) 0;
+  background: var(--color-primary);
+}
+
+/* The active drop target: the hovered column's blue-tinted ring (k3). */
+.column--drop-target {
+  outline: 1px solid var(--color-primary);
+}
+
+/* The drag chip: the floating card the cursor carries — the title alone,
+   no action labels (k3/k4). Built offscreen by the shell script and handed
+   to setDragImage. */
+.drag-chip {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  padding: var(--space-4) var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-panel);
+  box-shadow: var(--shadow-card);
+  color: var(--color-text);
+}
+
 /* --- stated states: empty panel (02), failure panel + retry (05) --- */
 
 /* The panel component: the bordered white surface the list and both
