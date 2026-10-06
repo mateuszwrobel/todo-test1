@@ -6,23 +6,23 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"strings"
 	"testing"
 
-	"todo/todos"
+	"todo/board"
 )
 
-// patchTodo sends a PATCH /todos/{id} with the given raw JSON body.
-func patchTodo(t *testing.T, url string, id int64, body string) (*http.Response, string) {
+// patchCard sends a PATCH /cards/{id} with the given raw JSON body and
+// returns the response plus its body, already read and closed.
+func patchCard(t *testing.T, url string, id int64, body string) (*http.Response, string) {
 	t.Helper()
-	req, err := http.NewRequest(http.MethodPatch, fmt.Sprintf("%s/todos/%d", url, id), strings.NewReader(body))
+	req, err := http.NewRequest(http.MethodPatch, fmt.Sprintf("%s/cards/%d", url, id), strings.NewReader(body))
 	if err != nil {
 		t.Fatalf("new PATCH request: %v", err)
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		t.Fatalf("PATCH /todos/%d: %v", id, err)
+		t.Fatalf("PATCH /cards/%d: %v", id, err)
 	}
 	defer resp.Body.Close()
 	b, err := io.ReadAll(resp.Body)
@@ -32,287 +32,319 @@ func patchTodo(t *testing.T, url string, id int64, body string) (*http.Response,
 	return resp, string(b)
 }
 
-// Card api/06 — Change done state in either direction.
-// Given a todo exists (title "Buy milk", not done)
-// When  a PATCH /todos/{id} with {"done": true} or {"done": false} arrives
-// Then  the response is 200 with the updated todo JSON and the title
-//
-//	unchanged — and the done state persists in the store
-func TestPatchDoneStateEitherDirection(t *testing.T) {
-	store := openStore(t)
-	created, err := store.Create("Buy milk")
+// createCardThroughAPI creates a card over POST /cards and returns the
+// decoded card — tests set up state the way a client does.
+func createCardThroughAPI(t *testing.T, srvURL, title string) map[string]interface{} {
+	t.Helper()
+	resp, err := http.Post(srvURL+"/cards", "application/json",
+		strings.NewReader(fmt.Sprintf(`{"title": %q}`, title)))
 	if err != nil {
-		t.Fatalf("seed Create: %v", err)
+		t.Fatalf("POST /cards (%q): %v", title, err)
 	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("POST /cards (%q) status = %d, want 201", title, resp.StatusCode)
+	}
+	var card map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&card); err != nil {
+		t.Fatalf("create body is not card JSON: %v", err)
+	}
+	return card
+}
 
-	srv := httptest.NewServer(NewHandler(store, openBoardStore(t)))
-	defer srv.Close()
+// assertCardKeys pins that a body is the full Card JSON — exactly the four
+// contract fields, nothing more, nothing less.
+func assertCardKeys(t *testing.T, body string) map[string]interface{} {
+	t.Helper()
+	var card map[string]interface{}
+	if err := json.Unmarshal([]byte(body), &card); err != nil {
+		t.Fatalf("body is not card JSON: %v (body %s)", err, body)
+	}
+	if got := mapKeys(card); !equalKeys(got, []string{"column", "id", "position", "title"}) {
+		t.Fatalf("card keys = %v, want exactly the four contract fields id, title, column, position (body %s)", got, body)
+	}
+	return card
+}
 
-	// Mark done.
-	resp, body := patchTodo(t, srv.URL, created.ID, `{"done": true}`)
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("PATCH {done:true} status = %d, want 200 (body %s)", resp.StatusCode, body)
-	}
-	var got todos.Todo
-	if err := json.Unmarshal([]byte(body), &got); err != nil {
-		t.Fatalf("PATCH response is not todo JSON: %v (body %s)", err, body)
-	}
-	if got != (todos.Todo{ID: created.ID, Title: "Buy milk", Done: true}) {
-		t.Errorf("PATCH {done:true} = %+v, want {ID:%d Title:Buy milk Done:true}", got, created.ID)
-	}
-
-	// Reopen.
-	resp, body = patchTodo(t, srv.URL, created.ID, `{"done": false}`)
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("PATCH {done:false} status = %d, want 200 (body %s)", resp.StatusCode, body)
-	}
-	got = todos.Todo{}
-	if err := json.Unmarshal([]byte(body), &got); err != nil {
-		t.Fatalf("PATCH response is not todo JSON: %v (body %s)", err, body)
-	}
-	if got != (todos.Todo{ID: created.ID, Title: "Buy milk", Done: false}) {
-		t.Errorf("PATCH {done:false} = %+v, want {ID:%d Title:Buy milk Done:false}", got, created.ID)
-	}
-
-	// The last state is what the durable store now reports.
+// boardSnapshot reads the whole board for before/after unchanged probes.
+func boardSnapshot(t *testing.T, store *board.Store) []board.ColumnCards {
+	t.Helper()
 	list, err := store.List()
 	if err != nil {
-		t.Fatalf("List: %v", err)
+		t.Fatalf("board store.List: %v", err)
 	}
-	if len(list) != 1 || list[0] != (todos.Todo{ID: created.ID, Title: "Buy milk", Done: false}) {
-		t.Fatalf("store after toggles = %+v, want the todo not-done with title unchanged", list)
+	return list
+}
+
+// assertBoardUnchanged is the unchanged-card probe of the error cards: after
+// a rejection the List read must show every column exactly as it was.
+func assertBoardUnchanged(t *testing.T, store *board.Store, before []board.ColumnCards) {
+	t.Helper()
+	after := boardSnapshot(t, store)
+	if len(after) != len(before) {
+		t.Fatalf("board columns changed shape: before %+v after %+v", before, after)
+	}
+	for i, col := range after {
+		if col.Name != before[i].Name {
+			t.Fatalf("column %d name changed: %q after, %q before", i, col.Name, before[i].Name)
+		}
+		if len(col.Cards) != len(before[i].Cards) {
+			t.Errorf("column %q holds %d cards after the rejection, want %d (unchanged)",
+				col.Name, len(col.Cards), len(before[i].Cards))
+			continue
+		}
+		for j, c := range col.Cards {
+			if c != before[i].Cards[j] {
+				t.Errorf("column %q position %d = %+v after the rejection, want %+v (unchanged)",
+					col.Name, j, c, before[i].Cards[j])
+			}
+		}
 	}
 }
 
-// Card api/08 — Change missing todo.
-// Given no todo exists with identifier X
-// When  a PATCH /todos/X arrives
-// Then  the response is 404 with { "error": "no such todo" }
-func TestPatchMissingTodoIs404(t *testing.T) {
-	srv := httptest.NewServer(NewHandler(openStore(t), openBoardStore(t)))
+// Card api/05 — Patch title returns the card.
+// Given a card exists with identifier N
+// When  a client patches {"title": "new text"} to /cards/N
+// Then  the response is 200
+//
+//	And the body is the card with the new title, same column, same position,
+//	same id
+//
+// Tested against the real board store: what the wire shows is what the board
+// holds. Place and identity survive a rename — the List probe re-reads them.
+func TestPatchCardTitleReturnsCard(t *testing.T) {
+	store := openBoardStore(t)
+	srv := httptest.NewServer(NewHandler(openStore(t), store))
 	defer srv.Close()
 
-	resp, body := patchTodo(t, srv.URL, 999, `{"done": true}`)
-	if resp.StatusCode != http.StatusNotFound {
-		t.Fatalf("PATCH missing id status = %d, want 404 (body %s)", resp.StatusCode, body)
+	first := createCardThroughAPI(t, srv.URL, "first card")
+	second := createCardThroughAPI(t, srv.URL, "second card")
+	id := int64(second["id"].(float64))
+
+	resp, body := patchCard(t, srv.URL, id, `{"title": "new text"}`)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %s)", resp.StatusCode, body)
 	}
-	var errBody map[string]string
-	if err := json.Unmarshal([]byte(body), &errBody); err != nil {
-		t.Fatalf("error body is not JSON: %v (body %s)", err, body)
+	if ct := resp.Header.Get("Content-Type"); ct != "application/json" {
+		t.Errorf("Content-Type = %q, want application/json", ct)
 	}
-	if errBody["error"] != "no such todo" {
-		t.Errorf("error body = %s, want {\"error\": \"no such todo\"}", body)
+	card := assertCardKeys(t, body)
+	if card["title"] != "new text" {
+		t.Errorf("title = %v, want %q", card["title"], "new text")
+	}
+	if card["column"] != "todo" {
+		t.Errorf("column = %v, want %q — a title change keeps the place", card["column"], "todo")
+	}
+	if card["position"] != float64(1) {
+		t.Errorf("position = %v, want 1 — a title change keeps the position", card["position"])
+	}
+	if card["id"] != second["id"] {
+		t.Errorf("id = %v, want %v — a title change keeps the identifier", card["id"], second["id"])
+	}
+
+	// The board itself agrees: both cards in the todo column in position
+	// order, the renamed one holding its slot.
+	list := boardSnapshot(t, store)
+	if len(list) != 3 || list[0].Name != "todo" {
+		t.Fatalf("board list = %+v, want the three fixed columns todo-first", list)
+	}
+	want := []struct {
+		title    string
+		position int
+	}{
+		{"first card", 0},
+		{"new text", 1},
+	}
+	if len(list[0].Cards) != len(want) {
+		t.Fatalf("todo column holds %+v, want the two cards", list[0].Cards)
+	}
+	for i, c := range list[0].Cards {
+		if c.Title != want[i].title || c.Position != want[i].position {
+			t.Errorf("todo position %d = %+v, want %q at position %d", i, c, want[i].title, want[i].position)
+		}
+	}
+
+	// The untouched card's identifier survived too — the patch touched only
+	// the named card.
+	if list[0].Cards[0].ID != int64(first["id"].(float64)) {
+		t.Errorf("first card id = %d, want %v (unchanged)", list[0].Cards[0].ID, first["id"])
 	}
 }
 
-// Card api/09 — Change with empty body (defensive path).
-// When  a PATCH /todos/{id} with an empty JSON object arrives — or a body
-//
-//	with no recognizable JSON fields at all —
-//
-// Then  the response is 422 stating that at least one field is required
-func TestPatchEmptyBodyIs422(t *testing.T) {
-	store := openStore(t)
-	created, err := store.Create("unchanged")
-	if err != nil {
-		t.Fatalf("seed Create: %v", err)
-	}
-	srv := httptest.NewServer(NewHandler(store, openBoardStore(t)))
+// The board stores no frozen state — column membership is the only done
+// state — so a card in the done column stays fully editable through the
+// same endpoint: patching its title succeeds, and the card keeps its place
+// in done (board/05 behavior surfaced at the wire).
+func TestPatchCardTitleOnDoneCardSucceeds(t *testing.T) {
+	store := openBoardStore(t)
+	srv := httptest.NewServer(NewHandler(openStore(t), store))
 	defer srv.Close()
 
-	for _, body := range []string{`{}`, ``} {
-		resp, respBody := patchTodo(t, srv.URL, created.ID, body)
+	card := createCardThroughAPI(t, srv.URL, "reviewed work")
+	id := int64(card["id"].(float64))
+
+	// Move it to done first (the column direction the same handler carries).
+	if resp, body := patchCard(t, srv.URL, id, `{"column": "done"}`); resp.StatusCode != http.StatusOK {
+		t.Fatalf("move to done: status = %d, want 200 (body %s)", resp.StatusCode, body)
+	}
+
+	resp, body := patchCard(t, srv.URL, id, `{"title": "reviewed work (final)"}`)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200 — a done card is editable (body %s)", resp.StatusCode, body)
+	}
+	updated := assertCardKeys(t, body)
+	if updated["title"] != "reviewed work (final)" {
+		t.Errorf("title = %v, want the new text", updated["title"])
+	}
+	if updated["column"] != "done" {
+		t.Errorf("column = %v, want done — the title change keeps the place", updated["column"])
+	}
+	list := boardSnapshot(t, store)
+	if len(list[2].Cards) != 1 || list[2].Cards[0].Title != "reviewed work (final)" {
+		t.Errorf("done column holds %+v, want the one renamed card", list[2].Cards)
+	}
+}
+
+// The contract lets one request carry title and column together: a single
+// PATCH applies both directions — the new text and the move to the bottom
+// of the target column — and answers the card as it now stands.
+func TestPatchCardTitleAndColumnTogether(t *testing.T) {
+	store := openBoardStore(t)
+	srv := httptest.NewServer(NewHandler(openStore(t), store))
+	defer srv.Close()
+
+	moved := createCardThroughAPI(t, srv.URL, "old title")
+	kept := createCardThroughAPI(t, srv.URL, "stays put")
+	id := int64(moved["id"].(float64))
+
+	resp, body := patchCard(t, srv.URL, id, `{"title": "new title", "column": "in_progress"}`)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %s)", resp.StatusCode, body)
+	}
+	card := assertCardKeys(t, body)
+	if card["title"] != "new title" {
+		t.Errorf("title = %v, want %q", card["title"], "new title")
+	}
+	if card["column"] != "in_progress" {
+		t.Errorf("column = %v, want in_progress", card["column"])
+	}
+	if card["position"] != float64(0) {
+		t.Errorf("position = %v, want 0 — the bottom of the empty in_progress column", card["position"])
+	}
+
+	// Both directions landed in the store, and the source column closed
+	// its gap: the kept card now sits at todo position 0.
+	list := boardSnapshot(t, store)
+	if len(list[1].Cards) != 1 || list[1].Cards[0].Title != "new title" || list[1].Cards[0].Position != 0 {
+		t.Errorf("in_progress column holds %+v, want the moved card at position 0", list[1].Cards)
+	}
+	if len(list[0].Cards) != 1 || list[0].Cards[0].ID != int64(kept["id"].(float64)) || list[0].Cards[0].Position != 0 {
+		t.Errorf("todo column holds %+v, want only the kept card at position 0", list[0].Cards)
+	}
+}
+
+// The title direction of PATCH runs into board's text rule — the same rule
+// create hits — so the refusal bodies must read identically across verbs:
+// single wording per error class. Blank → "title is required" (create's
+// api/03 wording), over-limit → the limit statement formatted from
+// board.MaxTextLen (create's api/04 wording). Both pinned byte-for-byte
+// against the POST /cards refusal bodies, and the board left unchanged.
+func TestPatchCardTitleRefusalsWordedLikeCreate(t *testing.T) {
+	store := openBoardStore(t)
+	srv := httptest.NewServer(NewHandler(openStore(t), store))
+	defer srv.Close()
+
+	card := createCardThroughAPI(t, srv.URL, "solid card")
+	id := int64(card["id"].(float64))
+	before := boardSnapshot(t, store)
+
+	// Blank title → the required refusal, create's exact wording.
+	for _, title := range []string{"", " \t\n "} {
+		resp, body := patchCard(t, srv.URL, id, fmt.Sprintf(`{"title": %q}`, title))
 		if resp.StatusCode != http.StatusUnprocessableEntity {
-			t.Fatalf("PATCH body %q status = %d, want 422 (resp %s)", body, resp.StatusCode, respBody)
+			t.Fatalf("blank title %q: status = %d, want 422 (body %s)", title, resp.StatusCode, body)
 		}
-		var errBody map[string]string
-		if err := json.Unmarshal([]byte(respBody), &errBody); err != nil {
-			t.Fatalf("body %q: error body is not JSON: %v (resp %s)", body, err, respBody)
+		assertCreateError(t, []byte(body), "title is required")
+	}
+
+	// Over-limit title → the limit statement, word-for-word what create
+	// answers for the same input.
+	overLimit := strings.Repeat("x", board.MaxTextLen+1)
+	_, createBody := func() (*http.Response, string) {
+		resp, err := http.Post(srv.URL+"/cards", "application/json",
+			strings.NewReader(fmt.Sprintf(`{"title": %q}`, overLimit)))
+		if err != nil {
+			t.Fatalf("POST /cards: %v", err)
 		}
-		if !strings.Contains(errBody["error"], "at least one field") {
-			t.Errorf("body %q: error = %q, want it to state that at least one field is required", body, errBody["error"])
-		}
-	}
-
-	// No state change from either rejected request.
-	list, err := store.List()
-	if err != nil {
-		t.Fatalf("List: %v", err)
-	}
-	if len(list) != 1 || list[0] != (todos.Todo{ID: created.ID, Title: "unchanged", Done: false}) {
-		t.Fatalf("state changed on empty-body patches: %+v", list)
-	}
-}
-
-// Card api/05 — Change text of a not-done todo.
-// When  a PATCH /todos/{id} with {"title": "new text"} arrives for an
-//
-//	existing not-done todo —
-//
-// Then  the response is 200 with the updated todo JSON and done state
-//
-//	unchanged, and the change persists.
-//	An empty/whitespace-only title is the contract's 422 "title is
-//	required" — the rule arrives through the store's todos/02
-//	validation, never re-implemented here.
-//	An over-the-limit title is 422 stating the limit, stated from
-//	todos.MaxTitleLength — the constant's single owner.
-func TestPatchTitleOnNotDoneTodo(t *testing.T) {
-	store := openStore(t)
-	created, err := store.Create("Walk the dog")
-	if err != nil {
-		t.Fatalf("seed Create: %v", err)
-	}
-	srv := httptest.NewServer(NewHandler(store, openBoardStore(t)))
-	defer srv.Close()
-
-	// The happy direction: 200 with the updated todo, done still false.
-	resp, body := patchTodo(t, srv.URL, created.ID, `{"title": "Walk the dog in the park"}`)
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("PATCH {title} status = %d, want 200 (body %s)", resp.StatusCode, body)
-	}
-	var got todos.Todo
-	if err := json.Unmarshal([]byte(body), &got); err != nil {
-		t.Fatalf("PATCH response is not todo JSON: %v (body %s)", err, body)
-	}
-	if got != (todos.Todo{ID: created.ID, Title: "Walk the dog in the park", Done: false}) {
-		t.Errorf("PATCH {title} = %+v, want {ID:%d Title:Walk the dog in the park Done:false}", got, created.ID)
-	}
-	// It persists.
-	list, err := store.List()
-	if err != nil {
-		t.Fatalf("List: %v", err)
-	}
-	if len(list) != 1 || list[0] != got {
-		t.Fatalf("PATCH title did not persist: %+v", list)
-	}
-
-	// Empty and whitespace-only titles arrive as the store's invalid-text
-	// outcome, stated as the contract's 422.
-	for _, raw := range []string{`{"title": ""}`, `{"title": "   "}`} {
-		resp, body = patchTodo(t, srv.URL, created.ID, raw)
+		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusUnprocessableEntity {
-			t.Fatalf("PATCH body %s status = %d, want 422 (body %s)", raw, resp.StatusCode, body)
+			t.Fatalf("create over-limit status = %d, want 422", resp.StatusCode)
 		}
-		var errBody map[string]string
-		if err := json.Unmarshal([]byte(body), &errBody); err != nil {
-			t.Fatalf("body %s: error body is not JSON: %v (resp %s)", raw, err, body)
+		b, err := io.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatalf("read body: %v", err)
 		}
-		if errBody["error"] != "title is required" {
-			t.Errorf("body %s: error = %q, want %q", raw, errBody["error"], "title is required")
-		}
-	}
-
-	// Over the limit: 422 stating the limit number — owned by one constant.
-	long := strings.Repeat("x", todos.MaxTitleLength+1)
-	resp, body = patchTodo(t, srv.URL, created.ID, `{"title": "`+long+`"}`)
+		return resp, string(b)
+	}()
+	resp, patchBody := patchCard(t, srv.URL, id, fmt.Sprintf(`{"title": %q}`, overLimit))
 	if resp.StatusCode != http.StatusUnprocessableEntity {
-		t.Fatalf("over-limit PATCH status = %d, want 422 (body %s)", resp.StatusCode, body)
+		t.Fatalf("over-limit: status = %d, want 422 (body %s)", resp.StatusCode, patchBody)
 	}
-	var errBody map[string]string
-	if err := json.Unmarshal([]byte(body), &errBody); err != nil {
-		t.Fatalf("over-limit: error body is not JSON: %v (resp %s)", err, body)
-	}
-	if msg := errBody["error"]; !strings.Contains(msg, strconv.Itoa(todos.MaxTitleLength)) ||
-		!strings.Contains(msg, "limit") {
-		t.Errorf("over-limit error = %q, want it to state the %d-character limit",
-			msg, todos.MaxTitleLength)
+	assertCreateError(t, []byte(patchBody), fmt.Sprintf("title exceeds the %d character limit", board.MaxTextLen))
+	if patchBody != createBody {
+		t.Errorf("over-limit bodies differ: PATCH %s vs POST %s — one wording per error class across verbs", patchBody, createBody)
 	}
 
-	// Every rejection above left the todo exactly at the happy-path result.
-	list, err = store.List()
-	if err != nil {
-		t.Fatalf("List: %v", err)
-	}
-	if len(list) != 1 || list[0] != (todos.Todo{ID: created.ID, Title: "Walk the dog in the park", Done: false}) {
-		t.Fatalf("rejected patches changed the todo: %+v", list)
-	}
+	assertBoardUnchanged(t, store, before)
 }
 
-// The stored form is canonical — the trimmed title, the same rule Create
-// applies (todos/02): one text the rules speak about.
-func TestPatchTitleStoresTrimmedForm(t *testing.T) {
-	store := openStore(t)
-	created, err := store.Create("padded")
-	if err != nil {
-		t.Fatalf("seed Create: %v", err)
-	}
-	srv := httptest.NewServer(NewHandler(store, openBoardStore(t)))
+// Shape violations are transport errors, not rule refusals — the module's
+// convention kept from create ("Malformed JSON is a transport error: 400
+// invalid request, distinct from the 422 rule refusals"; a field present but
+// not a string is the same class there). A non-numeric id is unparseable
+// input: the contract's blanket 400 rule, kept from the todo handlers.
+func TestPatchCardMalformedBodyIs400(t *testing.T) {
+	store := openBoardStore(t)
+	srv := httptest.NewServer(NewHandler(openStore(t), store))
 	defer srv.Close()
 
-	resp, body := patchTodo(t, srv.URL, created.ID, `{"title": "   Buy milk\t"}`)
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("PATCH padded title status = %d, want 200 (body %s)", resp.StatusCode, body)
-	}
-	var got todos.Todo
-	if err := json.Unmarshal([]byte(body), &got); err != nil {
-		t.Fatalf("response is not todo JSON: %v (body %s)", err, body)
-	}
-	if got.Title != "Buy milk" {
-		t.Errorf("title = %q, want the trimmed form %q", got.Title, "Buy milk")
-	}
-}
+	card := createCardThroughAPI(t, srv.URL, "untouched card")
+	id := int64(card["id"].(float64))
+	before := boardSnapshot(t, store)
 
-// Card api/07 — Title edit on done todo refused.
-// When  a PATCH /todos/{id} carrying a title arrives for a done todo
-// Then  the response is 422 with {"error": "cannot edit a done todo"}
-//
-//	And the todo is unchanged.
-//	The done-only reopen path is unaffected — reopening still answers
-//	200 and unlocks the title direction again (todos/07's story on the
-//	contract).
-func TestPatchTitleOnDoneTodoRefused(t *testing.T) {
-	store := openStore(t)
-	created, err := store.Create("Buy milk")
-	if err != nil {
-		t.Fatalf("seed Create: %v", err)
-	}
-	done := true
-	if _, err := store.Change(created.ID, todos.ChangeFields{Done: &done}); err != nil {
-		t.Fatalf("seed Change(done=true): %v", err)
-	}
-	srv := httptest.NewServer(NewHandler(store, openBoardStore(t)))
-	defer srv.Close()
-
-	// Title carried — even alongside done — the frozen refusal answers.
-	for _, body := range []string{`{"title": "Buy oat milk"}`, `{"title": "Buy oat milk", "done": true}`} {
-		resp, respBody := patchTodo(t, srv.URL, created.ID, body)
-		if resp.StatusCode != http.StatusUnprocessableEntity {
-			t.Fatalf("PATCH %s status = %d, want 422 (body %s)", body, resp.StatusCode, respBody)
+	for _, body := range []string{
+		`{"title": "unterminated`, // broken JSON
+		`{"title": [1,2]}`,        // title present but not a string
+		`{"column": true}`,        // column present but not a string
+	} {
+		resp, got := patchCard(t, srv.URL, id, body)
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("status = %d for body %s, want 400 (body %s)", resp.StatusCode, body, got)
 		}
-		var errBody map[string]string
-		if err := json.Unmarshal([]byte(respBody), &errBody); err != nil {
-			t.Fatalf("PATCH %s: error body is not JSON: %v (resp %s)", body, err, respBody)
-		}
-		if errBody["error"] != "cannot edit a done todo" {
-			t.Errorf("PATCH %s: error = %q, want %q", body, errBody["error"], "cannot edit a done todo")
-		}
+		assertCreateError(t, []byte(got), "invalid request")
 	}
 
-	// Unchanged: still the original text, still done.
-	list, err := store.List()
-	if err != nil {
-		t.Fatalf("List: %v", err)
+	// Non-numeric id: the same transport class.
+	resp, got := func() (*http.Response, string) {
+		r, err := http.NewRequest(http.MethodPatch, srv.URL+"/cards/not-a-number", strings.NewReader(`{"title": "x"}`))
+		if err != nil {
+			t.Fatalf("new request: %v", err)
+		}
+		rp, err := http.DefaultClient.Do(r)
+		if err != nil {
+			t.Fatalf("PATCH /cards/not-a-number: %v", err)
+		}
+		defer rp.Body.Close()
+		b, err := io.ReadAll(rp.Body)
+		if err != nil {
+			t.Fatalf("read body: %v", err)
+		}
+		return rp, string(b)
+	}()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("non-numeric id: status = %d, want 400 (body %s)", resp.StatusCode, got)
 	}
-	if len(list) != 1 || list[0] != (todos.Todo{ID: created.ID, Title: "Buy milk", Done: true}) {
-		t.Fatalf("frozen patches changed the todo: %+v", list)
-	}
+	assertCreateError(t, []byte(got), "invalid request")
 
-	// Reopen unaffected: done-only answers 200, and the title direction
-	// then succeeds — the unlock path over the contract.
-	resp, respBody := patchTodo(t, srv.URL, created.ID, `{"done": false}`)
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("reopen status = %d, want 200 (body %s)", resp.StatusCode, respBody)
-	}
-	resp, respBody = patchTodo(t, srv.URL, created.ID, `{"title": "Buy oat milk"}`)
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("title after reopen status = %d, want 200 (body %s)", resp.StatusCode, respBody)
-	}
-	list, err = store.List()
-	if err != nil {
-		t.Fatalf("List: %v", err)
-	}
-	if len(list) != 1 || list[0] != (todos.Todo{ID: created.ID, Title: "Buy oat milk", Done: false}) {
-		t.Fatalf("reopen-then-edit did not persist: %+v", list)
-	}
+	assertBoardUnchanged(t, store, before)
 }

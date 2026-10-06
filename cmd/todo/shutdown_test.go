@@ -2,6 +2,8 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -13,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"todo/board"
 	"todo/todos"
 )
 
@@ -38,21 +41,25 @@ import (
 func TestCleanShutdownCompletesInFlightWork(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "shutdown.db")
 	boardPath := filepath.Join(t.TempDir(), "shutdown-board.db")
-	seedOne(t, dbPath)
 
 	addr := freeAddr(t)
 	srv := startServer(t, addr, dbPath, boardPath)
 
+	// A card to patch: PATCH /todos retired at api/05 (PATCH /cards took
+	// its place), so the in-flight mutation rides the kanban endpoint.
+	cardID := createBoardCard(t, addr, "shut down me")
+
 	// Start a PATCH whose body never finishes: the handler is processing
-	// (io.ReadAll on the body) while shutdown is signaled.
+	// (its first read off r.Body, inside the JSON decode) while shutdown
+	// is signaled.
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
 	defer conn.Close()
-	part := "{\"done\":tr"
-	rest := "ue}"
-	_, err = io.WriteString(conn, "PATCH /todos/1 HTTP/1.1\r\n"+
+	part := "{\"title\":\"in-fl"
+	rest := "ight\"}"
+	_, err = io.WriteString(conn, "PATCH /cards/"+strconv.FormatInt(cardID, 10)+" HTTP/1.1\r\n"+
 		"Host: "+addr+"\r\n"+
 		"Content-Type: application/json\r\n"+
 		"Expect: 100-continue\r\n"+
@@ -109,18 +116,29 @@ func TestCleanShutdownCompletesInFlightWork(t *testing.T) {
 	waitExitZero(t, srv)
 
 	// The completed operation is durable: reopen proves the store closed
-	// after the committed write.
-	store, err := todos.Open(dbPath)
+	// after the committed write — the board holds the card with the title
+	// the in-flight PATCH carried.
+	store, err := board.Open(boardPath)
 	if err != nil {
-		t.Fatalf("reopen after shutdown: %v", err)
+		t.Fatalf("reopen board after shutdown: %v", err)
 	}
 	defer store.Close()
-	list, err := store.List()
+	columns, err := store.List()
 	if err != nil {
-		t.Fatalf("List after shutdown: %v", err)
+		t.Fatalf("board List after shutdown: %v", err)
 	}
-	if len(list) != 1 || !list[0].Done {
-		t.Fatalf("in-flight change not durable: %+v, want one done todo", list)
+	total := 0
+	found := false
+	for _, col := range columns {
+		total += len(col.Cards)
+		for _, c := range col.Cards {
+			if c.Title == "in-flight" {
+				found = true
+			}
+		}
+	}
+	if total != 1 || !found {
+		t.Fatalf("in-flight change not durable: %+v, want the one card titled %q", columns, "in-flight")
 	}
 
 	// The listener stopped: nothing accepts on the address anymore.
@@ -148,6 +166,28 @@ func TestCleanShutdownExitCodeZero(t *testing.T) {
 		c.Close()
 		t.Fatalf("listener still accepts on %s after shutdown", addr)
 	}
+}
+
+// createBoardCard creates one card through the composed listener (POST /cards
+// — the mount the api handler answers) and returns its identifier.
+func createBoardCard(t *testing.T, addr, title string) int64 {
+	t.Helper()
+	resp, err := http.Post("http://"+addr+"/cards", "application/json",
+		strings.NewReader(fmt.Sprintf(`{"title": %q}`, title)))
+	if err != nil {
+		t.Fatalf("POST /cards: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("POST /cards status = %d, want 201", resp.StatusCode)
+	}
+	var card struct {
+		ID int64 `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&card); err != nil {
+		t.Fatalf("create body is not card JSON: %v", err)
+	}
+	return card.ID
 }
 
 // seedOne creates the data file with a single not-done todo, using the store

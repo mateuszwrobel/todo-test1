@@ -156,8 +156,9 @@ func getBoard(t *testing.T, addr string) boardPayload {
 //
 //	And the page route serves the app page from the same process
 //
-// The todo POST/PATCH/DELETE endpoints stay mounted until their retirement
-// cards land — this test asserts neither of them and deletes neither.
+// The todo deletion endpoint stays mounted until its retirement card lands
+// (POST retired at api/02, PATCH at api/05) — this test asserts neither of
+// them and deletes neither.
 func TestStartServesBothSurfaces(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "todos.db")     // absent at start
