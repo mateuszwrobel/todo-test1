@@ -43,7 +43,7 @@ func TestGetBoardIsFixedColumnsWithDisplayTitlesInPositionOrder(t *testing.T) {
 	seedDirect(t, path, board.InProgress, "earlier-top", 0)
 	seedDirect(t, path, board.Done, "shipped", 0)
 
-	srv := httptest.NewServer(NewHandler(openStore(t), store))
+	srv := httptest.NewServer(NewHandler(store))
 	defer srv.Close()
 
 	resp, err := http.Get(srv.URL + "/board")
@@ -113,7 +113,7 @@ func TestGetBoardIsFixedColumnsWithDisplayTitlesInPositionOrder(t *testing.T) {
 // An empty column is an empty array on the contract — [], never null (the
 // established convention of every list endpoint in this module).
 func TestGetBoardEmptyColumnsAreEmptyArrays(t *testing.T) {
-	srv := httptest.NewServer(NewHandler(openStore(t), openBoardStore(t)))
+	srv := httptest.NewServer(NewHandler(openBoardStore(t)))
 	defer srv.Close()
 
 	resp, err := http.Get(srv.URL + "/board")
@@ -156,7 +156,7 @@ func TestGetBoardStoreFailureIs500(t *testing.T) {
 		t.Fatalf("closing the store to force the failure path: %v", err)
 	}
 
-	srv := httptest.NewServer(NewHandler(openStore(t), store))
+	srv := httptest.NewServer(NewHandler(store))
 	defer srv.Close()
 
 	resp, err := http.Get(srv.URL + "/board")

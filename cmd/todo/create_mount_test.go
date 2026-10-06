@@ -22,7 +22,7 @@ import (
 func TestCardsEndpointMounted(t *testing.T) {
 	dir := t.TempDir()
 	addr := freeAddr(t)
-	startServer(t, addr, filepath.Join(dir, "todos.db"), filepath.Join(dir, "kanban.db"))
+	startServer(t, addr, filepath.Join(dir, "kanban.db"))
 
 	resp, err := http.Post("http://"+addr+"/cards", "application/json",
 		strings.NewReader(`{"title": "mount probe"}`))

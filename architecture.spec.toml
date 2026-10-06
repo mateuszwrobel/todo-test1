@@ -1,12 +1,14 @@
 # architecture.spec.toml — todo application module boundaries (spec-first, ADR-001)
 #
 # Planned go layout, module rooted at this directory:
-#   todos    — CRUD data module (owns todo collection + durable state) [superseded by board, ADR-003]
 #   board    — kanban data module (owns card collection, fixed columns, ordering)
 #   api      — HTTP translation layer over the data module's in-process contract
 #   ui       — server-rendered page (htmx); reaches api over HTTP at RUNTIME only
 #   cmd/todo — composition root (package main): wires store + api + ui. Chosen over
 #              a root main package so the root stays clean of wiring code.
+#
+# (The `todos` entry retired with the package at KW4/api/10 — the last todo
+# endpoint's retirement, per dependencies_kanban.md §KW4.)
 #
 # Matching notes (archspec help glob / help languages):
 # - go `matches.units` takes globs over FULL import paths; the go module path is
@@ -20,17 +22,10 @@
 [project]
 language = "go"
 
-# Data module: depends on NOTHING internal.
-[[module]]
-name = "todos"
-matches = { units = ["*/todos"] }
-[module.allowed]
-depend_on = []
-forbidden = ["api", "ui", "server"]
-
 # Board data module (kanban pivot, ADR-003): depends on NOTHING internal. Only
 # api (contract translation) and the composition root may import it; ui never
-# reaches it (HTTP only) — workplan_board_store.md Boundaries.
+# reaches it (HTTP only) — workplan_board_store.md Boundaries. The sole data
+# module now that todos retired at KW4/api/10.
 [[module]]
 name = "board"
 matches = { units = ["*/board"] }
@@ -38,38 +33,39 @@ matches = { units = ["*/board"] }
 depend_on = []
 forbidden = ["api", "ui", "server"]
 
-# HTTP translation layer: internal dependencies are todos (until its endpoints
-# retire) and board (GET /board, workplan_api_board.md). The api→board edge is
-# declared at the wave that first imports board — KW1 api/01, not before.
+# HTTP translation layer: internal dependency is board alone — the todos edge
+# this also carried served the todo endpoints, retired by KW4 (api/01, api/02,
+# api/05, api/10). The api→board edge was declared at the wave that first
+# imported board — KW1 api/01, not before.
 [[module]]
 name = "api"
 matches = { units = ["*/api"] }
 [module.allowed]
-depend_on = ["todos", "board"]
+depend_on = ["board"]
 forbidden = ["ui", "server"]
 
 # Page module: coupling to api is HTTP at runtime (invisible to the driver), so
 # no in-process dependency is allowed — including none on the data modules
-# (workplan boundary: ui never reaches todos/board or the data files).
+# (workplan boundary: ui never reaches board or the data files).
 [[module]]
 name = "ui"
 matches = { units = ["*/ui"] }
 [module.allowed]
 depend_on = []
-forbidden = ["todos", "board", "api", "server"]
+forbidden = ["board", "api", "server"]
 
 # Composition root: cmd/todo, package main — sanctioned wiring (go driver marks it
 # role `composition`), depends on all modules it composes. The server→board edge
-# is declared at the wave that first imports board — KW1 api/01, whose wiring
-# opens kanban.db beside todos.db.
+# was declared at the wave that first imported board — KW1 api/01, whose wiring
+# opened kanban.db beside todos.db; the todos edge retired at KW4/api/10.
 [[module]]
 name = "server"
 matches = { units = ["*/cmd/todo"] }
 [module.allowed]
-depend_on = ["todos", "board", "api", "ui"]
+depend_on = ["board", "api", "ui"]
 
 # No dependency cycles among the declared modules.
 [[constraint]]
 type = "no_cycles"
-modules = ["todos", "board", "api", "ui", "server"]
+modules = ["board", "api", "ui", "server"]
 severity = "error"

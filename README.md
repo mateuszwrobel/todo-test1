@@ -60,9 +60,9 @@ all internal/infrastructure references. Copy it into your own projects and adapt
 
 ## Todo application (this repo's product code)
 
-Modules: `todos` (SQLite-backed store), `board` (SQLite-backed board store),
-`api` (JSON contract), `ui` (board page), `cmd/todo` (composition root). Run:
-`go run ./cmd/todo --addr 127.0.0.1:8080 --db todos.db --board-db kanban.db`.
+Modules: `board` (SQLite-backed board store), `api` (JSON contract),
+`ui` (board page), `cmd/todo` (composition root). Run:
+`go run ./cmd/todo --addr 127.0.0.1:8080 --board-db kanban.db`.
 
 KW1 — board page: `GET /` renders the board, read over HTTP from the contract's
 `GET /board` — the three fixed columns To Do / In Progress / Done with their
@@ -74,6 +74,7 @@ field — so no row checkbox or toggle exists anywhere on the page. Browser
 acceptance: `make e2e` (the retired per-wave targets `e2e-w1..w11` are now
 this single suite).
 
-Transitional state: the api contract's `POST /todos`, `PATCH /todos/{id}` and
-`DELETE /todos/{id}` endpoints still exist until KW2–KW4 retire them; the
-page's card controls are inert placeholders until their operations wire on.
+Transitional state: the todo surface is fully retired — every `*_ /todos*`
+endpoint is gone (last one deleted at KW4) and the `todos` store package no
+longer exists; the page's card controls are inert placeholders until their
+operations wire on.

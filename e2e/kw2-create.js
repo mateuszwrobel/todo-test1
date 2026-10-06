@@ -76,11 +76,11 @@ function getJSON(url) {
   });
 }
 
-// The composition root still opens both stores until the todo endpoints
-// retire (KW4): point each flag at its own temp file so no run touches a
-// file beside the repo.
-function startServer(port, todoDb, boardDb) {
-  const proc = spawn(serverBin, ['--addr', `127.0.0.1:${port}`, '--db', todoDb, '--board-db', boardDb], {
+// The composition root opens only the board data file — the todo
+// store retired with the last todo endpoint at KW4. Point the flag at a
+// temp file so no run touches a file beside the repo.
+function startServer(port, boardDb) {
+  const proc = spawn(serverBin, ['--addr', `127.0.0.1:${port}`, '--board-db', boardDb], {
     stdio: ['ignore', 'ignore', 'pipe'],
   });
   let stderr = '';
@@ -96,7 +96,7 @@ async function stopServer(proc) {
 
 function tmpPaths(name) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kanban-e2e-'));
-  return { todo: path.join(dir, name + '.todos.db'), board: path.join(dir, name + '.kanban.db'), dir };
+  return { board: path.join(dir, name + '.kanban.db'), dir };
 }
 
 // Contract truths this lane asserts against: the create input, the submit
@@ -154,7 +154,7 @@ async function main() {
     const dbs = tmpPaths('create');
     run(seedBin, ['--db', dbs.board, '--titles', seededTitles.join(','), '--in-progress', '2']);
     const port = await freePort();
-    const srv = startServer(port, dbs.todo, dbs.board);
+    const srv = startServer(port, dbs.board);
     await waitForHTTP(`http://127.0.0.1:${port}/board`);
     await page.goto(`http://127.0.0.1:${port}/`);
 
@@ -222,7 +222,7 @@ async function main() {
     const dbs2 = tmpPaths('reject-empty');
     run(seedBin, ['--db', dbs2.board, '--titles', 'Write the weekly report,Call the plumber']);
     const port2 = await freePort();
-    const srv2 = startServer(port2, dbs2.todo, dbs2.board);
+    const srv2 = startServer(port2, dbs2.board);
     await waitForHTTP(`http://127.0.0.1:${port2}/board`);
     await page.goto(`http://127.0.0.1:${port2}/`);
 
@@ -258,7 +258,7 @@ async function main() {
     const dbs3 = tmpPaths('reject-long');
     run(seedBin, ['--db', dbs3.board, '--titles', 'Write the weekly report,Call the plumber']);
     const port3 = await freePort();
-    const srv3 = startServer(port3, dbs3.todo, dbs3.board);
+    const srv3 = startServer(port3, dbs3.board);
     await waitForHTTP(`http://127.0.0.1:${port3}/board`);
     await page.goto(`http://127.0.0.1:${port3}/`);
 

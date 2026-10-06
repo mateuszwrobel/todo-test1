@@ -24,7 +24,6 @@ import (
 // same identifiers, titles, columns, and positions.
 func TestRestartResumesState(t *testing.T) {
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "todos.db")
 	boardPath := filepath.Join(dir, "kanban.db")
 
 	// Seed the board file directly while no server holds it (the
@@ -46,7 +45,7 @@ func TestRestartResumesState(t *testing.T) {
 	addr := freeAddr(t)
 
 	// Run 1: read the board through the live HTTP surface.
-	srv := startServer(t, addr, dbPath, boardPath)
+	srv := startServer(t, addr, boardPath)
 	before := getBoard(t, addr)
 
 	// Non-vacuity: run 1 really shows the seeded cards, in List's fixed
@@ -74,7 +73,7 @@ func TestRestartResumesState(t *testing.T) {
 		t.Logf("first run exited: %v", err)
 	}
 
-	startServer(t, addr, dbPath, boardPath)
+	startServer(t, addr, boardPath)
 
 	// Run 2: the board lists the same cards with the same texts, columns,
 	// and positions.

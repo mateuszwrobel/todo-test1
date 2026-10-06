@@ -64,13 +64,15 @@ func freeAddr(t *testing.T) string {
 	return addr
 }
 
-// startServer runs the built command with the given listen address, todo data
-// file path, and board data file path, and waits until it answers on /board.
-// Both data paths are always caller-supplied temp paths: leaving either flag
-// out would write its default (todos.db / kanban.db) into the package dir.
-func startServer(t *testing.T, addr, dbPath, boardDBPath string) *exec.Cmd {
+// startServer runs the built command with the given listen address and
+// board data file path, and waits until it answers on /board. The board
+// path is always caller-supplied and a temp path: leaving the flag out
+// would write the kanban.db default into the package dir. (The --db flag
+// retired with the todo store at api/10 — the board file is the only data
+// file the command opens.)
+func startServer(t *testing.T, addr, boardDBPath string) *exec.Cmd {
 	t.Helper()
-	cmd := exec.Command(buildBinary(t), "--addr", addr, "--db", dbPath, "--board-db", boardDBPath)
+	cmd := exec.Command(buildBinary(t), "--addr", addr, "--board-db", boardDBPath)
 	out := &lockedBuffer{}
 	cmd.Stdout = out
 	cmd.Stderr = out
@@ -150,21 +152,21 @@ func getBoard(t *testing.T, addr string) boardPayload {
 }
 
 // Card server/01 — Start serves board and page.
-// Given a fresh machine state — no board file, no todo data file
+// Given a fresh machine state — no board data file
 // When  the command is started
 // Then  GET /board answers 200 with the three fixed columns
 //
 //	And the page route serves the app page from the same process
 //
-// The todo deletion endpoint stays mounted until its retirement card lands
-// (POST retired at api/02, PATCH at api/05) — this test asserts neither of
-// them and deletes neither.
+// The todo surface is fully retired (api/01, api/02, api/05, api/10) — the
+// command opens one data file and mounts only the board contract; the
+// startup-with-no-data-file behavior the old todo-flavored fresh state pinned
+// now belongs to the board store alone.
 func TestStartServesBothSurfaces(t *testing.T) {
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "todos.db")     // absent at start
 	boardPath := filepath.Join(dir, "kanban.db") // absent at start
 	addr := freeAddr(t)
-	startServer(t, addr, dbPath, boardPath)
+	startServer(t, addr, boardPath)
 
 	// JSON contract: the board read answers the three fixed columns; on a
 	// fresh machine state every column is empty.

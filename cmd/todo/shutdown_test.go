@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"todo/board"
-	"todo/todos"
 )
 
 // Card server/04 — Clean shutdown completes in-flight work.
@@ -39,11 +38,10 @@ import (
 // as idle and closed under the racy "signal immediately after write" form
 // of this test (that race was a verified flake).
 func TestCleanShutdownCompletesInFlightWork(t *testing.T) {
-	dbPath := filepath.Join(t.TempDir(), "shutdown.db")
 	boardPath := filepath.Join(t.TempDir(), "shutdown-board.db")
 
 	addr := freeAddr(t)
-	srv := startServer(t, addr, dbPath, boardPath)
+	srv := startServer(t, addr, boardPath)
 
 	// A card to patch: PATCH /todos retired at api/05 (PATCH /cards took
 	// its place), so the in-flight mutation rides the kanban endpoint.
@@ -148,14 +146,16 @@ func TestCleanShutdownCompletesInFlightWork(t *testing.T) {
 	}
 }
 
-// Exit codes contract: SIGINT/SIGTERM after successful start → 0.
+// Exit codes contract: SIGINT/SIGTERM after successful start → 0. The
+// former seed arm rode the todo store; with the todo surface retired the
+// idle-shutdown story needs no data at all — startup with no board file
+// creates the empty board (fresh_path_test pins that behavior), and an
+// idle process still drains and exits 0.
 func TestCleanShutdownExitCodeZero(t *testing.T) {
-	dbPath := filepath.Join(t.TempDir(), "idle.db")
 	boardPath := filepath.Join(t.TempDir(), "idle-board.db")
-	seedOne(t, dbPath)
 
 	addr := freeAddr(t)
-	srv := startServer(t, addr, dbPath, boardPath)
+	srv := startServer(t, addr, boardPath)
 
 	if err := srv.Process.Signal(syscall.SIGTERM); err != nil {
 		t.Fatalf("SIGTERM: %v", err)
@@ -188,22 +188,6 @@ func createBoardCard(t *testing.T, addr, title string) int64 {
 		t.Fatalf("create body is not card JSON: %v", err)
 	}
 	return card.ID
-}
-
-// seedOne creates the data file with a single not-done todo, using the store
-// directly while no server holds the file (single-process assumption).
-func seedOne(t *testing.T, dbPath string) {
-	t.Helper()
-	store, err := todos.Open(dbPath)
-	if err != nil {
-		t.Fatalf("seed Open: %v", err)
-	}
-	if _, err := store.Create("shut down me"); err != nil {
-		t.Fatalf("seed Create: %v", err)
-	}
-	if err := store.Close(); err != nil {
-		t.Fatalf("seed Close: %v", err)
-	}
 }
 
 // waitExitZero waits for the process to exit on its own (bounded) and

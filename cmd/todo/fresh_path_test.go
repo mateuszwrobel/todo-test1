@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-// Card server/03 — Start without todo data creates an empty board.
-// Given no todo data file exists and the board has never been created
+// Card server/03 — Start without board data creates an empty board.
+// Given the board has never been created — no data file on disk
 // When  the command is started
 // Then  GET /board answers 200 with the three fixed columns
 //
@@ -17,14 +17,14 @@ import (
 // (This is the board-flavored rewrite of the old fresh-path start test,
 // which asserted the page's "no todos" state through the retired todo list
 // read; empty-board page rendering is a ui card, the board's existence on
-// startup is the server-side behavior pinned here.)
+// startup is the server-side behavior pinned here. The todo data file it
+// also passed is gone — the command now opens exactly one data file.)
 func TestFreshPathStartsEmpty(t *testing.T) {
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "todos.db")     // dir exists, file absent
 	boardPath := filepath.Join(dir, "kanban.db") // dir exists, file absent
 
 	addr := freeAddr(t)
-	startServer(t, addr, dbPath, boardPath) // must start successfully
+	startServer(t, addr, boardPath) // must start successfully
 
 	// The board exists with the three fixed columns holding no cards.
 	got := getBoard(t, addr)

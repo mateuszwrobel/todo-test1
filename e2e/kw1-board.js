@@ -73,11 +73,11 @@ function getJSON(url) {
   });
 }
 
-// The composition root still opens both stores until the todo endpoints
-// retire (KW4): point each flag at its own temp file so no run touches a
-// file beside the repo.
-function startServer(port, todoDb, boardDb) {
-  const proc = spawn(serverBin, ['--addr', `127.0.0.1:${port}`, '--db', todoDb, '--board-db', boardDb], {
+// The composition root opens only the board data file — the todo
+// store retired with the last todo endpoint at KW4. Point the flag at a
+// temp file so no run touches a file beside the repo.
+function startServer(port, boardDb) {
+  const proc = spawn(serverBin, ['--addr', `127.0.0.1:${port}`, '--board-db', boardDb], {
     stdio: ['ignore', 'ignore', 'pipe'],
   });
   let stderr = '';
@@ -93,7 +93,7 @@ async function stopServer(proc) {
 
 function tmpPaths(name) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kanban-e2e-'));
-  return { todo: path.join(dir, name + '.todos.db'), board: path.join(dir, name + '.kanban.db'), dir };
+  return { board: path.join(dir, name + '.kanban.db'), dir };
 }
 
 // The fixed columns as the contract states them — the render mirrors this
@@ -136,7 +136,7 @@ async function main() {
       '--done', '4,5',
     ]);
     const port1 = await freePort();
-    const srv1 = startServer(port1, dbs1.todo, dbs1.board);
+    const srv1 = startServer(port1, dbs1.board);
     await waitForHTTP(`http://127.0.0.1:${port1}/board`);
     await page.goto(`http://127.0.0.1:${port1}/`);
 
@@ -194,7 +194,7 @@ async function main() {
     // shows the three fixed columns each stating its emptiness.
     const dbs2 = tmpPaths('fresh'); // both files absent — nothing seeded, nothing opened before start
     const port2 = await freePort();
-    const srv2 = startServer(port2, dbs2.todo, dbs2.board);
+    const srv2 = startServer(port2, dbs2.board);
     await waitForHTTP(`http://127.0.0.1:${port2}/board`);
     await page.goto(`http://127.0.0.1:${port2}/`);
 

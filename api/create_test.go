@@ -22,7 +22,7 @@ import (
 // Tested against the real board store: persistence is proven, not faked.
 func TestPostCardsCreates(t *testing.T) {
 	store := openBoardStore(t)
-	srv := httptest.NewServer(NewHandler(openStore(t), store))
+	srv := httptest.NewServer(NewHandler(store))
 	defer srv.Close()
 
 	resp, err := http.Post(srv.URL+"/cards", "application/json",
@@ -119,7 +119,7 @@ func TestPostCardsCreates(t *testing.T) {
 // whitespace comes back trimmed, and that is what the board holds.
 func TestPostCardsReturnsTrimmedTitle(t *testing.T) {
 	store := openBoardStore(t)
-	srv := httptest.NewServer(NewHandler(openStore(t), store))
+	srv := httptest.NewServer(NewHandler(store))
 	defer srv.Close()
 
 	resp, err := http.Post(srv.URL+"/cards", "application/json",
@@ -161,7 +161,7 @@ func TestPostCardsReturnsTrimmedTitle(t *testing.T) {
 // the blank rule has one owner, not two.
 func TestPostCardsBlankOrAbsentTitleIsStated422(t *testing.T) {
 	store := openBoardStore(t)
-	srv := httptest.NewServer(NewHandler(openStore(t), store))
+	srv := httptest.NewServer(NewHandler(store))
 	defer srv.Close()
 
 	for _, body := range []string{
@@ -198,7 +198,7 @@ func TestPostCardsBlankOrAbsentTitleIsStated422(t *testing.T) {
 // todo handler answered that body 400 through its struct decode).
 func TestPostCardsMalformedJSONIs400(t *testing.T) {
 	store := openBoardStore(t)
-	srv := httptest.NewServer(NewHandler(openStore(t), store))
+	srv := httptest.NewServer(NewHandler(store))
 	defer srv.Close()
 
 	for _, body := range []string{
@@ -240,7 +240,7 @@ func TestPostCardsMalformedJSONIs400(t *testing.T) {
 // title of exactly board.MaxTextLen characters creates.
 func TestPostCardsOverLimitStatesLimit(t *testing.T) {
 	store := openBoardStore(t)
-	srv := httptest.NewServer(NewHandler(openStore(t), store))
+	srv := httptest.NewServer(NewHandler(store))
 	defer srv.Close()
 
 	long := strings.Repeat("x", board.MaxTextLen+1)

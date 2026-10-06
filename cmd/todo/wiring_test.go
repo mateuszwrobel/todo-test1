@@ -47,10 +47,11 @@ func TestArchspecGateGreen(t *testing.T) {
 // pinned: ui imports no project package at all (its coupling to the api is
 // HTTP at runtime only — the pre-kanban pin checked api/todos, ui may now
 // import none); data-file opening is per-owner, so the SQLite driver
-// appears only in the modules that own a data file — board (kanban.db) and,
-// transitionally, todos (todos.db), because the surviving todo endpoints
-// keep the todos package referenced until they retire at KW4
-// (dependencies_kanban.md); after KW4 this arm tightens to board alone.
+// appears only in the module that owns a data file — board (kanban.db).
+// The todos arm of this pin retired with the package: the transitional
+// allowance (dependencies_kanban.md, "todos until its endpoints retire at
+// KW4") was scheduled to tighten to board alone at KW4, and the api/10
+// retirement is where it did.
 // And nothing imports the composition root (server, i.e. cmd/todo).
 func TestDependencyDirectionsOnImports(t *testing.T) {
 	root := repoRoot(t)
@@ -60,14 +61,13 @@ func TestDependencyDirectionsOnImports(t *testing.T) {
 	}
 
 	for file, imps := range imports {
-		inDataOwner := strings.HasPrefix(file, "board/") ||
-			strings.HasPrefix(file, "todos/") // transitional until KW4 retirement
+		inDataOwner := strings.HasPrefix(file, "board/")
 		for _, imp := range imps {
 			if strings.HasPrefix(file, "ui/") && strings.HasPrefix(imp, "todo/") {
 				t.Errorf("%s imports %q: ui imports no project packages — it reaches the api over HTTP only", file, imp)
 			}
 			if strings.HasPrefix(imp, "modernc.org/sqlite") && !inDataOwner {
-				t.Errorf("%s imports %q: only data-file owners open data files (board; todos until its endpoints retire at KW4)", file, imp)
+				t.Errorf("%s imports %q: board is the only data-file owner — the todo store package retired at api/10", file, imp)
 			}
 			if imp == "todo/cmd/todo" {
 				t.Errorf("%s imports %q: nothing imports the composition root (server)", file, imp)

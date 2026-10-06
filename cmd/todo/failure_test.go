@@ -55,16 +55,18 @@ func TestAddressInUseFailsLoudly(t *testing.T) {
 	defer ln.Close()
 	addr := ln.Addr().String()
 
-	out := runExpectFailure(t, "--addr", addr, "--db", filepath.Join(t.TempDir(), "x.db"),
-		"--board-db", filepath.Join(t.TempDir(), "y.db"))
+	out := runExpectFailure(t, "--addr", addr, "--board-db", filepath.Join(t.TempDir(), "y.db"))
 	t.Logf("stated reason: %s", out)
 }
 
+// The board data file is the command's only data file (the --db flag and
+// the todo store retired at api/10): a board path that cannot be opened
+// must fail startup, loudly and with a stated reason.
 func TestUnusableDataPathFailsLoudly(t *testing.T) {
 	addr := freeAddr(t)
-	badPath := filepath.Join(t.TempDir(), "no-such-dir", "todo.db")
+	badPath := filepath.Join(t.TempDir(), "no-such-dir", "kanban.db")
 
-	out := runExpectFailure(t, "--addr", addr, "--db", badPath)
+	out := runExpectFailure(t, "--addr", addr, "--board-db", badPath)
 	t.Logf("stated reason: %s", out)
 
 	if dialable(t, addr) {
@@ -74,8 +76,7 @@ func TestUnusableDataPathFailsLoudly(t *testing.T) {
 
 func TestMalformedFlagValuesFailLoudly(t *testing.T) {
 	// Port out of range — a malformed --addr value.
-	out := runExpectFailure(t, "--addr", "127.0.0.1:99999", "--db", filepath.Join(t.TempDir(), "x.db"),
-		"--board-db", filepath.Join(t.TempDir(), "y.db"))
+	out := runExpectFailure(t, "--addr", "127.0.0.1:99999", "--board-db", filepath.Join(t.TempDir(), "y.db"))
 	t.Logf("stated reason: %s", out)
 
 	// Unknown flag.

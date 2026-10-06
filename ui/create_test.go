@@ -33,7 +33,7 @@ func realChain(t *testing.T, seeds ...string) (*board.Store, *httptest.Server) {
 			t.Fatalf("seed card %q: %v", text, err)
 		}
 	}
-	apiSrv := fakeAPI(t, api.NewHandler(nil, store).ServeHTTP)
+	apiSrv := fakeAPI(t, api.NewHandler(store).ServeHTTP)
 	return store, uiServer(t, apiSrv.URL)
 }
 

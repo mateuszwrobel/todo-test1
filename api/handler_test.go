@@ -8,19 +8,18 @@ import (
 	"testing"
 
 	"todo/board"
-	"todo/todos"
 )
 
-// GET /todos retired by api/01; POST /todos — the surviving method that made
-// the retired GET answer 405 back then — retired by api/02. With no method
-// left owning the exact path /todos (the surviving endpoints live at
-// /todos/{id}, which the path /todos does not match), ServeMux answers the
-// path as a route that does not exist: 404, no Allow header.
-// Given the JSON contract handler with the /todos collection route deleted
-// When a client sends GET /todos (no method owns this path anymore)
+// The todo surface is fully retired: api/01 deleted GET /todos, api/02
+// deleted POST /todos, api/05 deleted PATCH /todos/{id}, and api/10 deleted
+// DELETE /todos/{id} — the last surviving todo endpoint. With no method
+// owning either todo path pattern, ServeMux answers every todo route as a
+// path that does not exist: 404, no Allow header. Given the JSON contract
+// handler with the whole todo surface deleted
+// When a client sends GET /todos (no method owns this path)
 // Then the router answers 404 Not Found
 func TestGetTodosRetiredServes404PathFullyRetired(t *testing.T) {
-	srv := httptest.NewServer(NewHandler(openStore(t), openBoardStore(t)))
+	srv := httptest.NewServer(NewHandler(openBoardStore(t)))
 	defer srv.Close()
 
 	resp, err := http.Get(srv.URL + "/todos")
@@ -30,23 +29,27 @@ func TestGetTodosRetiredServes404PathFullyRetired(t *testing.T) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusNotFound {
-		t.Fatalf("GET /todos status = %d, want 404 (api/02 retired the last owner of the path; api/01's 405 pin held only while POST /todos survived)", resp.StatusCode)
+		t.Fatalf("GET /todos status = %d, want 404 (no route owns the path; api/02 retired its last owner)", resp.StatusCode)
+	}
+	if allow := resp.Header.Get("Allow"); allow != "" {
+		t.Errorf("Allow = %q, want no Allow header — a 405 would need a surviving method on the path, and none remains", allow)
 	}
 }
 
-// Card api/02 — POST /todos retired as POST /cards lands. The same pin style
-// as the retired GET above: name the removed route, pin the router's true
-// answer for it.
+// Card api/02's pin, re-executed after api/10 retired the item-path
+// deletion: the same no-route 404, and nothing is created anywhere — the
+// todo store itself no longer exists, and the board is untouched.
 // Given the JSON contract handler with POST /todos deleted from its routes
 // When a client sends POST /todos with a create body
 // Then the router answers 404 — no route owns the path (a 405 would need a
-// surviving method on the exact path, and none remains), and nothing is
-// created in the todo store
+// surviving method on the exact path, and none remains) — and the board is
+// unchanged
 func TestPostTodosRetiredServes404CreatesNothing(t *testing.T) {
-	store := openStore(t)
-	srv := httptest.NewServer(NewHandler(store, openBoardStore(t)))
+	store := openBoardStore(t)
+	srv := httptest.NewServer(NewHandler(store))
 	defer srv.Close()
 
+	before := boardSnapshot(t, store)
 	resp, err := http.Post(srv.URL+"/todos", "application/json", strings.NewReader(`{"title": "Buy milk"}`))
 	if err != nil {
 		t.Fatalf("POST /todos: %v", err)
@@ -56,30 +59,22 @@ func TestPostTodosRetiredServes404CreatesNothing(t *testing.T) {
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("POST /todos status = %d, want 404 (route retired: ServeMux has no pattern matching the path at all)", resp.StatusCode)
 	}
-	if list, err := store.List(); err != nil {
-		t.Fatalf("todos store.List: %v", err)
-	} else if len(list) != 0 {
-		t.Errorf("the retired POST /todos created todos: %+v", list)
-	}
+	assertBoardUnchanged(t, store, before)
 }
 
-// Card api/05 — PATCH /todos retired as PATCH /cards lands. Same pin style as
-// the two retired routes above — name the removed route, pin the router's
-// true answer — but the true answer differs: DELETE /todos/{id} still owns
-// the path pattern, so ServeMux matches the path and only the method goes
-// unmatched. That is a 405 with an Allow header, not the 404 the /todos
-// collection path answers where no method owns it anymore.
-// Given the JSON contract handler with PATCH /todos/{id} deleted from its routes
-// When a client sends PATCH /todos/1 with a change body
-// Then the router answers 405 Method Not Allowed with Allow naming the
+// Card api/05's pin, re-executed after api/10 retired the last surviving
+// todo endpoint: back then PATCH /todos/{id} answered 405 because
+// DELETE /todos/{id} still owned the path pattern; with that deletion gone
+// no method owns the path, so the router's true answer is the same 404 the
+// collection path gives — no Allow header.
+// Given the JSON contract handler with PATCH /todos/{id} deleted and
 //
-//	surviving DELETE — and the todo store is untouched
-func TestPatchTodosRetiredServes405DeleteStillOwnsPath(t *testing.T) {
-	store := openStore(t)
-	if _, err := store.Create("keep me"); err != nil {
-		t.Fatalf("todos store.Create: %v", err)
-	}
-	srv := httptest.NewServer(NewHandler(store, openBoardStore(t)))
+//	DELETE /todos/{id} retired at api/10
+//
+// When a client sends PATCH /todos/1 with a change body
+// Then the router answers 404 Not Found with no Allow header
+func TestPatchTodosRetiredServes404PathFullyRetired(t *testing.T) {
+	srv := httptest.NewServer(NewHandler(openBoardStore(t)))
 	defer srv.Close()
 
 	req, err := http.NewRequest(http.MethodPatch, srv.URL+"/todos/1", strings.NewReader(`{"title": "renamed"}`))
@@ -92,31 +87,52 @@ func TestPatchTodosRetiredServes405DeleteStillOwnsPath(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusMethodNotAllowed {
-		t.Fatalf("PATCH /todos/1 status = %d, want 405 (route retired; DELETE /todos/{id} survives on the same path pattern, so ServeMux answers method mismatch, not no-such-path)", resp.StatusCode)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("PATCH /todos/1 status = %d, want 404 (api/10 retired DELETE /todos/{id}, the last method owning the path; the 405 this route answered while it survived is gone with it)", resp.StatusCode)
 	}
-	if allow := resp.Header.Get("Allow"); !strings.Contains(allow, http.MethodDelete) {
-		t.Errorf("Allow = %q, want it to name DELETE — the deletion endpoint survives the retirement", allow)
-	}
-	if list, err := store.List(); err != nil {
-		t.Fatalf("todos store.List: %v", err)
-	} else if len(list) != 1 || list[0].Title != "keep me" {
-		t.Errorf("the retired PATCH /todos changed the store: %+v, want the one untouched todo", list)
+	if allow := resp.Header.Get("Allow"); allow != "" {
+		t.Errorf("Allow = %q, want no Allow header — no method owns /todos/{id} anymore", allow)
 	}
 }
 
-func openStore(t *testing.T) *todos.Store {
-	t.Helper()
-	store, err := todos.Open(filepath.Join(t.TempDir(), "api.db"))
+// Card api/10 — DELETE /todos/{id} retires as DELETE /cards/{id} lands. The
+// ledger states it (workplans/dependencies_kanban.md §KW4: "todo DELETE
+// retires here"); this is the retirement pin, same style as the retired
+// routes above — name the removed route, pin the router's true answer.
+// Unlike PATCH's former 405 pin, the answer is the full-retirement 404:
+// this deletion was the last method ever owning /todos/{id}, so nothing
+// remains to make the path match with a method mismatch, and no Allow
+// header accompanies the 404.
+// Given the JSON contract handler with DELETE /todos/{id} deleted from its
+// routes
+// When a client sends DELETE /todos/1
+// Then the router answers 404 Not Found with no Allow header
+func TestDeleteTodosRetiredServes404PathFullyRetired(t *testing.T) {
+	srv := httptest.NewServer(NewHandler(openBoardStore(t)))
+	defer srv.Close()
+
+	req, err := http.NewRequest(http.MethodDelete, srv.URL+"/todos/1", nil)
 	if err != nil {
-		t.Fatalf("todos.Open: %v", err)
+		t.Fatalf("build DELETE request: %v", err)
 	}
-	t.Cleanup(func() { store.Close() })
-	return store
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("DELETE /todos/1: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("DELETE /todos/1 status = %d, want 404 (route fully retired: no method owns the path pattern anymore)", resp.StatusCode)
+	}
+	if allow := resp.Header.Get("Allow"); allow != "" {
+		t.Errorf("Allow = %q, want no Allow header — the retired deletion was the path's last owner", allow)
+	}
 }
 
-// openBoardStore opens a real board store in a fresh temp dir. The handler is
-// always built over a real store — no fakes (wave law: wire against real code).
+// openBoardStore opens a real board store in a fresh temp dir. The handler
+// is always built over a real store — no fakes (wave law: wire against real
+// code). It is now the only store the contract reaches: the todo store
+// package retired with the last todo endpoint (api/10).
 func openBoardStore(t *testing.T) *board.Store {
 	t.Helper()
 	store, err := board.Open(filepath.Join(t.TempDir(), "kanban.db"))

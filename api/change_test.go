@@ -114,7 +114,7 @@ func assertBoardUnchanged(t *testing.T, store *board.Store, before []board.Colum
 // holds. Place and identity survive a rename — the List probe re-reads them.
 func TestPatchCardTitleReturnsCard(t *testing.T) {
 	store := openBoardStore(t)
-	srv := httptest.NewServer(NewHandler(openStore(t), store))
+	srv := httptest.NewServer(NewHandler(store))
 	defer srv.Close()
 
 	first := createCardThroughAPI(t, srv.URL, "first card")
@@ -177,7 +177,7 @@ func TestPatchCardTitleReturnsCard(t *testing.T) {
 // in done (board/05 behavior surfaced at the wire).
 func TestPatchCardTitleOnDoneCardSucceeds(t *testing.T) {
 	store := openBoardStore(t)
-	srv := httptest.NewServer(NewHandler(openStore(t), store))
+	srv := httptest.NewServer(NewHandler(store))
 	defer srv.Close()
 
 	card := createCardThroughAPI(t, srv.URL, "reviewed work")
@@ -210,7 +210,7 @@ func TestPatchCardTitleOnDoneCardSucceeds(t *testing.T) {
 // of the target column — and answers the card as it now stands.
 func TestPatchCardTitleAndColumnTogether(t *testing.T) {
 	store := openBoardStore(t)
-	srv := httptest.NewServer(NewHandler(openStore(t), store))
+	srv := httptest.NewServer(NewHandler(store))
 	defer srv.Close()
 
 	moved := createCardThroughAPI(t, srv.URL, "old title")
@@ -251,7 +251,7 @@ func TestPatchCardTitleAndColumnTogether(t *testing.T) {
 // against the POST /cards refusal bodies, and the board left unchanged.
 func TestPatchCardTitleRefusalsWordedLikeCreate(t *testing.T) {
 	store := openBoardStore(t)
-	srv := httptest.NewServer(NewHandler(openStore(t), store))
+	srv := httptest.NewServer(NewHandler(store))
 	defer srv.Close()
 
 	card := createCardThroughAPI(t, srv.URL, "solid card")
@@ -308,7 +308,7 @@ func TestPatchCardTitleRefusalsWordedLikeCreate(t *testing.T) {
 // outcome and the board is exactly as it was (List probe).
 func TestPatchCardUnknownIDIsStated404(t *testing.T) {
 	store := openBoardStore(t)
-	srv := httptest.NewServer(NewHandler(openStore(t), store))
+	srv := httptest.NewServer(NewHandler(store))
 	defer srv.Close()
 
 	createCardThroughAPI(t, srv.URL, "the only card")
@@ -343,7 +343,7 @@ func TestPatchCardUnknownIDIsStated404(t *testing.T) {
 // non-string column value was a shape violation (400, pinned apart).
 func TestPatchCardInvalidColumnIsStated422(t *testing.T) {
 	store := openBoardStore(t)
-	srv := httptest.NewServer(NewHandler(openStore(t), store))
+	srv := httptest.NewServer(NewHandler(store))
 	defer srv.Close()
 
 	card := createCardThroughAPI(t, srv.URL, "steady card")
@@ -378,7 +378,7 @@ func TestPatchCardInvalidColumnIsStated422(t *testing.T) {
 // shows the card exactly as it was.
 func TestPatchCardEmptyBodyIsStated422(t *testing.T) {
 	store := openBoardStore(t)
-	srv := httptest.NewServer(NewHandler(openStore(t), store))
+	srv := httptest.NewServer(NewHandler(store))
 	defer srv.Close()
 
 	card := createCardThroughAPI(t, srv.URL, "card standing pat")
@@ -412,7 +412,7 @@ func TestPatchCardEmptyBodyIsStated422(t *testing.T) {
 // input: the contract's blanket 400 rule, kept from the todo handlers.
 func TestPatchCardMalformedBodyIs400(t *testing.T) {
 	store := openBoardStore(t)
-	srv := httptest.NewServer(NewHandler(openStore(t), store))
+	srv := httptest.NewServer(NewHandler(store))
 	defer srv.Close()
 
 	card := createCardThroughAPI(t, srv.URL, "untouched card")
