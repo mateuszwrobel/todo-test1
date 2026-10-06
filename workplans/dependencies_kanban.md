@@ -21,7 +21,7 @@ The board read is the first feature; composition wires from the start so every l
 | ui/01 board-renders-three-fixed-columns | api/01, server/01 | first real render; todo list render retires |
 | ui/02 empty-board-rendered-as-stated | ui/01 | render rule |
 | ui/03 load-failure-rendered-as-stated | ui/01 | failure render |
-| server/01 start-serves-board-and-page | board/01, api/01, ui/01 | wiring lands now, not last; todos store package deleted at wave end when unreferenced |
+| server/01 start-serves-board-and-page | board/01, api/01, ui/01 | todo GET retires here; todos package retires at KW4 when last endpoint retires |
 | server/03 start-without-todos-empty-board | server/01, board/01 | startup on absent files |
 | server/08 wiring-honors-dependency-directions | all four packages wired | archspec gate goes green at wave end |
 
