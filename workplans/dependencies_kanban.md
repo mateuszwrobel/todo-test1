@@ -119,11 +119,11 @@ Behavior-frozen styling pass, mirroring the retired todo-app W9–W11 pattern in
 | KW2 create | KW1 | KW3, KW4 |
 | KW3 edit | KW1 | KW2, KW4 |
 | KW4 delete | KW1 | KW2, KW3 |
-| KW5 drag | KW2, KW3 | — |
+| KW5 drag | KW2, KW3, KW4 | — |
 | KW6 lifecycle+migration+in-flight | KW3, KW4, KW5 | — |
 | KW7 styling | KW6 | — |
 
-After KW1 the widest parallel spread is {KW2 ∥ KW3 ∥ KW4}; KW5 is a join on KW2+KW3; KW6 and KW7 are the tail.
+After KW1 the widest parallel spread is {KW2 ∥ KW3 ∥ KW4}; KW5 is a join on KW2+KW3+KW4; KW6 and KW7 are the tail.
 
 ## Lane rules
 
