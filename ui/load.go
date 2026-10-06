@@ -10,25 +10,25 @@ import (
 
 const defaultLoadTimeout = 5 * time.Second
 
-// listTodos performs the module's one read: GET {apiBase}/todos over real
+// loadBoard performs the module's one read: GET {apiBase}/board over real
 // HTTP. Any transport failure or non-200 status is a load failure — the
-// result is an error, never an empty list standing in for the truth.
-func (p *page) listTodos() ([]todo, error) {
-	resp, err := p.client.Get(p.apiBase + "/todos")
+// result is an error, never an empty board standing in for the truth.
+func (p *page) loadBoard() (boardResponse, error) {
+	var board boardResponse
+	resp, err := p.client.Get(p.apiBase + "/board")
 	if err != nil {
-		return nil, err
+		return board, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New("api returned non-200 for todo list")
+		return board, errors.New("api returned non-200 for board read")
 	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return board, err
 	}
-	var todos []todo
-	if err := json.Unmarshal(body, &todos); err != nil {
-		return nil, err
+	if err := json.Unmarshal(body, &board); err != nil {
+		return board, err
 	}
-	return todos, nil
+	return board, nil
 }

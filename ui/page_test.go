@@ -4,13 +4,13 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
 
-// fakeAPI serves a canned GET /todos over real HTTP — the api contract stand-in
-// for these tests. The ui module talks to it only via its base URL.
+// fakeAPI serves a canned GET /board over real HTTP — the api contract
+// stand-in for these tests. The ui module talks to it only via its base URL.
 func fakeAPI(t *testing.T, handler http.HandlerFunc) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(handler)
@@ -39,98 +39,139 @@ func getPage(t *testing.T, url string) (int, string) {
 	return resp.StatusCode, buf.String()
 }
 
-// Card ui/01 — Page shows the list truthfully.
-// Given the store contains todos with mixed done states
-// When  the user opens the page
-// Then  every todo renders as a row in creation order, oldest first
-//
-//	And each row shows its text and its done state readably
-//	And every row offers done-toggle and delete controls
-//	And only not-done rows offer an edit control
-func TestPageShowsTheListTruthfully(t *testing.T) {
-	itemsJSON := `[
-		{"id": 3, "title": "read spec", "done": true},
-		{"id": 5, "title": "buy milk", "done": false},
-		{"id": 9, "title": "write code", "done": false}
-	]`
-	api := fakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/todos" || r.Method != http.MethodGet {
+// boardJSON is the contract body with cards in all three columns; each
+// column's array is in position order, as the contract states it.
+const boardJSON = `{
+	"columns": [
+		{"title": "To Do", "cards": [
+			{"id": 1, "title": "Draft the launch note", "column": "todo", "position": 1},
+			{"id": 2, "title": "Rotate the API keys", "column": "todo", "position": 2}]},
+		{"title": "In Progress", "cards": [
+			{"id": 3, "title": "Wire the webhook", "column": "in_progress", "position": 1}]},
+		{"title": "Done", "cards": [
+			{"id": 4, "title": "Ship v1.2", "column": "done", "position": 1}]}
+	]
+}`
+
+func boardAPI(t *testing.T) *httptest.Server {
+	return fakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/board" || r.Method != http.MethodGet {
 			http.NotFound(w, r)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(itemsJSON))
+		_, _ = w.Write([]byte(boardJSON))
 	})
-	uiSrv := uiServer(t, api.URL)
+}
 
-	status, page := getPage(t, uiSrv.URL+"/")
+// columnHTML slices one column panel's markup out of the page.
+func columnHTML(t *testing.T, page, anchor string) string {
+	t.Helper()
+	start := strings.Index(page, `<section id="column-`+anchor+`"`)
+	if start < 0 {
+		t.Fatalf("page has no column #%s:\n%s", anchor, page)
+	}
+	end := strings.Index(page[start:], `</section>`)
+	if end < 0 {
+		t.Fatalf("column #%s is unterminated", anchor)
+	}
+	return page[start : start+end]
+}
+
+// cardHTML slices one card's markup out of the page.
+func cardHTML(t *testing.T, page string, id int64) string {
+	t.Helper()
+	start := strings.Index(page, `id="card-`+strconv.FormatInt(id, 10)+`"`)
+	if start < 0 {
+		t.Fatalf("page has no card %d:\n%s", id, page)
+	}
+	end := strings.Index(page[start:], `</li>`)
+	if end < 0 {
+		t.Fatalf("card %d is unterminated", id)
+	}
+	return page[start : start+end]
+}
+
+// Card ui/01 — Board renders three fixed columns.
+// Given the server holds cards in all three columns
+// When  the user opens the page
+// Then  three column panels appear in the order "To Do", "In Progress", "Done"
+//
+//	And each panel lists its cards top-to-bottom exactly as the server's arrays order them
+//	And cards in "Done" render with the done treatment while other cards render plain
+//	And no done checkbox or toggle exists anywhere on the page
+func TestBoardRendersThreeFixedColumns(t *testing.T) {
+	api := boardAPI(t)
+	status, page := getPage(t, uiServer(t, api.URL).URL+"/")
 	if status != http.StatusOK {
 		t.Fatalf("GET / status = %d, want 200", status)
 	}
 
-	// Rows in creation order (the contract order = ascending id = oldest first).
-	iOldest := strings.Index(page, "read spec")
-	iMiddle := strings.Index(page, "buy milk")
-	iNewest := strings.Index(page, "write code")
-	if iOldest < 0 || iMiddle < 0 || iNewest < 0 {
-		t.Fatalf("page missing todo texts:\n%s", page)
-	}
-	if !(iOldest < iMiddle && iMiddle < iNewest) {
-		t.Errorf("rows not in creation order (oldest first):\n%s", page)
-	}
-
-	// One row per todo.
-	rows := regexp.MustCompile(`(?s)<li[^>]*id="todo-\d+"`).FindAllString(page, -1)
-	if len(rows) != 3 {
-		t.Fatalf("found %d rows, want 3:\n%s", len(rows), page)
-	}
-
-	rowOf := func(id string) string {
-		m := regexp.MustCompile(
-			`(?s)<li[^>]*id="todo-` + regexp.QuoteMeta(id) + `"[^>]*>(.*?)</li>`,
-		).FindStringSubmatch(page)
-		if m == nil {
-			t.Fatalf("no row for id %s:\n%s", id, page)
+	// Three column panels, in the fixed order.
+	anchors := []string{"to-do", "in-progress", "done"}
+	titles := []string{"To Do", "In Progress", "Done"}
+	prev := -1
+	for i, anchor := range anchors {
+		at := strings.Index(page, `<section id="column-`+anchor+`"`)
+		if at < 0 {
+			t.Fatalf("page is missing the column panel %q:\n%s", titles[i], page)
 		}
-		return m[1]
-	}
-
-	for _, id := range []string{"3", "5", "9"} {
-		row := rowOf(id)
-		// Done state readable: a checkbox reflects it.
-		if !strings.Contains(row, `type="checkbox"`) {
-			t.Errorf("row %s has no done-toggle checkbox:\n%s", id, row)
+		if at < prev {
+			t.Errorf("column %q does not follow the fixed order:\n%s", titles[i], page)
 		}
-		// Delete control on every row.
-		if !strings.Contains(row, "Delete") {
-			t.Errorf("row %s has no delete control:\n%s", id, row)
-		}
-	}
-	if !strings.Contains(rowOf("3"), `checked`) {
-		t.Errorf("done row 3 checkbox does not show done state:\n%s", rowOf("3"))
-	}
-	for _, id := range []string{"5", "9"} {
-		if strings.Contains(rowOf(id), "checked") {
-			t.Errorf("not-done row %s checkbox shows done state:\n%s", id, rowOf(id))
+		prev = at
+		if got := strings.Index(columnHTML(t, page, anchor), titles[i]); got < 0 {
+			t.Errorf("column #%s does not state its title %q", anchor, titles[i])
 		}
 	}
 
-	// Edit control ONLY on not-done rows.
-	if strings.Contains(rowOf("3"), "Edit") {
-		t.Errorf("done row 3 offers an edit control:\n%s", rowOf("3"))
-	}
-	for _, id := range []string{"5", "9"} {
-		if !strings.Contains(rowOf(id), "Edit") {
-			t.Errorf("not-done row %s offers no edit control:\n%s", id, rowOf(id))
+	// Each panel lists its cards top-to-bottom exactly as the server's
+	// arrays order them.
+	for _, c := range []struct {
+		anchor string
+		ids    []int64
+	}{{"to-do", []int64{1, 2}}, {"in-progress", []int64{3}}, {"done", []int64{4}}} {
+		col := columnHTML(t, page, c.anchor)
+		prev := -1
+		for _, id := range c.ids {
+			at := strings.Index(col, `id="card-`+strconv.FormatInt(id, 10)+`"`)
+			if at < 0 {
+				t.Fatalf("column %s is missing card %d:\n%s", c.anchor, id, col)
+			}
+			if at < prev {
+				t.Errorf("column %s does not list card %d in array order:\n%s", c.anchor, id, col)
+			}
+			prev = at
 		}
 	}
 
-	// Create input + button on the page.
-	if !strings.Contains(page, `<input`) || !strings.Contains(page, `name="title"`) {
-		t.Errorf("page has no create input:\n%s", page)
+	// The done treatment renders on the Done column's cards; every other
+	// card renders plain.
+	if !strings.Contains(cardHTML(t, page, 4), `card--done`) {
+		t.Errorf("card 4 (Done column) lacks the done treatment:\n%s", cardHTML(t, page, 4))
 	}
-	if !strings.Contains(page, ">Add<") {
-		t.Errorf("page has no create button:\n%s", page)
+	for _, id := range []int64{1, 2, 3} {
+		if strings.Contains(cardHTML(t, page, id), `card--done`) {
+			t.Errorf("card %d (not in Done) carries the done treatment:\n%s", id, cardHTML(t, page, id))
+		}
+	}
+
+	// No done checkbox or toggle anywhere on the page.
+	if strings.Contains(page, `type="checkbox"`) {
+		t.Errorf("page carries a done checkbox/toggle:\n%s", page)
+	}
+
+	// Every card carries its edit and delete affordance hooks. Until the
+	// operation cards land (edit KW3, delete KW4) they are inert
+	// placeholder elements — no request wiring — but the elements exist.
+	for _, id := range []int64{1, 2, 3, 4} {
+		card := cardHTML(t, page, id)
+		if !strings.Contains(card, `class="btn btn--secondary card__edit"`) {
+			t.Errorf("card %d has no edit affordance element:\n%s", id, card)
+		}
+		if !strings.Contains(card, `class="btn btn--secondary card__delete"`) {
+			t.Errorf("card %d has no delete affordance element:\n%s", id, card)
+		}
 	}
 }
 

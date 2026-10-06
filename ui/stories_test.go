@@ -12,7 +12,10 @@ import (
 
 // W9 — the /__components story gallery. One observable state per section,
 // each section a real template rendering of a deterministic fixture, each
-// addressed by its stable #state-* id for later pixel tests.
+// addressed by its stable #state-* id for later pixel tests. The todo-state
+// sections retired with the todo list render; the full board gallery is
+// card ui/13 (KW7). What stands here is the placeholder inventory of the
+// surfaces that exist now: the board and the stated load failure.
 
 const storyGalleryPath = "/__components"
 
@@ -22,18 +25,34 @@ func galleryPage(t *testing.T) (int, string) {
 	return getPage(t, uiServer(t, "http://127.0.0.1:1").URL+storyGalleryPath)
 }
 
-// sectionHTML slices one section's markup out of the gallery page.
+// sectionHTML slices one section's markup out of the gallery page. Depth-
+// aware: the board section nests its column <section> elements, so the
+// slice ends at the closing tag that matches the section's own opening.
 func sectionHTML(t *testing.T, page, id string) string {
 	t.Helper()
 	start := strings.Index(page, `<section id="`+id+`">`)
 	if start < 0 {
 		t.Fatalf("gallery page has no section #%s:\n%s", id, page)
 	}
-	end := strings.Index(page[start:], `</section>`)
-	if end < 0 {
-		t.Fatalf("section #%s is unterminated", id)
+	rest := page[start:]
+	depth, at := 0, 0
+	for {
+		open := strings.Index(rest[at:], `<section`)
+		close := strings.Index(rest[at:], `</section>`)
+		if close < 0 {
+			t.Fatalf("section #%s is unterminated", id)
+		}
+		if open >= 0 && open < close {
+			depth++
+			at += open + len("<section")
+			continue
+		}
+		depth--
+		if depth == 0 {
+			return page[start : start+at+close+len("</section>")]
+		}
+		at += close + len("</section>")
 	}
-	return page[start : start+end]
 }
 
 func TestStoryGalleryRendersEveryState(t *testing.T) {
@@ -41,7 +60,7 @@ func TestStoryGalleryRendersEveryState(t *testing.T) {
 	if status != http.StatusOK {
 		t.Fatalf("GET %s status = %d, want 200", storyGalleryPath, status)
 	}
-	if !strings.Contains(page, "<title>Todo UI — components</title>") {
+	if !strings.Contains(page, "<title>Board UI — components</title>") {
 		t.Errorf("gallery page missing its title:\n%s", page)
 	}
 	if !strings.Contains(page, `href="/static/style.css"`) {
@@ -49,13 +68,8 @@ func TestStoryGalleryRendersEveryState(t *testing.T) {
 	}
 
 	states := []struct{ id, caption string }{
-		{"state-list-populated", "state: list populated"},
-		{"state-empty", "state: empty"},
-		{"state-create-error", "state: create error"},
-		{"state-edit-band", "state: edit band"},
+		{"state-board", "state: board"},
 		{"state-load-failure", "state: load failure"},
-		{"state-missing-todo", "state: missing todo"},
-		{"state-in-flight-disabled", "state: in-flight disabled"},
 	}
 	for _, s := range states {
 		sectionHTML(t, page, s.id) // fails loudly when the container is absent
@@ -82,7 +96,7 @@ func TestStoryGalleryNeverTouchesTheContract(t *testing.T) {
 	if apiHit {
 		t.Error("the story gallery reached the api — fixtures must be in-code only")
 	}
-	if !strings.Contains(page, `<section id="state-list-populated">`) {
+	if !strings.Contains(page, `<section id="state-board">`) {
 		t.Error("gallery content missing with a live-but-untouchable api")
 	}
 }
@@ -94,15 +108,12 @@ func TestStoryGalleryFixturesAreContractTrue(t *testing.T) {
 		section string
 		want    []string
 	}{
-		{"state-list-populated", []string{
-			`id="todo-list"`, "Buy milk", "Pay electricity bill", "Walk the dog", "Read 20 pages",
-			`data-state="done"`, `data-state="not-done"`,
+		{"state-board", []string{
+			`id="board"`, `id="column-to-do"`, `id="column-in-progress"`, `id="column-done"`,
+			"Draft the launch note", "Rotate the API keys", "Ship v1.2",
+			`id="card-903" class="card card--done"`, // done treatment derived from column membership
 		}},
-		{"state-empty", []string{`id="empty-state"`, "No todos yet."}},
-		{"state-create-error", []string{`id="create-error"`, "title is required"}},
-		{"state-edit-band", []string{`class="row editing"`, "Walk the dog in the park"}},
-		{"state-load-failure", []string{`id="load-error"`, "Could not load todos.", `id="retry"`}},
-		{"state-missing-todo", []string{`id="missing-todo-banner"`, "no such todo", `id="todo-list"`}},
+		{"state-load-failure", []string{`id="load-error"`, "Could not load board.", `id="retry"`}},
 	}
 	for _, c := range checks {
 		section := sectionHTML(t, page, c.section)
@@ -112,22 +123,11 @@ func TestStoryGalleryFixturesAreContractTrue(t *testing.T) {
 			}
 		}
 	}
-}
-
-func TestStoryGalleryInFlightControlsCarryDisabled(t *testing.T) {
-	_, page := galleryPage(t)
-	section := sectionHTML(t, page, "state-in-flight-disabled")
-
-	// The four controls card ui/16 blocks while in flight: create Add,
-	// row checkbox, edit Save, row Delete.
-	for _, want := range []string{
-		`<button type="submit" class="btn btn--primary" disabled>Add</button>`,
-		`<input type="checkbox" disabled `,
-		`<button type="submit" class="btn btn--primary save" disabled>`,
-		`<button type="button" class="btn btn--secondary delete" disabled `,
-	} {
-		if !strings.Contains(section, want) {
-			t.Errorf("in-flight section missing disabled control %q\nsection: %s", want, section)
+	// The board fixture states its fixed columns in order.
+	section := sectionHTML(t, page, "state-board")
+	for _, title := range []string{"To Do", "In Progress", "Done"} {
+		if !strings.Contains(section, title) {
+			t.Errorf("section #state-board missing column title %q\nsection: %s", title, section)
 		}
 	}
 }
@@ -135,16 +135,15 @@ func TestStoryGalleryInFlightControlsCarryDisabled(t *testing.T) {
 func TestGalleryComponentExamplesAnchorEveryPrimitive(t *testing.T) {
 	// W10 part 3 — one example per named component, each at its exact
 	// #c-* id, with the components block above the state sections and
-	// the page keeping its single-h1 shape.
+	// the page keeping its single-h1 shape. The checkbox and row examples
+	// retired with the todo list surface; board component examples join
+	// with the gallery pass at KW7 (card ui/13).
 	_, page := galleryPage(t)
 
 	ids := []string{
 		"c-btn-primary", "c-btn-secondary", "c-btn-disabled",
 		"c-input-default", "c-input-focus",
-		"c-checkbox-unchecked", "c-checkbox-checked", "c-checkbox-disabled",
-		"c-row-not-done", "c-row-done",
-		"c-error-text", "c-banner", "c-hint", "c-empty-state",
-		"c-panel", "c-heading", "c-tokens",
+		"c-error-text", "c-panel", "c-heading", "c-tokens",
 	}
 	for _, id := range ids {
 		if got := strings.Count(page, `id="`+id+`"`); got != 1 {
@@ -155,7 +154,7 @@ func TestGalleryComponentExamplesAnchorEveryPrimitive(t *testing.T) {
 		t.Errorf("gallery no longer carries exactly one h1:\n%s", page)
 	}
 	componentsAt := strings.Index(page, `<section id="components"`)
-	statesAt := strings.Index(page, `<section id="state-list-populated"`)
+	statesAt := strings.Index(page, `<section id="state-board"`)
 	if componentsAt < 0 || statesAt < 0 || componentsAt > statesAt {
 		t.Errorf("components block is not above the state sections (components at %d, states at %d)",
 			componentsAt, statesAt)
@@ -167,10 +166,6 @@ func TestGalleryComponentExamplesCarryFrozenStates(t *testing.T) {
 	for _, want := range []string{
 		`id="c-btn-disabled" type="button" class="btn btn--secondary" disabled`,
 		`id="c-input-focus" class="input is-focus"`, // static focus stand-in
-		`id="c-checkbox-checked" type="checkbox" class="checkbox" checked`,
-		`id="c-checkbox-disabled" type="checkbox" class="checkbox" disabled`,
-		`id="c-row-not-done" class="row" data-state="not-done"`,
-		`id="c-row-done" class="row row--done" data-state="done"`,
 	} {
 		if !strings.Contains(page, want) {
 			t.Errorf("component example missing %q", want)

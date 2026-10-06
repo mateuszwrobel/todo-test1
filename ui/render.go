@@ -4,17 +4,26 @@ import (
 	"bytes"
 	"html/template"
 	"net/http"
+	"strings"
 )
 
-// Page surfaces rendered by this module: the shell (with the always-ready
-// create control), the list (rows carry their done state and controls), the
-// stated empty state, and the stated load-failure state. Template-per-
-// surface; procedural.
+// doneColumnTitle is the display title of the column whose cards render with
+// the done treatment. The treatment is a rendering rule keyed on the column
+// a card sits in (workplan_ui_board.md decision): the contract carries no
+// done field — column membership is the done state — so a per-card done
+// indicator would contradict the model, and no done checkbox or toggle
+// exists anywhere on the page.
+const doneColumnTitle = "Done"
+
+// Page surfaces rendered by this module: the shell (the create band joins it
+// with card ui/04, KW2), the board (three column panels in the contract's
+// fixed order, cards top-to-bottom in array order), and the stated
+// load-failure state. Template-per-surface; procedural.
 var pageTmpl = template.Must(template.New("page").Parse(`<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Todo</title>
+<title>Board</title>
 {{/* Load order is contractual: tokens.css before style.css — style.css
     consumes the design tokens via var(), so the token layer must parse
     first (a later token sheet would flash unstyled pixels). */}}
@@ -24,105 +33,96 @@ var pageTmpl = template.Must(template.New("page").Parse(`<!doctype html>
 </head>
 <body>
 <main>
-<h1 class="heading">My Todos</h1>
-<style>
-/* The row edit band stays hidden until the row's Edit control puts the
-   row in edit mode — the list reads as text, not as inputs. */
-.edit-form{display:none}
-li.editing .edit-form{display:inline}
-li.editing .title{display:none}
-</style>
-<div id="todos-area">{{.State}}</div>
-{{.CreateArea}}
+<h1 class="heading">Board</h1>
+<div id="board-area">{{.State}}</div>
 </main>
-<script>
-// htmx swaps 2xx responses by default; a stated failure arrives as a 4xx
-// whose body is already-rendered HTML for the same surface the operation
-// acts on. Route those bodies through the same htmx swap engine — no
-// browser-side rendering happens here.
-document.body.addEventListener('htmx:responseError', function (event) {
-  var elt = event.detail && event.detail.elt;
-  if (elt && elt.closest && elt.closest('#create-form')) {
-    // A create refusal: the already-rendered create-area fragment.
-    htmx.swap(document.getElementById('create-area'),
-              event.detail.xhr.responseText,
-              { swapStyle: 'outerHTML' });
-    return;
-  }
-  // A row-operation failure: the stated surface plus the server-truth list
-  // (an edit refusal carries the reason on the row, a missing todo carries
-  // the banner above the truthful list). Plain (non-HTML) error bodies
-  // never swap, so nothing on the page can look like it succeeded.
-  var area = document.getElementById('todos-area');
-  var ctype = event.detail.xhr.getResponseHeader('Content-Type') || '';
-  if (area && ctype.indexOf('text/html') === 0) {
-    htmx.swap(area, event.detail.xhr.responseText, { swapStyle: 'innerHTML' });
-  }
-});
-</script>
 </body>
 </html>
 `))
 
-var listTmpl = template.Must(template.New("list").Parse(`<ul id="todo-list" class="panel">
+// boardTmpl renders the three column panels in the contract's array order
+// (the contract fixes the order To Do / In Progress / Done, and the page
+// renders the server's truth rather than re-imposing its own). Each card
+// carries its edit and delete affordance hooks from day one: the buttons
+// are inert placeholders — no hx-* wiring, no fragment endpoint behind them
+// until their operation cards land (edit KW3, delete KW4; see
+// workplans/dependencies_kanban.md wave rows for ui/06 and ui/07). They
+// must exist as elements now so the card's surface is complete when the
+// operations wire onto these very hooks.
+var boardTmpl = template.Must(template.New("board").Parse(`<div id="board" class="board">
 {{- range .}}
-<li id="todo-{{.ID}}" class="row{{if .Done}} row--done{{end}}{{if .Editing}} editing{{end}}" data-state="{{if .Done}}done{{else}}not-done{{end}}">
-<label class="done-toggle"><input type="checkbox" class="checkbox" {{if .Done}}checked{{end}} hx-patch="/ui/todos/{{.ID}}" hx-vals='{"done": {{if .Done}}false{{else}}true{{end}}}' hx-target="#todos-area" hx-swap="innerHTML" hx-disabled-elt="this">
-<span>{{if .Done}}done{{else}}not done{{end}}</span></label>
-<span class="title">{{.Title}}</span>
-{{if not .Done}}<button type="button" class="btn btn--secondary edit" hx-on:click="this.closest('li').classList.toggle('editing')">Edit</button>
-<form class="edit-form" hx-patch="/ui/todos/{{.ID}}" hx-target="#todos-area" hx-swap="innerHTML" hx-disabled-elt="#todo-{{.ID}} .save">
-<input class="input" type="text" name="title" value="{{if .Editing}}{{.Typed}}{{else}}{{.Title}}{{end}}">
-<button type="submit" class="btn btn--primary save">Save</button>
-<button type="button" class="btn btn--secondary cancel" hx-on:click="this.closest('li').classList.remove('editing')">Cancel</button>
-</form>{{end}}{{if .EditError}}<p id="edit-error-{{.ID}}" class="edit-error error-text">{{.EditError}}</p>{{end}}
-<button type="button" class="btn btn--secondary delete" hx-delete="/ui/todos/{{.ID}}" hx-target="#todos-area" hx-swap="innerHTML" hx-disabled-elt="this">Delete</button>
+<section id="column-{{.Anchor}}" class="column" data-column="{{.Title}}">
+<h2 class="column__title">{{.Title}}</h2>
+<ul class="column__cards">
+{{- range .Cards}}
+<li id="card-{{.ID}}" class="card{{if .Done}} card--done{{end}}" data-card="{{.ID}}">
+<span class="card__title">{{.Title}}</span>
+<button type="button" class="btn btn--secondary card__edit">Edit</button>
+<button type="button" class="btn btn--secondary card__delete">Delete</button>
 </li>
 {{- end}}
-</ul>`))
+</ul>
+</section>
+{{- end}}
+</div>`))
 
-var emptyTmpl = template.Must(template.New("empty").Parse(
-	`<p id="empty-state" class="empty-state panel">No todos yet.</p>`))
-
-// The failure state offers a retry: a GET on the page, which re-issues the
-// read — recovery stays inside GET semantics.
+// failedTmpl is the stated load-failure surface. The retry control re-issues
+// the read through GET semantics — recovery stays inside the page reload
+// path, same pattern the superseded list surface used.
 var failedTmpl = template.Must(template.New("failed").Parse(
-	`<div id="load-error" class="panel">Could not load todos. <a id="retry" href="/">Retry</a></div>`))
+	`<div id="load-error" class="panel">Could not load board. <a id="retry" href="/">Retry</a></div>`))
 
-func renderPage(w http.ResponseWriter, state template.HTML) {
-	_ = pageTmpl.Execute(w, struct {
-		State      template.HTML
-		CreateArea template.HTML
-	}{state, createAreaHTML(createAreaData{})})
+// column is one rendered column panel; card is one rendered card. Done on a
+// card is derived, never carried: it is set by the mapping below when the
+// card's column is the done column (see doneColumnTitle).
+type column struct {
+	Title  string // display title as the contract states it
+	Anchor string // id-safe form of Title, for the column element's id
+	Cards  []card
 }
 
-func renderList(w http.ResponseWriter, todos []todo) {
+type card struct {
+	ID    int64
+	Title string
+	Done  bool // derived from column membership — drives the card--done class
+}
+
+// columnsOf maps the contract body to the render model: columns in array
+// order, cards in array (position) order, the done treatment keyed on the
+// column's display title.
+func columnsOf(board boardResponse) []column {
+	columns := make([]column, 0, len(board.Columns))
+	for _, col := range board.Columns {
+		out := column{Title: col.Title, Anchor: columnAnchor(col.Title)}
+		for _, c := range col.Cards {
+			out.Cards = append(out.Cards, card{
+				ID:    c.ID,
+				Title: c.Title,
+				Done:  col.Title == doneColumnTitle,
+			})
+		}
+		columns = append(columns, out)
+	}
+	return columns
+}
+
+// columnAnchor makes an element id out of a display title ("In Progress" →
+// "in-progress").
+func columnAnchor(title string) string {
+	return strings.ToLower(strings.ReplaceAll(title, " ", "-"))
+}
+
+func renderBoard(w http.ResponseWriter, columns []column) {
 	var b bytes.Buffer
-	if err := listTmpl.Execute(&b, rowsFor(todos)); err != nil {
+	if err := boardTmpl.Execute(&b, columns); err != nil {
 		http.Error(w, "render failed", http.StatusInternalServerError)
 		return
 	}
 	renderPage(w, template.HTML(b.String()))
 }
 
-// listRow is one rendered row: the todo itself plus, on the edit feature's
-// refusal path only, the stated contract refusal and the rejected text kept
-// in the row's band (ui/11, ui/12). The plain browse/toggle/delete renderings
-// leave the three edit fields empty — rows render as before.
-type listRow struct {
-	todo
-	EditError string // contract's stated refusal, shown on this row when set
-	Typed     string // rejected edit text, prefilled back into the band
-	Editing   bool   // band revealed on load — a refusal on a not-done row
-}
-
-// rowsFor maps a plain list state to rows carrying no edit surface.
-func rowsFor(todos []todo) []listRow {
-	rows := make([]listRow, 0, len(todos))
-	for _, t := range todos {
-		rows = append(rows, listRow{todo: t})
-	}
-	return rows
+func renderPage(w http.ResponseWriter, state template.HTML) {
+	_ = pageTmpl.Execute(w, struct{ State template.HTML }{state})
 }
 
 func renderState(w http.ResponseWriter, which *template.Template) {

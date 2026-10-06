@@ -1,6 +1,9 @@
-// Package ui renders the todo page and its HTML surfaces. It has zero
-// in-process dependencies on the other modules: it reaches the api contract
-// over HTTP at runtime, at the base URL the composition root injects.
+// Package ui renders the kanban board page and its HTML surfaces. It has
+// zero in-process dependencies on the other modules: it reaches the api
+// contract over HTTP at runtime, at the base URL the composition root
+// injects. The page renders the board (GET /board); the superseded todo
+// list-render stack retired here (workplan_ui_board.md decision: the ui
+// module survives with its surface replaced, ADR-003).
 package ui
 
 import (
@@ -11,12 +14,24 @@ import (
 //go:embed static
 var staticFS embed.FS
 
-// todo mirrors the api contract's Todo DTO. The ui module defines its own
-// shape because it may not import the other modules (architecture spec).
-type todo struct {
-	ID    int64  `json:"id"`
-	Title string `json:"title"`
-	Done  bool   `json:"done"`
+// boardResponse mirrors the GET /board contract body. The ui module defines
+// its own shapes because it may not import the other modules (architecture
+// spec). Cards arrive inside their column arrays in position order — the
+// render mirrors array order and never re-sorts (server order is the truth).
+type boardResponse struct {
+	Columns []boardColumnResponse `json:"columns"`
+}
+
+type boardColumnResponse struct {
+	Title string              `json:"title"`
+	Cards []boardCardResponse `json:"cards"`
+}
+
+type boardCardResponse struct {
+	ID       int64  `json:"id"`
+	Title    string `json:"title"`
+	Column   string `json:"column"`
+	Position int    `json:"position"`
 }
 
 type page struct {
@@ -26,7 +41,10 @@ type page struct {
 
 // NewHandler builds the ui module's handlers. apiBase is the address of the
 // api contract on the same listener (injected by the composition root); every
-// read of todos goes to that address over HTTP.
+// read of the board goes to that address over HTTP. The page's fragment
+// endpoints retired with the todo list surface; kanban operations land as
+// their own cards (create KW2, edit KW3, delete KW4, drag KW5) and re-extend
+// this route table then.
 func NewHandler(apiBase string) http.Handler {
 	p := &page{
 		apiBase: apiBase,
@@ -42,9 +60,6 @@ func NewHandler(apiBase string) http.Handler {
 	mux.HandleFunc("GET /static/tokens.css", serveStaticCSS("static/tokens.css"))
 	mux.HandleFunc("GET /static/style.css", serveStaticCSS("static/style.css"))
 	mux.HandleFunc("GET /__components", p.handleStories)
-	mux.HandleFunc("POST /ui/todos", p.handleCreate)
-	mux.HandleFunc("PATCH /ui/todos/{id}", p.handleToggle)
-	mux.HandleFunc("DELETE /ui/todos/{id}", p.handleDelete)
 	return mux
 }
 
@@ -53,17 +68,15 @@ func (p *page) handleIndex(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	todos, err := p.listTodos()
+	board, err := p.loadBoard()
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err != nil {
+		// A failed read states the failure — never columns standing in
+		// for a truth the server could not give (card ui/03 pins it).
 		renderState(w, failedTmpl)
 		return
 	}
-	if len(todos) == 0 {
-		renderState(w, emptyTmpl)
-		return
-	}
-	renderList(w, todos)
+	renderBoard(w, columnsOf(board))
 }
 
 func (p *page) handleHTMX(w http.ResponseWriter, r *http.Request) {
