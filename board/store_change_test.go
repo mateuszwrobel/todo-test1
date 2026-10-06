@@ -430,9 +430,14 @@ func TestChangeColumnMovesToBottomAndClosesGap(t *testing.T) {
 	}
 }
 
-// A requested column equal to the card's current column is not a move: no
-// placement happens, the card keeps its position. Within-column reordering is
-// board/07 (KW5), deliberately not exercised into existence here.
+// A requested column equal to the card's current column is not a move:
+// Change carries no position direction, so it places nothing and the card
+// keeps its position. This pin survives board/07 with its assertion unchanged
+// but its rationale flipped: the old claim that within-column reordering
+// doesn't exist *anywhere* in the store is retired — Move is the reorder
+// operation (board/07, pinned in store_move_test.go as remove-then-insert at
+// an index), and Change remains the column-only direction where no index is
+// ever given.
 func TestChangeColumnToSameColumnPlacesNothing(t *testing.T) {
 	store := openStore(t)
 	seedBoard(t, store, []columnFixture{{Todo, []string{"t0", "t1", "t2"}}})

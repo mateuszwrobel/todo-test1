@@ -334,6 +334,156 @@ func TestMoveRejectionsChangeNothing(t *testing.T) {
 	}
 }
 
+// Card board/07 — Reorder within a column.
+// Given a column holding cards [A, B, C] at positions 0, 1, 2
+// When  card A is moved to position 2 of the same column
+// Then  the column holds [B, C, A] with positions 0, 1, 2
+//
+// Same-column Move is remove-then-insert: position indexes the column minus
+// the moved card, which is what turns A→2 into [B, C, A] — not an insertion
+// past a still-counted A. The table covers the scenario, the same move from
+// below (down one, up to top), the exact-position no-op the splice makes
+// provably inert (board cell-for-cell identical, card returned unchanged), a
+// column's only card, and the clamp ends inside one column. The card keeps
+// its identifier, its text, and its column — only position is re-decided.
+// This is the behavior the KW3 same-column no-op disclaimed; the pin there
+// survives as a statement about Change, and this test is where the store
+// makes the claim.
+func TestMoveReordersWithinColumn(t *testing.T) {
+	tests := []struct {
+		name    string
+		columns []columnFixture
+		from    Column
+		fromPos int
+		index   int
+		want    []string // the reordered column, top-to-bottom
+	}{
+		{
+			"scenario: top card to position 2 — A over B and C",
+			[]columnFixture{
+				{Todo, []string{"A", "B", "C"}},
+			},
+			Todo, 0, 2,
+			[]string{"B", "C", "A"},
+		},
+		{
+			"down one: middle card to the bottom",
+			[]columnFixture{
+				{Todo, []string{"A", "B", "C"}},
+			},
+			Todo, 1, 2,
+			[]string{"A", "C", "B"},
+		},
+		{
+			"up to top: bottom card to position 0",
+			[]columnFixture{
+				{Todo, []string{"A", "B", "C"}},
+			},
+			Todo, 2, 0,
+			[]string{"C", "A", "B"},
+		},
+		{
+			"exact-position no-op: middle card to its own index",
+			[]columnFixture{
+				{Todo, []string{"A", "B", "C"}},
+			},
+			Todo, 1, 1,
+			[]string{"A", "B", "C"},
+		},
+		{
+			"exact-position no-op: top card to index 0",
+			[]columnFixture{
+				{Todo, []string{"A", "B", "C"}},
+				{Done, []string{"D0", "D1"}},
+			},
+			Todo, 0, 0,
+			[]string{"A", "B", "C"},
+		},
+		{
+			"a column's only card to position 0 stays put",
+			[]columnFixture{
+				{InProgress, []string{"Z"}},
+			},
+			InProgress, 0, 0,
+			[]string{"Z"},
+		},
+		{
+			"negative index clamps to the top",
+			[]columnFixture{
+				{Done, []string{"D0", "D1", "D2"}},
+			},
+			Done, 2, -3,
+			[]string{"D2", "D0", "D1"},
+		},
+		{
+			"past-end index clamps to the bottom",
+			[]columnFixture{
+				{Done, []string{"D0", "D1", "D2"}},
+			},
+			Done, 0, 99,
+			[]string{"D1", "D2", "D0"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := openStore(t)
+			seedBoard(t, store, tt.columns)
+
+			before := mustList(t, store)
+			byTitle := cardsByTitle(before)
+			target := before[columnIndex(t, before, tt.from)].Cards[tt.fromPos]
+
+			moved, err := store.Move(target.ID, tt.from, tt.index)
+			if err != nil {
+				t.Fatalf("Move(%d, %q, %d): %v", target.ID, tt.from, tt.index, err)
+			}
+			if moved.ID != target.ID || moved.Title != target.Title || moved.Column != tt.from {
+				t.Errorf("moved card = %+v, want %+v with identity, text, and column kept", moved, target)
+			}
+			wantIndex := tt.index
+			if wantIndex < 0 {
+				wantIndex = 0
+			}
+			if n := len(before[columnIndex(t, before, tt.from)].Cards) - 1; wantIndex > n {
+				wantIndex = n
+			}
+			if moved.Position != wantIndex {
+				t.Errorf("moved Position = %d, want %d", moved.Position, wantIndex)
+			}
+
+			after := mustList(t, store)
+			assertColumnCells(t, after, tt.from, tt.want, byTitle)
+
+			// Only the reordered column may differ — every other column is
+			// cell-for-cell exactly as it was.
+			for _, col := range before {
+				if col.Name == tt.from {
+					continue
+				}
+				kept := after[columnIndex(t, after, col.Name)]
+				if len(kept.Cards) != len(col.Cards) {
+					t.Fatalf("untouched column %q holds %s, want %s",
+						col.Name, titles(kept.Cards), titles(col.Cards))
+				}
+				for i := range col.Cards {
+					if kept.Cards[i] != col.Cards[i] {
+						t.Errorf("untouched column %q cell %d = %+v, want %+v — a reorder touches one column",
+							col.Name, i, kept.Cards[i], col.Cards[i])
+					}
+				}
+			}
+			// The no-op rows are pinned harder than by order alone: the whole
+			// board must be identical, down to positions the splice rewrote
+			// with the same values.
+			if tt.fromPos == wantIndex && !boardEqual(before, after) {
+				t.Errorf("exact-position move changed the board:\n before: %s\n after:  %s",
+					flatten(before), flatten(after))
+			}
+			assertContiguous(t, after)
+		})
+	}
+}
+
 // cardsByTitle indexes a listing by title — every fixture title in this file
 // is unique across the board — so each expected cell can pin its identifier
 // as well as its text and position.
