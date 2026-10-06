@@ -1,3 +1,4 @@
 e2e/bin/
 /todo.db
 /todos.db
+e2e/visual/.results/
