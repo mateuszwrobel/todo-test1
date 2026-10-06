@@ -127,6 +127,76 @@ server (SIGTERM teardown), mirroring the KW1–KW3 lanes.
    empty treatment while every other column keeps its cards; no reload, and
    the DOM mirrors GET /board, agreement intact after a reload.
 
+## KW5 — Drag: move, reorder, done membership (`e2e/kw5-drag.js`)
+
+Re-executes the parent scenarios "Drag card between columns", "Drag reorder
+within a column" and "Done is column membership", plus the MOVE leg of
+"Operation on missing card" — the leg that completes that scenario fully
+(edit leg KW3, delete leg KW4). Each scenario gets its own seeded temp board,
+port, and server (SIGTERM teardown), mirroring the KW1–KW4 lanes; the
+missing-card scenario adds a second browser context on the same server.
+
+Drag is real HTML5 DnD in chromium: the lane drives mouse choreography
+(hover, mouse.down, stepped mouse.moves, mouse.up) — Playwright's drag
+interception turns these into dragstart/dragenter/dragover/drop. The
+one-request-per-drop and zero-request-per-abandonment rules are proven by
+counting PATCH requests with a `page.on('request')` listener per gesture:
+exactly one per accepted drop (body carries the target column + drop index),
+zero per abandoned one. The server-side contract-call count (ui → api PATCH)
+is ui/move_test.go's recorder; from the browser the client's single fetch is
+what the lane counts.
+
+### What it asserts
+
+1. **Drag card between columns** — dragging a middle To Do card onto In
+   Progress *between its two cards* issues EXACTLY ONE PATCH with body
+   `{column: "In Progress", position: 1}`, the card lands at the drop index
+   (DOM order card-for-card equals GET /board under contiguous positions),
+   the source column packs its gap, text and identifier are unchanged, no
+   reload (window marker survives), and drag chrome cleans up after itself.
+   Mid-gesture the insertion line's position is witnessed before mouse-up
+   (best-effort; the request body's index is the hard proof that the marked
+   gap is the gap that landed).
+2. **Drag reorder within a column** — dragging the bottom card of a
+   four-card To Do column to its top is one PATCH with position 0 (the
+   contract's index-after-removal), the column lists the new order
+   immediately, and the order survives an actual `page.reload()` with the
+   stored positions contiguous 0..n-1 agreeing card-for-card.
+3. **Done is column membership** — dragging the In Progress card into Done
+   lands it with the done treatment (`card--done` off membership), and
+   dragging it back out clears the treatment. No separate done control
+   exists anywhere on the page at any point: zero checkbox/radio/switch
+   markup, no done/toggle button or link. A cross-check block then
+   re-exercises kw3's "editing a Done card keeps the treatment" on a card
+   the DRAG placed in Done — asserted on the fresh truth render (one PATCH
+   to the card endpoint, no reload, treatment kept).
+4. **Operation on missing card — move leg** — staged with two browser
+   contexts on one server: context A deletes the card through its Delete
+   control, context B's never-refreshed page stays genuinely stale and still
+   shows the card as draggable. Dragging that stale card attempts EXACTLY
+   ONE PATCH; the contract answers 404; the shared `#missing-card` surface
+   states "no such card" over the re-rendered truth (the page under the
+   banner IS GET /board — nothing faked, nothing moved), and the statement
+   dies at reload.
+5. **Abandoned drag changes nothing** — a drag that hovers the gutter and a
+   column but releases outside every column (over the page heading) issues
+   ZERO PATCH requests — dragover outside a column is never accepted, so
+   drop and the single fetch site are unreachable from it. The board is
+   unchanged in DOM and GET /board, no reload, no drag chrome left behind.
+
+### Known product bug this lane witnessed (not asserted)
+
+The drag's fetch swap assigns the board fragment with plain `innerHTML`
+(render.go), and the bundled htmx 2.0.6 removed MutationObserver
+auto-processing — so EDIT and DELETE controls on markup a DROP re-rendered
+are left unwired until the next full render: an edit Save there submits
+natively as a page navigation (`GET /?title=...`, edit discarded) and a
+Delete click does nothing. The lane witnesses this verbatim in its run
+output (scenario 3 cross-check) and kw3/kw4 stay green because their swaps
+go through htmx, which processes what it swaps. The fix belongs to the
+drag swap site (`htmx.process` the swapped region, or route the fetch answer
+through `htmx.swap`) — see `__log__/2026-10-06-kw5-e2e-drag.md`.
+
 ## Seeding
 
 `e2e/testdata/` is a go tool (test-support, not served application code;
