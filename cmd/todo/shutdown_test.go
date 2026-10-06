@@ -37,10 +37,11 @@ import (
 // of this test (that race was a verified flake).
 func TestCleanShutdownCompletesInFlightWork(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "shutdown.db")
+	boardPath := filepath.Join(t.TempDir(), "shutdown-board.db")
 	seedOne(t, dbPath)
 
 	addr := freeAddr(t)
-	srv := startServer(t, addr, dbPath)
+	srv := startServer(t, addr, dbPath, boardPath)
 
 	// Start a PATCH whose body never finishes: the handler is processing
 	// (io.ReadAll on the body) while shutdown is signaled.
@@ -132,10 +133,11 @@ func TestCleanShutdownCompletesInFlightWork(t *testing.T) {
 // Exit codes contract: SIGINT/SIGTERM after successful start → 0.
 func TestCleanShutdownExitCodeZero(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "idle.db")
+	boardPath := filepath.Join(t.TempDir(), "idle-board.db")
 	seedOne(t, dbPath)
 
 	addr := freeAddr(t)
-	srv := startServer(t, addr, dbPath)
+	srv := startServer(t, addr, dbPath, boardPath)
 
 	if err := srv.Process.Signal(syscall.SIGTERM); err != nil {
 		t.Fatalf("SIGTERM: %v", err)

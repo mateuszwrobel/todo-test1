@@ -26,6 +26,7 @@ import (
 // over already-seeded todos — the same stand-in the W3 e2e uses.
 func TestRestartResumesState(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "restart.db")
+	boardPath := filepath.Join(t.TempDir(), "restart-board.db")
 	store, err := todos.Open(dbPath)
 	if err != nil {
 		t.Fatalf("seed Open: %v", err)
@@ -54,7 +55,7 @@ func TestRestartResumesState(t *testing.T) {
 	addr := freeAddr(t)
 
 	// Run 1: drive a toggle through the live HTTP surface, read the state.
-	srv := startServer(t, addr, dbPath)
+	srv := startServer(t, addr, dbPath, boardPath)
 	req, err := http.NewRequest(http.MethodPatch, "http://"+addr+"/todos/1", strings.NewReader(`{"done":true}`))
 	if err != nil {
 		t.Fatalf("build PATCH: %v", err)
@@ -85,7 +86,7 @@ func TestRestartResumesState(t *testing.T) {
 		t.Logf("first run exited: %v", err)
 	}
 
-	startServer(t, addr, dbPath)
+	startServer(t, addr, dbPath, boardPath)
 
 	// The JSON contract reports the same todos with the same states.
 	after := getTodos(t, addr)

@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"todo/todos"
+	"todo/board"
 )
 
 var (
@@ -64,11 +64,13 @@ func freeAddr(t *testing.T) string {
 	return addr
 }
 
-// startServer runs the built command with the given address and db path and
-// waits until it answers on /todos.
-func startServer(t *testing.T, addr, dbPath string) *exec.Cmd {
+// startServer runs the built command with the given listen address, todo data
+// file path, and board data file path, and waits until it answers on /board.
+// Both data paths are always caller-supplied temp paths: leaving either flag
+// out would write its default (todos.db / kanban.db) into the package dir.
+func startServer(t *testing.T, addr, dbPath, boardDBPath string) *exec.Cmd {
 	t.Helper()
-	cmd := exec.Command(buildBinary(t), "--addr", addr, "--db", dbPath)
+	cmd := exec.Command(buildBinary(t), "--addr", addr, "--db", dbPath, "--board-db", boardDBPath)
 	out := &lockedBuffer{}
 	cmd.Stdout = out
 	cmd.Stderr = out
@@ -85,7 +87,7 @@ func startServer(t *testing.T, addr, dbPath string) *exec.Cmd {
 
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
-		resp, err := http.Get("http://" + addr + "/todos")
+		resp, err := http.Get("http://" + addr + "/board")
 		if err == nil {
 			resp.Body.Close()
 			return cmd
@@ -113,49 +115,74 @@ func (b *lockedBuffer) String() string {
 	return b.buf.String()
 }
 
-// Card server/01 — Start serves both surfaces.
-// Given a data file path and a listen address
-// When  the command is started
-// Then  the page is served at GET / on that address
-//
-//	And the JSON contract is served at /todos on the same address
-//	And page operations work end to end
-//
-// (In W1 the page has no write operations yet; "end to end" here means the
-// rendered page reflects real stored data, read through the api contract.)
-func TestStartServesBothSurfaces(t *testing.T) {
-	dbPath := filepath.Join(t.TempDir(), "todo.db")
-	store, err := todos.Open(dbPath)
+// boardColumn/boardPayload decode the GET /board wire body. The test package
+// mirrors the contract's shape locally rather than importing api — the same
+// own-shape convention the ui module follows toward the contract.
+type boardColumn struct {
+	Title string       `json:"title"`
+	Cards []board.Card `json:"cards"`
+}
+
+type boardPayload struct {
+	Columns []boardColumn `json:"columns"`
+}
+
+// wantColumnTitles is the contract's fixed column set in board order.
+var wantColumnTitles = []string{"To Do", "In Progress", "Done"}
+
+// getBoard reads GET /board and requires 200 with a decodable body.
+func getBoard(t *testing.T, addr string) boardPayload {
+	t.Helper()
+	resp, err := http.Get("http://" + addr + "/board")
 	if err != nil {
-		t.Fatalf("seed Open: %v", err)
+		t.Fatalf("GET /board: %v", err)
 	}
-	for _, title := range []string{"write report", "water plants"} {
-		if _, err := store.Create(title); err != nil {
-			t.Fatalf("seed Create: %v", err)
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /board status = %d, want 200 (%s)", resp.StatusCode, body)
+	}
+	var got boardPayload
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("GET /board body %s: %v", body, err)
+	}
+	return got
+}
+
+// Card server/01 — Start serves board and page.
+// Given a fresh machine state — no board file, no todo data file
+// When  the command is started
+// Then  GET /board answers 200 with the three fixed columns
+//
+//	And the page route serves the app page from the same process
+//
+// The todo POST/PATCH/DELETE endpoints stay mounted until their retirement
+// cards land — this test asserts neither of them and deletes neither.
+func TestStartServesBothSurfaces(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "todos.db")     // absent at start
+	boardPath := filepath.Join(dir, "kanban.db") // absent at start
+	addr := freeAddr(t)
+	startServer(t, addr, dbPath, boardPath)
+
+	// JSON contract: the board read answers the three fixed columns; on a
+	// fresh machine state every column is empty.
+	got := getBoard(t, addr)
+	if len(got.Columns) != len(wantColumnTitles) {
+		t.Fatalf("GET /board columns = %d, want %d: %+v", len(got.Columns), len(wantColumnTitles), got.Columns)
+	}
+	for i, want := range wantColumnTitles {
+		if got.Columns[i].Title != want {
+			t.Errorf("column %d title = %q, want %q", i, got.Columns[i].Title, want)
+		}
+		if len(got.Columns[i].Cards) != 0 {
+			t.Errorf("column %q on a fresh machine state holds %d cards, want 0",
+				got.Columns[i].Title, len(got.Columns[i].Cards))
 		}
 	}
-	store.Close()
 
-	addr := freeAddr(t)
-	startServer(t, addr, dbPath)
-
-	// JSON contract at /todos.
-	resp, err := http.Get("http://" + addr + "/todos")
-	if err != nil {
-		t.Fatalf("GET /todos: %v", err)
-	}
-	body, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("GET /todos status = %d, want 200", resp.StatusCode)
-	}
-	var got []todos.Todo
-	if err := json.Unmarshal(body, &got); err != nil || len(got) != 2 {
-		t.Fatalf("GET /todos body = %s (err %v), want 2 todos", body, err)
-	}
-
-	// Page at GET / on the same address.
-	resp, err = http.Get("http://" + addr + "/")
+	// Page from the same process: the app page is served on GET /.
+	resp, err := http.Get("http://" + addr + "/")
 	if err != nil {
 		t.Fatalf("GET /: %v", err)
 	}
@@ -167,9 +194,7 @@ func TestStartServesBothSurfaces(t *testing.T) {
 	if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
 		t.Errorf("GET / Content-Type = %q, want text/html", ct)
 	}
-	for _, title := range []string{"write report", "water plants"} {
-		if !strings.Contains(string(page), title) {
-			t.Errorf("page does not show stored todo %q:\n%s", title, page)
-		}
+	if len(page) == 0 {
+		t.Error("GET / served an empty body")
 	}
 }

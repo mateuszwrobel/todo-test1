@@ -17,7 +17,7 @@ func TestFreshPathStartsEmpty(t *testing.T) {
 
 	// Given: nothing exists at the configured path.
 	addr := freeAddr(t)
-	startServer(t, addr, dbPath) // must start successfully
+	startServer(t, addr, dbPath, filepath.Join(t.TempDir(), "not-yet-board.db")) // must start successfully
 
 	resp, err := http.Get("http://" + addr + "/")
 	if err != nil {

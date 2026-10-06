@@ -55,7 +55,8 @@ func TestAddressInUseFailsLoudly(t *testing.T) {
 	defer ln.Close()
 	addr := ln.Addr().String()
 
-	out := runExpectFailure(t, "--addr", addr, "--db", filepath.Join(t.TempDir(), "x.db"))
+	out := runExpectFailure(t, "--addr", addr, "--db", filepath.Join(t.TempDir(), "x.db"),
+		"--board-db", filepath.Join(t.TempDir(), "y.db"))
 	t.Logf("stated reason: %s", out)
 }
 
@@ -73,7 +74,8 @@ func TestUnusableDataPathFailsLoudly(t *testing.T) {
 
 func TestMalformedFlagValuesFailLoudly(t *testing.T) {
 	// Port out of range — a malformed --addr value.
-	out := runExpectFailure(t, "--addr", "127.0.0.1:99999", "--db", filepath.Join(t.TempDir(), "x.db"))
+	out := runExpectFailure(t, "--addr", "127.0.0.1:99999", "--db", filepath.Join(t.TempDir(), "x.db"),
+		"--board-db", filepath.Join(t.TempDir(), "y.db"))
 	t.Logf("stated reason: %s", out)
 
 	// Unknown flag.
