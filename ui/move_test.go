@@ -294,3 +294,105 @@ func TestDragWiringIsOnEveryCardIncludingDone(t *testing.T) {
 		}
 	}
 }
+
+// assertColumnOrder pins one column's rendered order: the ids appearing in
+// the given sequence, nothing else in between changing it.
+func assertColumnOrder(t *testing.T, html, anchor string, ids ...int64) {
+	t.Helper()
+	col := columnHTML(t, html, anchor)
+	prev := -1
+	for _, id := range ids {
+		at := strings.Index(col, `id="card-`+strconv.FormatInt(id, 10)+`"`)
+		if at < 0 {
+			t.Fatalf("column %s has no card %d:\n%s", anchor, id, col)
+		}
+		if at < prev {
+			t.Errorf("column %s order does not hold card %d after the previous one:\n%s", anchor, id, col)
+		}
+		prev = at
+	}
+}
+
+// assertStorePositionsContiguous pins the renormalization the store promises
+// after every move: the column's cards sit at positions 0..n-1.
+func assertStorePositionsContiguous(t *testing.T, store *board.Store, column board.Column) {
+	t.Helper()
+	columns, err := store.List()
+	if err != nil {
+		t.Fatalf("board List: %v", err)
+	}
+	for _, col := range columns {
+		if col.Name != column {
+			continue
+		}
+		for i, c := range col.Cards {
+			if c.Position != i {
+				t.Errorf("column %q card %q sits at position %d, want contiguous %d", column, c.Title, c.Position, i)
+			}
+		}
+		return
+	}
+	t.Fatalf("store has no column %q", column)
+}
+
+// Card ui/09 — Drag reorder persists.
+// Given a column shows at least three cards
+// When  the user drags a card to a new position within the same column
+// Then  the column re-renders in the new order immediately
+//
+//	And after a page reload the new order is still shown
+//
+// (Same machinery as ui/08 — one drop, one PATCH, same-column leg. "Immediately"
+// is the swap fragment pinning below; the reload arm is pinned here against the
+// server's truth — the browser actually issuing that reload is the wave-end
+// e2e lane's to show. The drop index for a later position excludes the dragged
+// card's own slot: To Do [1,2,3], line under card 3 → position 2 after removal.)
+func TestDragReorderWithinColumnRerendersAndSurvivesReload(t *testing.T) {
+	store, uiSrv, log := moveChain(t, "Write weekly report", "Fix login redirect", "Buy milk")
+
+	_, page := getPage(t, uiSrv.URL+"/")
+	assertColumnOrder(t, page, "to-do", 1, 2, 3)
+
+	status, frag := dragMove(t, uiSrv.URL, 1, "To Do", 2)
+	if status != http.StatusOK {
+		t.Fatalf("PATCH /ui/cards/1/move status = %d, want 200 (body %s)", status, frag)
+	}
+	assertOneMoveRequest(t, log, 1, "todo", 2)
+
+	// The column re-renders in the new order immediately — the swap body
+	// itself carries it, no reload required to see it.
+	assertColumnOrder(t, frag, "to-do", 2, 3, 1)
+
+	// After a page reload the new order is still shown: the fresh document
+	// reads the server's truth, and the server holds the new order.
+	_, reloaded := getPage(t, uiSrv.URL+"/")
+	assertColumnOrder(t, reloaded, "to-do", 2, 3, 1)
+
+	// The store's truth: the reorder persisted with contiguous positions.
+	if got := cardTitles(t, store, board.Todo); len(got) != 3 ||
+		got[0] != "Fix login redirect" || got[1] != "Buy milk" || got[2] != "Write weekly report" {
+		t.Errorf("store To Do column = %q, want the dragged card at the drop position", got)
+	}
+	assertStorePositionsContiguous(t, store, board.Todo)
+}
+
+// Card ui/09 (toward-the-top arm) — dragging a later card to the column's
+// top is the same same-column leg: the drop index is computed against the
+// list after removal, so the line above card 2 asks for position 0 and the
+// card lands first, ahead of both neighbours.
+func TestDragReorderToTopOfColumnLandsFirst(t *testing.T) {
+	store, uiSrv, log := moveChain(t, "Write weekly report", "Fix login redirect", "Buy milk")
+
+	status, frag := dragMove(t, uiSrv.URL, 3, "To Do", 0)
+	if status != http.StatusOK {
+		t.Fatalf("PATCH /ui/cards/3/move status = %d, want 200 (body %s)", status, frag)
+	}
+	assertOneMoveRequest(t, log, 3, "todo", 0)
+
+	assertColumnOrder(t, frag, "to-do", 3, 1, 2)
+	if got := cardTitles(t, store, board.Todo); len(got) != 3 ||
+		got[0] != "Buy milk" || got[1] != "Write weekly report" || got[2] != "Fix login redirect" {
+		t.Errorf("store To Do column = %q, want the dragged card first", got)
+	}
+	assertStorePositionsContiguous(t, store, board.Todo)
+}
