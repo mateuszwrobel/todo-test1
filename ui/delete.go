@@ -26,10 +26,9 @@ import (
 // fresh board (rendered at 200 — htmx treats a 204 as "nothing to swap", and
 // the card's contract is the board re-rendered without it, which is exactly
 // the contract's own observable truth: the next GET /board), and on a stale
-// card (404) the missing-card banner over the truth without it — edit's
-// stated-404 arm reused verbatim (same missingCardTmpl banner, same truth
-// re-render, same mirrored status), one mechanism per failure class across
-// verbs rather than a second one.
+// card (404) the shared stale-failure surface (stale.go) — byte-for-byte the
+// same surface the edit and move verbs serve, one mechanism per failure
+// class across verbs rather than a second one.
 func (p *page) handleDelete(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
@@ -52,20 +51,11 @@ func (p *page) handleDelete(w http.ResponseWriter, r *http.Request) {
 		writeHTML(w, http.StatusOK, b)
 	case http.StatusNotFound:
 		// Already gone behind the page's back (deleted in another session):
-		// the failure is stated in the contract's own words, the truth
-		// re-renders without the card, and nothing is left looking deleted
-		// by a click that did nothing. Reloading reads the same truth, so
-		// the statement never outlives the reload.
-		var b bytes.Buffer
-		if err := writeFragment(&b, missingCardTmpl, reason); err != nil {
-			http.Error(w, "render failed", http.StatusInternalServerError)
-			return
-		}
-		if err := p.writeBoardAreaFragment(&b); err != nil {
-			http.Error(w, "render failed", http.StatusInternalServerError)
-			return
-		}
-		writeHTML(w, http.StatusNotFound, b)
+		// the shared stale-failure surface — the same banner over the same
+		// truth every verb serves (stale.go). Nothing is left looking
+		// deleted by a click that did nothing, and reloading reads the same
+		// truth, so the statement never outlives the reload.
+		p.writeStaleFailure(w, reason)
 	default:
 		http.Error(w, reason, status)
 	}

@@ -43,12 +43,13 @@ var pageTmpl = template.Must(template.New("page").Parse(`<!doctype html>
 // whose body is already-rendered HTML for the same surface the operation
 // acts on. Route those bodies through the same htmx swap engine — no
 // browser-side rendering happens here. Carried over from the retired todo
-// shell and scoped to the create control; the edit control's refusals join
-// this routing (422 states the reason at the re-rendered card, 404 states
-// the missing card above the truth without it — both bodies are the board
-// area), and the delete control's 404 refusal joins it at KW4 (card ui/07):
-// the same banner-over-truth body, swapped the same way — one mechanism per
-// failure class. Drag refusals join at their own card (KW5).
+// shell and scoped to the create control; the edit and delete controls'
+// refusals route here too: a 422 states the reason at the re-rendered
+// card, a 404 is the shared stale-failure surface (stale.go) — banner over
+// the truth, swapped into #board-area the same way for every verb. The
+// drag's answers arrive through the fetch below and take the very same
+// fragments into the very same region — one surface per failure class
+// across all three verbs.
 document.body.addEventListener('htmx:responseError', function (event) {
   var elt = event.detail && event.detail.elt;
   var text = event.detail.xhr.responseText;
@@ -206,17 +207,16 @@ document.body.addEventListener('drop', function (event) {
       // Success fragments and the stated 404/422 fragments are both already
       // rendered HTML for the board surface — the same swap-the-region
       // machinery every other operation uses, just issued by fetch instead
-      // of htmx.
+      // of htmx. A stale drop's body is the shared stale-failure surface
+      // (stale.go), landing in the same #board-area as every other verb's.
       return resp.text().then(function (html) {
         document.getElementById('board-area').innerHTML = html;
       });
     }
     return resp.text().then(function () {}); // plain error leg: board keeps
-    // the last server truth; the shared stated surface is card ui/11's seam
+    // the last server truth (the stale-failure surface owns the 404 class)
   }).catch(function () {
-    // Transport failure: the board still shows the last server truth. The
-    // shared stated-failure surface lands with card ui/11 — no second
-    // mechanism here.
+    // Transport failure: the board still shows the last server truth.
   });
 });
 

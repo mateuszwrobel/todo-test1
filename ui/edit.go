@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"io"
 	"net/http"
 	"strconv"
@@ -21,15 +20,6 @@ import (
 // position in the same column wherever the server keeps it. The column
 // field is deliberately absent: moving is the drag card's operation (KW5).
 
-// missingCardTmpl states the stale-edit failure above the board: the
-// contract's own reason ("no such card") in the design system's banner
-// class, riding with the truth re-render so the stale card is simply gone
-// and nothing is left looking edited. The full stale surface shared by
-// every card operation lands with card ui/11 (KW5); this is the edit's
-// stated 404 arm.
-var missingCardTmpl = template.Must(template.New("missing-card").Parse(
-	`<div id="missing-card" class="banner" role="alert">{{.}}</div>`))
-
 // handleEdit — PATCH /ui/cards/{id}. It performs the title change by
 // issuing PATCH {apiBase}/cards/{id} over real HTTP with the contract's
 // {"title": ...} body, then answers the resulting state as a swap fragment
@@ -38,7 +28,7 @@ var missingCardTmpl = template.Must(template.New("missing-card").Parse(
 // new title; on a contract refusal (422) the board re-rendered from server
 // truth with the stated reason at the editing card, the card's original
 // title intact and the contract's status mirrored; on a stale card (404)
-// the missing-card banner over the truth without it.
+// the shared stale-failure surface (stale.go) — identical for every verb.
 func (p *page) handleEdit(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
@@ -76,19 +66,9 @@ func (p *page) handleEdit(w http.ResponseWriter, r *http.Request) {
 		writeHTML(w, http.StatusUnprocessableEntity, b)
 	case http.StatusNotFound:
 		// The card vanished behind the page's back (deleted in another
-		// session): the failure is stated, the truth re-renders without
-		// it, and nothing is left looking edited. Reloading reads the
-		// same truth, so the statement never outlives the reload.
-		var b bytes.Buffer
-		if err := writeFragment(&b, missingCardTmpl, reason); err != nil {
-			http.Error(w, "render failed", http.StatusInternalServerError)
-			return
-		}
-		if err := p.writeBoardAreaFragment(&b); err != nil {
-			http.Error(w, "render failed", http.StatusInternalServerError)
-			return
-		}
-		writeHTML(w, http.StatusNotFound, b)
+		// session): the shared stale-failure surface — the same banner over
+		// the same truth every verb serves (stale.go).
+		p.writeStaleFailure(w, reason)
 	default:
 		http.Error(w, reason, status)
 	}

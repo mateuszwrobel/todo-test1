@@ -144,9 +144,9 @@ func TestDeleteDoneCardIsNotSpecial(t *testing.T) {
 }
 
 // Card ui/07 (stale arm) / parent scenario s11 (delete leg) — a delete of a
-// card the server no longer holds (already deleted elsewhere) states the
-// failure in the contract's own words and re-renders the truth without the
-// card — edit's stated-404 arm, one mechanism per failure class across verbs.
+// card the server no longer holds states the failure in the contract's own
+// words and re-renders the truth without the card — the shared stale-failure
+// surface (stale.go), one mechanism per failure class across verbs.
 func TestDeleteOfUnknownCardStatesMissing(t *testing.T) {
 	store, uiSrv := realChain(t, "Still here")
 

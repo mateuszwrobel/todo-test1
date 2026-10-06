@@ -30,11 +30,12 @@ import (
 // clamp rule, not restated here.
 //
 // The rejection legs reuse the shipped machinery verbatim — no second
-// mechanism: the stale card (404) takes edit.go's missing-card banner over
-// the truth, and a contract refusal (422, in practice the invalid-column
+// mechanism: the stale card (404) takes the shared stale-failure surface
+// (stale.go), byte-for-byte the one surface the edit and delete verbs
+// serve, and a contract refusal (422, in practice the invalid-column
 // guard) is stated AT the dragged card over the unchanged truth exactly as
-// the edit refusal is (attachEditError; the field's edit-era name is one
-// rename away from the card-wide surface card ui/11 consolidates next).
+// the edit refusal is (attachEditError) — validation stays its own class
+// with its own surface, card ui/11 consolidated only the stale one.
 
 // columnKeysByName mirrors the contract's fixed column enum between the
 // display titles the page renders (and the drag carries, straight off the
@@ -56,10 +57,11 @@ var columnKeysByName = map[string]string{
 // is the lands-at-the-drop-position guarantee, including the source column
 // closing its gap and a Done landing rendering with the done treatment
 // because column membership is the done state; on a stale card (404) the
-// missing-card banner over the truth (edit's arm verbatim, mirrored status);
-// on a contract refusal (422) the truth with the contract's reason stated at
-// the dragged card, mirrored status; anything else the plain error at the
-// contract's status (edit's and delete's default arm).
+// shared stale-failure surface (stale.go, mirrored status — the one surface
+// all three verbs serve); on a contract refusal (422) the truth with the
+// contract's reason stated at the dragged card, mirrored status; anything
+// else the plain error at the contract's status (edit's and delete's
+// default arm).
 func (p *page) handleMove(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
@@ -111,20 +113,11 @@ func (p *page) handleMove(w http.ResponseWriter, r *http.Request) {
 		}
 		writeHTML(w, http.StatusUnprocessableEntity, b)
 	case http.StatusNotFound:
-		// The dragged card vanished behind the page's back: the failure is
-		// stated, the truth re-renders without it, and nothing is left
-		// looking moved. edit.go's arm verbatim — one mechanism per
-		// failure class across verbs, consolidation is card ui/11's.
-		var b bytes.Buffer
-		if err := writeFragment(&b, missingCardTmpl, reason); err != nil {
-			http.Error(w, "render failed", http.StatusInternalServerError)
-			return
-		}
-		if err := p.writeBoardAreaFragment(&b); err != nil {
-			http.Error(w, "render failed", http.StatusInternalServerError)
-			return
-		}
-		writeHTML(w, http.StatusNotFound, b)
+		// The dragged card vanished behind the page's back: the shared
+		// stale-failure surface — the same banner over the same truth the
+		// edit and delete verbs serve (stale.go). Nothing is left looking
+		// moved.
+		p.writeStaleFailure(w, reason)
 	default:
 		http.Error(w, reason, status)
 	}

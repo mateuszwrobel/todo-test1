@@ -291,21 +291,30 @@ func TestEditCancelIsClientSideOnly(t *testing.T) {
 
 // Parent scenario (s11 leg) — Stale edit states the failure.
 // Given the page shows a card the server no longer holds (deleted in
-// another session — here, an id the board never had, indistinguishable to
-// this page until delete lands at KW4),
+// another session — here, deleted straight from the real store between the
+// render and the save),
 // When  the user saves an edit on it
 // Then  the edit is not applied — the truth re-renders without the card,
 //
 //	nothing left faking the change — and the page states that the card
-//	does not exist, in the contract's own words
+//	does not exist, in the contract's own words, at the shared
+//	stale-failure surface every verb serves (stale.go)
 func TestEditOfUnknownCardStatesMissing(t *testing.T) {
-	store, uiSrv := realChain(t, "Still here")
+	store, uiSrv := realChain(t, "Still here", "Gone soon")
 
-	status, frag := patchCardForm(t, uiSrv.URL, 999, "ghost edit")
+	_, page := getPage(t, uiSrv.URL+"/")
+	if !strings.Contains(page, `id="card-2"`) {
+		t.Fatalf("page does not show the card about to vanish:\n%s", page)
+	}
+	if err := store.Delete(2); err != nil {
+		t.Fatalf("out-of-band delete: %v", err)
+	}
+
+	status, frag := patchCardForm(t, uiSrv.URL, 2, "ghost edit")
 
 	// The contract's 404, mirrored onto the fragment.
 	if status != http.StatusNotFound {
-		t.Fatalf("PATCH /ui/cards/999 status = %d, want 404 (body %s)", status, frag)
+		t.Fatalf("PATCH /ui/cards/2 status = %d, want 404 (body %s)", status, frag)
 	}
 	// The stated failure at the top of the swap surface — the contract's
 	// own "no such card" in the design system's banner, so the edit
@@ -314,7 +323,7 @@ func TestEditOfUnknownCardStatesMissing(t *testing.T) {
 	if !strings.Contains(frag, `class="banner" role="alert">no such card<`) {
 		t.Errorf("stated missing-card failure not rendered:\n%s", frag)
 	}
-	if strings.Contains(frag, `id="card-999"`) {
+	if strings.Contains(frag, `id="card-2"`) {
 		t.Errorf("stale card left on the board:\n%s", frag)
 	}
 	if !strings.Contains(frag, "Still here") {

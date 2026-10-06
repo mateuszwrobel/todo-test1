@@ -223,16 +223,20 @@ func TestDragIntoDoneLandsWithDoneTreatment(t *testing.T) {
 	}
 }
 
-// Card ui/08 (stale leg) — dropping a card the server no longer holds takes
-// the shipped stated-404 arm verbatim (edit's banner-over-truth, mirrored
-// status): the move never applied, and the card ui/11 surface will own the
-// consolidated statement later. Nothing moved.
+// Card ui/08 (stale leg) / card ui/11 (move leg) — dropping a card the
+// server no longer holds takes the shared stale-failure surface (stale.go):
+// the same banner over the truth every verb serves, mirrored status. The
+// staleness is produced end-to-end through the real store — the card
+// renders, then is deleted out-of-band before the drop. Nothing moved.
 func TestDragMoveOfUnknownCardStatesMissing(t *testing.T) {
-	store, uiSrv, log := moveChain(t, "Still here")
+	store, uiSrv, log := moveChain(t, "Still here", "Gone away")
+	if err := store.Delete(2); err != nil {
+		t.Fatalf("out-of-band delete: %v", err)
+	}
 
-	status, frag := dragMove(t, uiSrv.URL, 999, "In Progress", 0)
+	status, frag := dragMove(t, uiSrv.URL, 2, "In Progress", 0)
 	if status != http.StatusNotFound {
-		t.Fatalf("PATCH /ui/cards/999/move status = %d, want 404 (body %s)", status, frag)
+		t.Fatalf("PATCH /ui/cards/2/move status = %d, want 404 (body %s)", status, frag)
 	}
 	if len(log.patches()) != 1 {
 		t.Fatalf("the contract saw %v, want exactly one attempted move", log.patches())
@@ -240,7 +244,7 @@ func TestDragMoveOfUnknownCardStatesMissing(t *testing.T) {
 	if !strings.Contains(frag, `class="banner" role="alert">no such card<`) {
 		t.Errorf("stale move did not state the failure:\n%s", frag)
 	}
-	if strings.Contains(frag, `id="card-999"`) || !strings.Contains(frag, "Still here") {
+	if strings.Contains(frag, `id="card-2"`) || !strings.Contains(frag, "Still here") {
 		t.Errorf("truth not re-rendered under the stale-move failure:\n%s", frag)
 	}
 	if got := cardTitles(t, store, board.Todo); len(got) != 1 || got[0] != "Still here" {
