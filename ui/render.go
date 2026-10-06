@@ -209,8 +209,16 @@ document.body.addEventListener('drop', function (event) {
       // machinery every other operation uses, just issued by fetch instead
       // of htmx. A stale drop's body is the shared stale-failure surface
       // (stale.go), landing in the same #board-area as every other verb's.
+      // htmx 2.x processes only content that arrives through its own swap
+      // (the MutationObserver auto-scan is gone), so this site — the page's
+      // only raw innerHTML assignment — must wire the injected markup
+      // itself: without htmx.process the re-rendered cards' edit form would
+      // submit natively (a page navigation, edit discarded) and their
+      // Delete controls would sit inert until the next full render.
       return resp.text().then(function (html) {
-        document.getElementById('board-area').innerHTML = html;
+        var boardArea = document.getElementById('board-area');
+        boardArea.innerHTML = html;
+        htmx.process(boardArea);
       });
     }
     return resp.text().then(function () {}); // plain error leg: board keeps
