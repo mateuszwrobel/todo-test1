@@ -1,0 +1,45 @@
+{
+  "canvas_settings": {
+    "aspect_ratio": "1:1",
+    "ambient_lighting": "flat, even UI lighting",
+    "image_style": "clean modern high-fidelity web app UI mockup, flat design, sans-serif typography, light theme"
+  },
+  "layers": [
+    {
+      "description": "Solid light grey page backdrop filling the entire square canvas behind everything else.",
+      "coordinates": "cx: 0.500, cy: 0.500, w: 1.000, h: 1.000",
+      "hierarchy_and_relation": "Root background layer; the browser window floats centered on top of it.",
+      "color_specs": ["#F3F4F6"]
+    },
+    {
+      "description": "A desktop browser window with rounded corners and a soft drop shadow, white content area, occupying most of the canvas; its chrome strip along the window top shows three small grey circular window buttons at the left and a wide rounded grey address bar holding the small grey web address \"localhost:3000\".",
+      "coordinates": "cx: 0.500, cy: 0.500, w: 0.920, h: 0.720",
+      "hierarchy_and_relation": "Centered above the background; the app card sits inside its white content area below the chrome strip.",
+      "color_specs": ["#FFFFFF", "#E5E7EB", "#F9FAFB", "#D1D5DB"]
+    },
+    {
+      "description": "App header band across the top of the white content area: on the left the bold dark heading \"Kanban board\"; on the right a rounded text input outlined in red holding a few invisible typed spaces, followed by a blue rounded button with white label \"Add\"; directly below the input a small red error message reads \"title is required\".",
+      "coordinates": "cx: 0.500, cy: 0.250, w: 0.840, h: 0.090",
+      "hierarchy_and_relation": "Inside the browser window content area, above the three board columns; the error line sits just under the input.",
+      "color_specs": ["#111827", "#FFFFFF", "#EF4444", "#3B82F6", "#6B7280"]
+    },
+    {
+      "description": "A single rounded light column panel with a thin border titled by the bold heading \"To Do\" at its top, holding a vertical stack of three plain white card rows separated by thin dividers; each card row shows its dark title text at the left and two small grey action labels \"Edit\" and \"Delete\" at the right edge. Card row titles, top to bottom: \"Write weekly report\", \"Fix login redirect\", \"Buy milk\".",
+      "coordinates": "cx: 0.255, cy: 0.580, w: 0.270, h: 0.480",
+      "hierarchy_and_relation": "Leftmost of three equal board columns arranged side by side with equal gaps; cards are drawn strictly inside this panel.",
+      "color_specs": ["#F9FAFB", "#E5E7EB", "#FFFFFF", "#111827", "#6B7280"]
+    },
+    {
+      "description": "A single rounded light column panel with a thin border titled by the bold heading \"In Progress\" at its top, holding a vertical stack of two plain white card rows separated by a thin divider; each card row shows its dark title text at the left and two small grey action labels \"Edit\" and \"Delete\" at the right edge. Card row titles, top to bottom: \"Refactor board module\", \"Draft ADR-004\". Below the last card the panel interior is empty.",
+      "coordinates": "cx: 0.500, cy: 0.580, w: 0.270, h: 0.480",
+      "hierarchy_and_relation": "Middle of the three equal board columns; cards are drawn strictly inside this panel.",
+      "color_specs": ["#F9FAFB", "#E5E7EB", "#FFFFFF", "#111827", "#6B7280"]
+    },
+    {
+      "description": "A single rounded light column panel with a thin border titled by the bold heading \"Done\" at its top, holding a vertical stack of two card rows separated by a thin divider; each card row shows a small green circular check icon at the left, then muted grey title text, then two small grey action labels \"Edit\" and \"Delete\" at the right edge. Card row titles, top to bottom: \"Migrate todo list\", \"Set up CI\". No checkbox appears anywhere on these rows.",
+      "coordinates": "cx: 0.745, cy: 0.580, w: 0.270, h: 0.480",
+      "hierarchy_and_relation": "Rightmost of the three equal board columns; cards are drawn strictly inside this panel.",
+      "color_specs": ["#F9FAFB", "#E5E7EB", "#FFFFFF", "#10B981", "#9CA3AF", "#6B7280"]
+    }
+  ]
+}

@@ -1,0 +1,78 @@
+{
+  "canvas_settings": {
+    "aspect_ratio": "1:1",
+    "ambient_lighting": "flat, even UI lighting",
+    "image_style": "clean modern high-fidelity web app UI mockup, flat design, sans-serif typography, light theme"
+  },
+  "layers": [
+    {
+      "description": "Solid light grey page backdrop filling the entire square canvas behind everything else.",
+      "coordinates": "cx: 0.500, cy: 0.500, w: 1.000, h: 1.000",
+      "hierarchy_and_relation": "Root background layer; the browser window floats centered on top of it.",
+      "color_specs": [
+        "#F3F4F6"
+      ]
+    },
+    {
+      "description": "A desktop browser window with rounded corners and a soft drop shadow, white content area, occupying most of the canvas; its chrome strip along the window top shows three small grey circular window buttons at the left and a wide rounded grey address bar holding the small grey web address \"localhost:3000\".",
+      "coordinates": "cx: 0.500, cy: 0.500, w: 0.920, h: 0.720",
+      "hierarchy_and_relation": "Centered above the background; the app content sits inside its white content area below the chrome strip.",
+      "color_specs": [
+        "#FFFFFF",
+        "#E5E7EB",
+        "#F9FAFB",
+        "#D1D5DB"
+      ]
+    },
+    {
+      "description": "App header band across the top of the white content area: on the left the bold dark heading \"Kanban board\"; on the right a rounded text input with grey placeholder text \"Add a card…\" followed by a blue rounded button with white label \"Add\".",
+      "coordinates": "cx: 0.500, cy: 0.240, w: 0.840, h: 0.070",
+      "hierarchy_and_relation": "Inside the browser window content area, above the three board columns.",
+      "color_specs": [
+        "#111827",
+        "#FFFFFF",
+        "#E5E7EB",
+        "#6B7280",
+        "#3B82F6"
+      ]
+    },
+    {
+      "description": "A single rounded light column panel with a thin border titled by the bold heading \"To Do\" at its top, holding a vertical stack of three plain white card rows separated by thin dividers; each card row shows its dark title text at the left and two small grey action labels \"Edit\" and \"Delete\" at the right edge. Card row titles, top to bottom: \"Write weekly report\", \"Fix login redirect\", \"Buy milk\".",
+      "coordinates": "cx: 0.255, cy: 0.560, w: 0.270, h: 0.520",
+      "hierarchy_and_relation": "Leftmost of three equal board columns arranged side by side with equal gaps.",
+      "color_specs": [
+        "#F9FAFB",
+        "#E5E7EB",
+        "#FFFFFF",
+        "#111827",
+        "#6B7280"
+      ]
+    },
+    {
+      "description": "A single rounded light column panel with a thin border titled by the bold heading \"In Progress\" at its top, holding a vertical stack of two rows separated by a thin divider: the first row is an active inline edit band — a white rounded text input outlined in blue prefilled with the dark text \"Refactor board module\", followed at the right by a small blue rounded button with white label \"Save\"; the second row is a plain white card row with dark title \"Draft ADR-004\" and two small grey labels \"Edit\" and \"Delete\" at its right edge.",
+      "coordinates": "cx: 0.500, cy: 0.560, w: 0.270, h: 0.520",
+      "hierarchy_and_relation": "Middle of the three equal board columns; the edit band replaces the card row it edits in place.",
+      "color_specs": [
+        "#F9FAFB",
+        "#E5E7EB",
+        "#FFFFFF",
+        "#3B82F6",
+        "#111827",
+        "#6B7280"
+      ]
+    },
+    {
+      "description": "A single rounded light column panel with a thin border titled by the bold heading \"Done\" at its top, holding a vertical stack of two card rows separated by a thin divider; each card row shows a small green circular check icon at the left, then muted grey title text, then two small grey action labels \"Edit\" and \"Delete\" at the right edge. Card row titles, top to bottom: \"Migrate todo list\", \"Set up CI\".",
+      "coordinates": "cx: 0.745, cy: 0.560, w: 0.270, h: 0.520",
+      "hierarchy_and_relation": "Rightmost of the three equal board columns.",
+      "color_specs": [
+        "#F9FAFB",
+        "#E5E7EB",
+        "#FFFFFF",
+        "#10B981",
+        "#9CA3AF",
+        "#6B7280"
+      ]
+    }
+  ]
+}
