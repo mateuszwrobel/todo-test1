@@ -69,10 +69,12 @@ func freeAddr(t *testing.T) string {
 // path is always caller-supplied and a temp path: leaving the flag out
 // would write the kanban.db default into the package dir. (The --db flag
 // retired with the todo store at api/10 — the board file is the only data
-// file the command opens.)
-func startServer(t *testing.T, addr, boardDBPath string) *exec.Cmd {
+// file the command writes.) Extra args ride after the board flag, e.g. the
+// migration lane's --todo-db.
+func startServer(t *testing.T, addr, boardDBPath string, extra ...string) *exec.Cmd {
 	t.Helper()
-	cmd := exec.Command(buildBinary(t), "--addr", addr, "--board-db", boardDBPath)
+	args := append([]string{"--addr", addr, "--board-db", boardDBPath}, extra...)
+	cmd := exec.Command(buildBinary(t), args...)
 	out := &lockedBuffer{}
 	cmd.Stdout = out
 	cmd.Stderr = out

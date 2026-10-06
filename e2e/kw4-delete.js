@@ -91,9 +91,9 @@ function getJSON(url) {
 }
 
 // The composition root opens only the board data file. Point the flag at a
-// temp file so no run touches a file beside the repo.
+// temp file so no run touches a file beside the repo; the KW6 migration flag (--todo-db) points at a never-created path — these lanes state no todo data file, and a superseded todos.db beside the repo must not leak in.
 function startServer(port, boardDb) {
-  const proc = spawn(serverBin, ['--addr', `127.0.0.1:${port}`, '--board-db', boardDb], {
+  const proc = spawn(serverBin, ['--addr', `127.0.0.1:${port}`, '--board-db', boardDb, '--todo-db', boardDb + '.todos-absent'], {
     stdio: ['ignore', 'ignore', 'pipe'],
   });
   let stderr = '';

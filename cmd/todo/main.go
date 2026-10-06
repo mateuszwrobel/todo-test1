@@ -39,6 +39,7 @@ func run(args []string, stderr io.Writer) error {
 	fs.SetOutput(stderr)
 	addr := fs.String("addr", "127.0.0.1:8080", "listen address for page and JSON contract together")
 	boardDBPath := fs.String("board-db", "kanban.db", "board data file path")
+	todoDBPath := fs.String("todo-db", "todos.db", "superseded todo data file, read read-only once at first start (migration flag, delete after KW6)")
 	if err := fs.Parse(args); err != nil {
 		return fmt.Errorf("malformed flags: %w", err)
 	}
@@ -50,14 +51,22 @@ func run(args []string, stderr io.Writer) error {
 	// the store → build the ui handlers with the api's base URL → register
 	// routes → serve. The listener bind precedes the ui constructors so the
 	// base URL is the address actually bound (exact even for ephemeral
-	// ports); no lazy wiring. The board store is the only data file: the
-	// todo store and its --db flag retired with the last todo endpoint
-	// (api/10). An absent board file opens as an empty board (board/01).
+	// ports); no lazy wiring. The board store is the only data file the
+	// command writes: the todo store and its --db flag retired with the
+	// last todo endpoint (api/10). An absent board file opens as an empty
+	// board (board/01). Before anything serves, the one-time migration
+	// (server/02, server/05) may read the superseded todo file — read-only,
+	// never written — and seed the fresh board through the store in one
+	// transaction; a failing import fails startup loudly, migration.go.
 	boardStore, err := board.Open(*boardDBPath)
 	if err != nil {
 		return err
 	}
 	defer boardStore.Close()
+
+	if err := importTodos(boardStore, *todoDBPath); err != nil {
+		return err
+	}
 
 	apiHandler := api.NewHandler(boardStore)
 
