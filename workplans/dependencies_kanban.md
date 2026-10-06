@@ -4,7 +4,7 @@ Companion to the scenario cards in `workplans/scenarios-kanban/` and the module 
 
 Work proceeds **feature by feature**: a wave delivers one feature vertically — store → contract translation → page — and ends with that feature integrated against the real code landed earlier in the same wave. No fake-then-replace staging, no module-by-module lanes. The standing law: **a module is never implemented wholesale**; a module grows one feature per wave it appears in.
 
-Superseded code retires as its replacement lands: the `todos` store package is deleted in the wave whose composition no longer references it (KW1 wiring replaces the store; deletion lands with KW1 when the board serves); todo list-render components retire in KW1/KW2 when board rendering replaces them; todo endpoints retire in the wave their kanban counterpart lands (GET in KW1, POST in KW2, PATCH in KW3/KW5, DELETE in KW4).
+Superseded code retires as its replacement lands: the `todos` store package is deleted in the wave whose composition no longer references it (KW1 wiring replaces the store's role; package deletion lands with KW4 when the last surviving todo endpoint retires); todo list-render components retire in KW1/KW2 when board rendering replaces them; todo endpoints retire in the wave their kanban counterpart lands (GET in KW1, POST in KW2, PATCH in KW3/KW5, DELETE in KW4).
 
 Card notation: `<module>/<NN>`. Every card appears in exactly one wave; intra-wave rows give each card's concrete dependencies.
 
