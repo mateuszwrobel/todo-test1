@@ -163,6 +163,126 @@ func validateText(text string) (string, error) {
 	return trimmed, nil
 }
 
+// Change applies the given directions to the card identified by id in one
+// transaction and returns the card as it now stands. A nil direction is left
+// untouched; at least one direction must be non-nil.
+//
+// The title direction runs through validateText — the module's single text
+// rule, the same function Create screens through — BEFORE the transaction
+// opens: blank text is ErrTextRequired and over-long text ErrTextTooLong, each
+// with no statement executed, so a rejected change leaves the board exactly as
+// it was. The stored title is the trimmed text. A title-only change touches
+// nothing else: the card keeps its column, its position, and its identifier —
+// place and identity survive the rename — and done-column cards are fully
+// editable, because no frozen state is stored anywhere (column membership is
+// the only done state).
+//
+// The column direction moves the card to the bottom of the target column and
+// closes the gap in the source column, so every column's positions stay
+// contiguous 0..n-1 inside the same transaction. A requested column equal to
+// the card's current one places nothing — Change never reorders within a
+// column here; neighbor-ordering semantics (insert at an index, same-column
+// reorder) are dedicated operations in their own cards (board/06, board/07,
+// KW5). Until the enum guard lands with board/10, a column outside the fixed
+// set is refused only by the schema CHECK, which rolls the write back.
+func (s *Store) Change(id int64, title *string, column *Column) (Card, error) {
+	if title == nil && column == nil {
+		return Card{}, fmt.Errorf("change card %d: nothing to change (title and column both nil)", id)
+	}
+
+	// Validation precedes every write: the text rule is the first statement
+	// after the argument check, before Begin, before any SQL — same ordering
+	// guarantee Create gives, same rule function.
+	trimmed := ""
+	if title != nil {
+		var err error
+		trimmed, err = validateText(*title)
+		if err != nil {
+			return Card{}, fmt.Errorf("change card %d: %w", id, err)
+		}
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return Card{}, fmt.Errorf("change card %d: %w", id, err)
+	}
+	defer tx.Rollback() // no-op after Commit
+
+	var card Card
+	err = tx.QueryRow(
+		`SELECT id, title, "column", position FROM cards WHERE id = ?`, id,
+	).Scan(&card.ID, &card.Title, &card.Column, &card.Position)
+	if err != nil {
+		return Card{}, fmt.Errorf("change card %d: %w", id, err)
+	}
+
+	if title != nil {
+		if _, err := tx.Exec(`UPDATE cards SET title = ? WHERE id = ?`, trimmed, id); err != nil {
+			return Card{}, fmt.Errorf("change card %d: %w", id, err)
+		}
+		card.Title = trimmed
+	}
+
+	if column != nil && *column != card.Column {
+		var position int
+		if err := tx.QueryRow(
+			`SELECT count(*) FROM cards WHERE "column" = ?`, string(*column),
+		).Scan(&position); err != nil {
+			return Card{}, fmt.Errorf("change card %d: %w", id, err)
+		}
+		if _, err := tx.Exec(
+			`UPDATE cards SET "column" = ?, position = ? WHERE id = ?`,
+			string(*column), position, id,
+		); err != nil {
+			return Card{}, fmt.Errorf("change card %d: %w", id, err)
+		}
+		if err := renormalize(tx, card.Column); err != nil {
+			return Card{}, fmt.Errorf("change card %d: %w", id, err)
+		}
+		card.Column, card.Position = *column, position
+	}
+
+	if err := tx.Commit(); err != nil {
+		return Card{}, fmt.Errorf("change card %d: %w", id, err)
+	}
+	return card, nil
+}
+
+// renormalize rewrites a column's positions to contiguous 0..n-1 in the
+// column's current top-to-bottom order, closing the gap a card leaving the
+// column opened. It runs inside the caller's transaction, so the gap closes or
+// rolls back with the mutation that caused it — the invariant "positions are
+// exactly 0..n-1 per column" is never observable as broken.
+func renormalize(tx *sql.Tx, col Column) error {
+	rows, err := tx.Query(
+		`SELECT id FROM cards WHERE "column" = ? ORDER BY position ASC, id ASC`,
+		string(col),
+	)
+	if err != nil {
+		return fmt.Errorf("renormalize column %q: %w", col, err)
+	}
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return fmt.Errorf("renormalize column %q: %w", col, err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return fmt.Errorf("renormalize column %q: %w", col, err)
+	}
+	rows.Close()
+	for pos, id := range ids {
+		if _, err := tx.Exec(`UPDATE cards SET position = ? WHERE id = ?`, pos, id); err != nil {
+			return fmt.Errorf("renormalize column %q: %w", col, err)
+		}
+	}
+	return nil
+}
+
 // List returns the board: the three fixed columns in the order todo,
 // in_progress, done — all three always present, empty ones holding no cards —
 // each column's cards top-to-bottom by position. The ordered read is grouped
