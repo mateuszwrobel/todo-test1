@@ -161,8 +161,8 @@ const MaxTextLen = 500
 var ErrTextTooLong = fmt.Errorf("board: card text exceeds the %d character limit", MaxTextLen)
 
 // validateText is the module's single text rule: every entry point into the
-// board (Create, Change, Seed) runs candidate text through it before storage
-// is touched, so one rule source covers all paths and a rejection is always
+// board (Create, Change, Seed, Import) runs candidate text through it before
+// storage is touched, so one rule source covers all paths and a rejection is always
 // a named store outcome, never a storage-constraint failure. The rules:
 // non-blank once trimmed, at most MaxTextLen characters (runes) once trimmed.
 // It returns the normalized (trimmed) text to store.
@@ -589,6 +589,106 @@ func (s *Store) Seed(column Column, texts []string) error {
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("seed column %q: %w", column, err)
+	}
+	return nil
+}
+
+// SeedBatch is one column's slice of an Import: the target column and the
+// texts to place in it, top-to-bottom.
+type SeedBatch struct {
+	Column Column
+	Texts  []string
+}
+
+// Import bulk-places several ordered lists of texts — one per column — in
+// ONE transaction: Seed's multi-column sibling, the primitive a migration
+// drives when its material spans columns and the composition root wants the
+// whole import to land as a unit (deciding WHAT to import stays in the
+// composition root — this is still a plain ordered insert, not a migration
+// policy). The given order IS the result per column: each list lands below
+// any cards already in its column, in exactly the order the list states,
+// with the same placement semantics as Seed — the column's first imported
+// card takes the column's count at the moment of arrival, the next count+1,
+// and so on — so when the import commits every column still satisfies the
+// module invariant, contiguous 0..n-1 top-to-bottom, the imported order
+// below any residents. As in Seed, identifiers come from the same
+// autoincrement Create draws from: an import never imports or preserves
+// identifiers, every card it writes is new to this board. Batches naming the
+// same column append below each other in batch order, so the batch list
+// alone decides each column's final layout.
+//
+// Validation is Seed's, widened across the batch dimension, and it all
+// decides before any write: every batch's column is screened against the
+// fixed enum first (ErrInvalidColumn, naming the batch — the guard answers
+// even when the list of texts is empty), then every batch's every text runs
+// through validateText, the module's single text rule, at its batch and
+// entry index. One bad entry anywhere — bad text or bad column, in any
+// batch — refuses the whole import with the typed store error naming the
+// batch and entry, with no statement executed, so the board is exactly as it
+// was and no identifier is consumed; the column guards answering before any
+// text is read means a bad column wins over text faults. An accepted import
+// runs in one transaction (each column's count, then one insert per text)
+// and commits once: every column gains every card in order, or nothing at
+// all. An empty batches list — or one whose batches hold no texts — is a
+// no-op answered with nil: nothing is read, nothing is written.
+func (s *Store) Import(batches []SeedBatch) error {
+	// Enum guard first, across all batches: Seed's "the guard answers
+	// before the texts are read" widened to the batch dimension, so a bad
+	// column wins over any text fault regardless of batch order.
+	for i, batch := range batches {
+		if !validColumn(batch.Column) {
+			return fmt.Errorf("import batch %d: column %q is not todo, in_progress, or done: %w",
+				i, string(batch.Column), ErrInvalidColumn)
+		}
+	}
+	// Then every text through validateText, at its batch and entry index;
+	// the trimmed titles are kept so the transaction inserts exactly what
+	// the rule normalized, as Seed does.
+	titles := make([][]string, len(batches))
+	total := 0
+	for i, batch := range batches {
+		titles[i] = make([]string, len(batch.Texts))
+		for j, text := range batch.Texts {
+			title, err := validateText(text)
+			if err != nil {
+				return fmt.Errorf("import batch %d entry %d: %w", i, j, err)
+			}
+			titles[i][j] = title
+		}
+		total += len(titles[i])
+	}
+	if total == 0 {
+		return nil
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("import: %w", err)
+	}
+	defer tx.Rollback() // no-op after Commit
+
+	for i, batch := range batches {
+		if len(titles[i]) == 0 {
+			continue // a batch of no texts reads and writes nothing
+		}
+		var position int
+		if err := tx.QueryRow(
+			`SELECT count(*) FROM cards WHERE "column" = ?`, string(batch.Column),
+		).Scan(&position); err != nil {
+			return fmt.Errorf("import batch %d column %q: %w", i, string(batch.Column), err)
+		}
+		for _, title := range titles[i] {
+			if _, err := tx.Exec(
+				`INSERT INTO cards (title, "column", position) VALUES (?, ?, ?)`,
+				title, string(batch.Column), position,
+			); err != nil {
+				return fmt.Errorf("import batch %d column %q: %w", i, string(batch.Column), err)
+			}
+			position++
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("import: %w", err)
 	}
 	return nil
 }
