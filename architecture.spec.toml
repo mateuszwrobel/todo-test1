@@ -1,8 +1,9 @@
 # architecture.spec.toml — todo application module boundaries (spec-first, ADR-001)
 #
 # Planned go layout, module rooted at this directory:
-#   todos    — CRUD data module (owns todo collection + durable state)
-#   api      — HTTP translation layer over todos' in-process contract
+#   todos    — CRUD data module (owns todo collection + durable state) [superseded by board, ADR-003]
+#   board    — kanban data module (owns card collection, fixed columns, ordering)
+#   api      — HTTP translation layer over the data module's in-process contract
 #   ui       — server-rendered page (htmx); reaches api over HTTP at RUNTIME only
 #   cmd/todo — composition root (package main): wires store + api + ui. Chosen over
 #              a root main package so the root stays clean of wiring code.
@@ -27,7 +28,19 @@ matches = { units = ["*/todos"] }
 depend_on = []
 forbidden = ["api", "ui", "server"]
 
-# HTTP translation layer: only internal dependency is todos.
+# Board data module (kanban pivot, ADR-003): depends on NOTHING internal. Only
+# api (contract translation) and the composition root may import it; ui never
+# reaches it (HTTP only) — workplan_board_store.md Boundaries.
+[[module]]
+name = "board"
+matches = { units = ["*/board"] }
+[module.allowed]
+depend_on = []
+forbidden = ["api", "ui", "server"]
+
+# HTTP translation layer: only internal dependency is todos. The kanban pivot
+# (ADR-003) replaces this edge with board when the board endpoints land — the
+# edge is declared at the wave that first imports it, not before.
 [[module]]
 name = "api"
 matches = { units = ["*/api"] }
@@ -36,17 +49,18 @@ depend_on = ["todos"]
 forbidden = ["ui", "server"]
 
 # Page module: coupling to api is HTTP at runtime (invisible to the driver), so
-# no in-process dependency is allowed — including none on todos (workplan
-# boundary: ui never reaches the todos module or the data file).
+# no in-process dependency is allowed — including none on the data modules
+# (workplan boundary: ui never reaches todos/board or the data files).
 [[module]]
 name = "ui"
 matches = { units = ["*/ui"] }
 [module.allowed]
 depend_on = []
-forbidden = ["todos", "api", "server"]
+forbidden = ["todos", "board", "api", "server"]
 
 # Composition root: cmd/todo, package main — sanctioned wiring (go driver marks it
-# role `composition`), depends on all three modules.
+# role `composition`), depends on all three modules. The board edge is declared
+# at the wave that first imports it (server/01 wiring), not before.
 [[module]]
 name = "server"
 matches = { units = ["*/cmd/todo"] }
@@ -56,5 +70,5 @@ depend_on = ["todos", "api", "ui"]
 # No dependency cycles among the declared modules.
 [[constraint]]
 type = "no_cycles"
-modules = ["todos", "api", "ui", "server"]
+modules = ["todos", "board", "api", "ui", "server"]
 severity = "error"
