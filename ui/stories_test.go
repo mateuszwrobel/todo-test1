@@ -13,9 +13,8 @@ import (
 // W9 — the /__components story gallery. One observable state per section,
 // each section a real template rendering of a deterministic fixture, each
 // addressed by its stable #state-* id for later pixel tests. The todo-state
-// sections retired with the todo list render; the full board gallery is
-// card ui/13 (KW7). What stands here is the placeholder inventory of the
-// surfaces that exist now: the board and the stated load failure.
+// sections retired with the todo list render; the full board gallery — the
+// whole observable-state inventory (card ui/13, KW7) — stands here now.
 
 const storyGalleryPath = "/__components"
 
@@ -69,7 +68,14 @@ func TestStoryGalleryRendersEveryState(t *testing.T) {
 
 	states := []struct{ id, caption string }{
 		{"state-board", "state: board"},
+		{"state-board-empty", "state: empty board"},
 		{"state-load-failure", "state: load failure"},
+		{"state-create", "state: create band"},
+		{"state-create-error", "state: rejected create"},
+		{"state-edit-band", "state: edit band open"},
+		{"state-edit-error", "state: edit refused at card"},
+		{"state-stale", "state: stale operation"},
+		{"state-drag", "state: drag mid-gesture"},
 	}
 	for _, s := range states {
 		sectionHTML(t, page, s.id) // fails loudly when the container is absent
@@ -114,7 +120,34 @@ func TestStoryGalleryFixturesAreContractTrue(t *testing.T) {
 			`id="card-903" class="card card--done"`,                   // done treatment derived from column membership
 			`<p class="column__empty" data-empty="true">No cards</p>`, // the empty column's stated treatment
 		}},
+		{"state-board-empty", []string{
+			`id="board"`,
+			`id="column-to-do"`, `id="column-in-progress"`, `id="column-done"`,
+			// every column states its emptiness; no card, no failure surface.
+		}},
 		{"state-load-failure", []string{`id="load-error"`, "Could not load board.", `id="retry"`}},
+		{"state-create", []string{`id="create-area"`, `id="create-form"`, `name="title"`, ">Add<"}},
+		{"state-create-error", []string{`id="create-error"`, `class="error-text"`, "text is required"}},
+		{"state-edit-band", []string{
+			// the band markup is the template's own; .editing is the frozen
+			// reveal hook (static stand-in for the shell script's class toggle).
+			`id="card-913" class="card editing"`,
+			`<input class="input" type="text" name="title" value="Refactor board module">`,
+			`class="btn btn--primary save"`, `card__edit`,
+		}},
+		{"state-edit-error", []string{
+			`id="edit-error-912"`, `class="error-text"`, "text is required",
+			`<span class="card__title">Fix login redirect</span>`, // original text stands, refusal stated at the card
+		}},
+		{"state-stale", []string{
+			`id="missing-card"`, `class="banner"`, "no such card",
+			`id="board"`, // the truth under the banner — and not the stale card: 911–915 are all still board truth here
+		}},
+		{"state-drag", []string{
+			`id="card-911" class="card card--source"`, // dashed source slot
+			`<li class="drop-indicator"></li>`,        // insertion line at the landing gap
+			`class="column column--drop-target"`,      // the hovered column's ring
+		}},
 	}
 	for _, c := range checks {
 		section := sectionHTML(t, page, c.section)
@@ -123,6 +156,15 @@ func TestStoryGalleryFixturesAreContractTrue(t *testing.T) {
 				t.Errorf("section #%s missing %q\nsection: %s", c.section, want, section)
 			}
 		}
+	}
+	// The whole-board-empty section states emptiness three times and never
+	// fakes cards or failure.
+	empty := sectionHTML(t, page, "state-board-empty")
+	if got := strings.Count(empty, `class="column__empty"`); got != 3 {
+		t.Errorf("empty board states emptiness %d times, want 3 per column\nsection: %s", got, empty)
+	}
+	if strings.Contains(empty, `id="card-`) || strings.Contains(empty, `id="load-error"`) {
+		t.Errorf("empty board section renders cards or a failure surface:\n%s", empty)
 	}
 	// The board fixture states its fixed columns in order.
 	section := sectionHTML(t, page, "state-board")
@@ -145,6 +187,9 @@ func TestGalleryComponentExamplesAnchorEveryPrimitive(t *testing.T) {
 		"c-btn-primary", "c-btn-secondary", "c-btn-disabled",
 		"c-input-default", "c-input-focus",
 		"c-error-text", "c-panel", "c-heading", "c-tokens",
+		// KW7 board examples (card ui/13): the card component in its plain
+		// and done treatments, the drag chrome classes, and the failure banner.
+		"c-card", "c-card-done", "c-source-slot", "c-drop-indicator", "c-drag-chip", "c-banner",
 	}
 	for _, id := range ids {
 		if got := strings.Count(page, `id="`+id+`"`); got != 1 {

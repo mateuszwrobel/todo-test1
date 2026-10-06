@@ -44,6 +44,14 @@
   --color-danger-border: #fecaca;
   --color-bg-sunken: #f7f8fa;
 
+  /* Board components (KW7, card ui/13): values from the kanban mockups'
+     color_specs (k1–k7), named to keep style.css hex-free. The column
+     panel's near-white fill, the done check's green (k1/k5: the check IS
+     the done indicator), and the muted done title. */
+  --color-bg-column: #f9fafb;
+  --color-done: #10b981;
+  --color-text-done: #9ca3af;
+
   /* Space: the common gap/padding rhythm. Mockup-exact one-off paddings
      (page card margins, panel insets) stay literal in style.css — pixel
      anchors, not a scale step. */

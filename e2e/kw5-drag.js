@@ -455,7 +455,24 @@ async function main() {
     const todo2 = before2.find((c) => c.column === 'To Do');
     assert.ok(todo2.cards.length >= 3, 'the scenario needs a column of at least three cards');
     const bottom = todo2.cards[todo2.cards.length - 1];
-    const topPoint = await pointOn(page2.locator(`li.card[data-card="${todo2.cards[0].id}"]`), 0.25);
+    // Landing point for the TOP of the column, retargeted at the KW7
+    // side-by-side layout (harness-side only; the behavior tested is
+    // unchanged). The pre-KW7 pointOn(firstCard, 0.25) sat high enough on
+    // the card that the insertion line's ~14px reflow pushed the point out
+    // of the shifted card into the list band. The narrower columns wrap
+    // titles, making cards tall enough that 0.25 now stays INSIDE the card
+    // the line insertion moves — chromium then closes the gesture with a
+    // dragleave as its last event and fires no drop. Mirror of 2b's clamp
+    // toward the other edge: park just ABOVE the live first card, inside
+    // the section. clientY is below the midpoint of nothing — the line
+    // parks before the first card (position 0) — and no reflow ever moves
+    // an element under the release point.
+    const topPoint = await page2.locator('#column-to-do').evaluate((sec) => {
+      const ul = sec.querySelector('.column__cards');
+      const firstBox = ul.firstElementChild.getBoundingClientRect();
+      const secBox = sec.getBoundingClientRect();
+      return { x: firstBox.x + firstBox.width / 2, y: Math.max(firstBox.top - 8, secBox.top + 4) };
+    });
 
     log2.reset();
     await dragTo(page2, cardById(page2, bottom.id), topPoint);

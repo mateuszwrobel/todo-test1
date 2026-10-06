@@ -27,18 +27,45 @@ body {
   line-height: 1.45;
 }
 
-/* The page: one centered white card, mockups 01-06. */
+/* The page: one centered white card, mockups 01-06 widened for the board
+   pass (KW7): the kanban mockups k1–k7 fill the window content with three
+   side-by-side columns, so the card spans wider than the retired todo list.
+   The board shell arranges its three top-level blocks with grid: heading
+   left + create band right on the first line (k1 header band), board full
+   width beneath. DOM order stays board-area-before-create-area (the swap
+   wiring is frozen) — placement is pure layout. */
 body > main {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  max-width: 640px;
+  display: block;
+  max-width: 960px;
   margin: 48px auto;
   padding: 28px 32px 36px;
   background: var(--color-bg-panel);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-card);
+}
+
+/* The board shell's header band: board page only — the gallery's main is
+   plain block flow for its sections. */
+body:not(.stories) > main {
+  display: grid;
+  grid-template-columns: auto minmax(320px, 440px);
+  justify-content: space-between;
+  align-items: start;
+  gap: 20px;
+}
+body:not(.stories) > main > h1.heading {
+  grid-row: 1;
+  grid-column: 1;
+}
+body:not(.stories) > main > #create-area {
+  grid-row: 1;
+  grid-column: 2;
+  justify-self: end;
+}
+body:not(.stories) > main > #board-area {
+  grid-row: 2;
+  grid-column: 1 / -1;
 }
 
 .heading {
@@ -48,18 +75,14 @@ body > main {
   letter-spacing: -0.01em;
 }
 
-/* Visual order is create row above the board (mockups) while the DOM keeps
-   its original order — the swap-target region first, the create area after —
-   because the region-swap wiring and structure are frozen. `order` is pure
-   layout. */
-main > #create-area {
-  order: 1;
-}
-main > #board-area {
-  order: 2;
-}
+/* (The retired todo shell placed the create row with `order` on a flex
+   column; the board shell arranges the same DOM pair with the grid
+   placement above. Visual order is unchanged: create band above the
+   board, k1/k2.) */
 
-/* --- create row: wide input + blue primary button, grey hint beneath --- */
+/* --- create row: wide input + blue primary button, grey hint beneath ---
+   k2: the band sits at the header band's right edge; a rejection outlines
+   the input red and states the reason on its own line beneath it. */
 
 #create-form {
   display: grid;
@@ -91,6 +114,11 @@ main > #board-area {
   grid-column: 1 / -1;
   margin: 0;
   font-size: var(--text-sm);
+}
+
+/* k2: the rejected input reads outlined in red above its stated reason. */
+#create-form:has(#create-error) .input {
+  border-color: var(--color-danger);
 }
 
 /* Stated text components: the grey contract hint, and the red error text
@@ -143,75 +171,145 @@ main > #board-area {
   outline-offset: 2px;
 }
 
-/* --- list: bordered panel, rows on thin dividers (mockups 01/04) --- */
+/* --- board: three fixed columns side by side (mockups k1–k7) ---
+   The equal-gap grid is the mockups' structure; the 16px gutter between
+   panels stays OUTSIDE every column, which is what the drag layer relies
+   on: dragover there never preventDefaults, so a release in a gutter is
+   an abandoned drop (card ui/10), and the e2e lanes' "gutter" waypoints
+   measure off a column's right edge into it. */
 
-#todo-list {
+.board {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-5);
+}
+
+/* The column panel: light rounded well holding its title and card rows
+   (k1: one bordered panel per column, cards strictly inside). */
+.column {
+  display: flex;
+  flex-direction: column;
+  min-height: 260px; /* an empty column stays a visible drop target (k3) */
+  padding-top: var(--space-1);
+  background: var(--color-bg-column);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.column__title {
+  margin: 0;
+  padding: var(--space-3) var(--space-5);
+  font-size: var(--text-base);
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.column__cards {
+  flex: 1;
   margin: 0;
   padding: 0;
   list-style: none;
+  /* block flow, no flex: the drop-indicator's insertion shifts following
+     cards by exactly its 2px height + 2x6px margins (~14px), the geometry
+     the drag lanes' equilibrium reasoning assumes. */
 }
 
-/* The row component: controls, title, and any row-attached notice on one
-   wrapped line, separated by thin dividers (the panel's .panel border
-   frames the list itself). */
-.row {
+/* The card component (k1): a row — title left, controls right, separated
+   from its sibling by a thin divider. */
+.card {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-4) 14px;
-  padding: var(--space-5) var(--space-6);
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-4) var(--space-5);
   border-bottom: 1px solid var(--color-divider);
 }
 
-.row:last-child {
+.card:last-child {
   border-bottom: 0;
 }
 
-/* The checkbox is the done indicator (mockups); the existing state word
-   stays in the DOM — rendered text is frozen — but reads to assistive
-   tech instead of sitting beside the box. */
-.done-toggle {
-  position: relative;
-  display: inline-flex;
-  padding: 2px;
-}
-
-.checkbox {
-  width: 22px;
-  height: 22px;
-  margin: 0;
-  accent-color: var(--color-primary);
-  cursor: pointer;
-}
-
-.done-toggle span {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-
-.title {
+.card__title {
   flex: 1;
   min-width: 0;
   overflow-wrap: break-word;
 }
 
-.row--done .title {
+/* k6/k7: the row's controls appear on the hovered (or focused, for keyboard
+   users) row — at rest the row shows its title alone. The gating is opacity,
+   not visibility: the controls hold their layout box and stay hit-testable
+   while transparent, so they exist in the DOM and take activation exactly
+   as before; only the paint is hover-gated. */
+.card__edit,
+.card__delete {
+  padding: var(--space-1) var(--space-3);
+  background: transparent;
   color: var(--color-text-muted);
-  text-decoration: line-through;
+  font-size: var(--text-sm);
+  opacity: 0;
 }
 
-/* A row-attached refusal sits on its own line under the row's controls. */
-#todo-list .error-text {
+.card:hover .card__edit,
+.card:focus-within .card__edit,
+.card:hover .card__delete,
+.card:focus-within .card__delete {
+  opacity: 1;
+}
+
+.card__edit:hover {
+  background: transparent;
+  color: var(--color-text);
+}
+
+/* k7: the about-to-delete control reads red and bold under the pointer. */
+.card__delete:hover {
+  background: transparent;
+  color: var(--color-danger);
+  font-weight: 700;
+}
+
+/* The done treatment (k1/k5): a small solid green circular check, then the
+   muted title — the column IS the done state, the check renders it, and no
+   checkbox or control exists for it (the check is CSS paint on the title,
+   no markup, no text). */
+.card--done .card__title {
+  color: var(--color-text-done);
+}
+
+.card--done .card__title::before {
+  content: "\2713";
+  display: inline-block;
+  box-sizing: border-box;
+  width: 18px;
+  height: 18px;
+  margin-right: var(--space-3);
+  border-radius: 50%;
+  background: var(--color-done);
+  color: var(--color-on-primary);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+  vertical-align: -3px;
+}
+
+/* A card-attached refusal (rejected edit) states itself on its own line
+   under the row's controls — always visible, never hover-gated. */
+.card .error-text {
   flex-basis: 100%;
-  font-size: 14px; /* mockup-exact, between the scale steps */
-  order: 3;
 }
 
-/* --- inline edit band: prefilled input + blue Save (mockup 04) ---
+/* The stated empty (card ui/02): muted text centered in the empty well —
+   visibly an empty column, never a blank panel, and never the failure
+   surface's sunken panel. */
+.column__empty {
+  margin: auto var(--space-5);
+  padding: var(--space-5) 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+/* --- inline edit band: prefilled input + blue Save + Cancel ---
    The reveal/hide rules mirror the page shell's inline rule verbatim (that
    inline rule stays the behavior owner on the real page; duplicating it
    here only makes the gallery render the same bands without the shell). */
@@ -221,9 +319,6 @@ main > #board-area {
 }
 li.editing .edit-form {
   display: inline;
-}
-li.editing .title {
-  display: none;
 }
 
 .edit-form .input {
@@ -237,48 +332,50 @@ li.editing .title {
   margin-left: var(--space-2);
 }
 
-/* Open band layout (mockup 04: wide prefilled input + Save): the band takes
-   a full-width line under the row's controls. The #todo-list prefix gives
-   this rule higher specificity than the shell's inline display rule — the
-   shell rule keeps naming the reveal condition (the .editing class), this
-   only decides how an already-revealed band flows. The row's Delete joins
-   the first line via order so the band line stays uncluttered. */
-#todo-list li.editing .edit-form {
-  display: flex;
-  flex-basis: 100%;
-  align-items: center;
-  gap: var(--space-3);
-  margin-top: var(--space-1);
-  order: 2;
-}
-
-#todo-list li.editing .edit-form .input {
-  flex: 1;
-  width: auto;
-  max-width: none;
-}
-
-#todo-list li.editing .delete {
-  order: 1;
-}
-
-#todo-list li.editing .edit {
-  /* keeps the row's controls right-aligned on the first line (the hidden
-     title loses its flex push when the band is open) */
-  margin-left: auto;
-}
-
-/* --- card edit band (kanban, mockup k6): the row band's pattern inside a
-   card — prefilled input + Save + Cancel, revealed by the .editing class
-   the shell script toggles. The generic .edit-form display rules above are
-   band-agnostic; only the title swap-out is card-specific. */
+/* --- card edit band (kanban, mockup k6): the band replaces the card row's
+   text in place — prefilled input stretching, then Save, Cancel — and the
+   row's Edit/Delete step out while it is open (the band IS the row now).
+   Revealed by the .editing class the shell script toggles; the selector's
+   three classes outrank the generic li.editing rule's display:inline, so
+   an open band flows as the row's line without touching that rule. */
 .card.editing .card__title {
   display: none;
 }
 
+.card.editing .card__edit,
+.card.editing .card__delete {
+  display: none;
+}
+
+.card.editing .edit-form {
+  display: flex;
+  /* min-width:0 — without it the band keeps its min-content width (the
+     input's intrinsic field size included) and overflows the card, which
+     moves the Save button off its own hit box. */
+  flex: 1 1 100%;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.card.editing .edit-form .input {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  max-width: none;
+}
+
+.card.editing .edit-form .save,
+.card.editing .edit-form .cancel {
+  flex: none;
+}
+
 /* --- drag states (kanban mockups k3/k4): the visual layer for the drag
    machinery in the page shell — the classes the shell script toggles, no
-   interaction behavior restated here, colors all from the token layer. --- */
+   interaction behavior restated here, every color through the token layer
+   (KW7 consolidation). Geometry note: the indicator stays 2px tall with
+   6px vertical margins — the ~14px mid-drag reflow the drag lanes' drop
+   math reasons about — and the column gutter stays outside every panel. --- */
 
 /* The source slot: the dragged card's box rendered as the dashed empty
    slot the chip lifted from (k3/k4) — same position, same height, content
@@ -291,6 +388,12 @@ li.editing .title {
 
 .card--source > * {
   visibility: hidden;
+}
+
+/* The dashed ring stays a full ring even as the list's last row (the row
+   treatment's border-bottom:0 would otherwise close its bottom edge). */
+.card--source:last-child {
+  border-bottom: 1px dashed var(--color-border-field);
 }
 
 /* The drop indicator: the thin solid blue insertion line marking the
@@ -325,15 +428,14 @@ li.editing .title {
 
 /* --- stated states: empty panel (02), failure panel + retry (05) --- */
 
-/* The panel component: the bordered white surface the list and both
-   stated states sit in. */
+/* The panel component: the bordered white surface the stated failure sits
+   in. */
 .panel {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-bg-panel);
 }
 
-.empty-state,
 #load-error {
   display: flex;
   flex-direction: column;
@@ -375,11 +477,10 @@ li.editing .title {
   color: var(--color-danger-ink);
 }
 
-/* --- story gallery (/__components) --- */
-
-body.stories > main {
-  max-width: 720px;
-}
+/* --- story gallery (/__components) ---
+   The gallery page keeps the plain block shell (body > main) at the real
+   page's width: its board sections render the same grid at the same
+   measure the live page does. */
 
 .state-caption {
   margin: 26px var(--space-1) var(--space-3);
@@ -429,4 +530,38 @@ body.stories > main {
   height: 16px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
+}
+
+/* The drag chip's gallery example: the shell positions the real chip
+   offscreen for setDragImage; the example carries the identical look
+   pinned back into the page's flow (the .is-focus field is the same
+   static-stand-in pattern). */
+#c-drag-chip.drag-chip {
+  position: static;
+  display: inline-block;
+}
+
+/* Responsive nicety, trivial width: below the mockups' measure the three
+   columns stack and the header band flows to two lines. Drop math stays
+   live-measured, so the stacked layout stays draggable (the gutter point
+   the lanes probe simply falls beside the stacked panel, still outside it
+   only at wide widths — the lanes run at desktop widths). */
+@media (max-width: 720px) {
+  body:not(.stories) > main {
+    grid-template-columns: 1fr;
+  }
+  body:not(.stories) > main > h1.heading {
+    grid-column: 1;
+  }
+  body:not(.stories) > main > #create-area {
+    grid-row: 2;
+    grid-column: 1;
+    justify-self: stretch;
+  }
+  body:not(.stories) > main > #board-area {
+    grid-row: 3;
+  }
+  .board {
+    grid-template-columns: 1fr;
+  }
 }
