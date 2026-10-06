@@ -84,6 +84,11 @@ func handleCardChange(store BoardStore) http.HandlerFunc {
 			// Outcome → transport mapping — one site, keyed on the board's
 			// typed outcomes (api workplan decision).
 			switch {
+			case errors.Is(err, board.ErrCardNotFound):
+				// Card api/07 — the contract's stated not-found body. The
+				// board's existence check is its transaction's first read,
+				// so the rejected patch left the board exactly as it was.
+				errorJSON(w, http.StatusNotFound, "no such card")
 			case errors.Is(err, board.ErrTextRequired):
 				errorJSON(w, http.StatusUnprocessableEntity, "title is required")
 			case errors.Is(err, board.ErrTextTooLong):

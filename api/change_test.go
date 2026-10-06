@@ -298,6 +298,38 @@ func TestPatchCardTitleRefusalsWordedLikeCreate(t *testing.T) {
 	assertBoardUnchanged(t, store, before)
 }
 
+// Card api/07 — Patch unknown id is a stated 404.
+// Given no card exists with identifier Z
+// When  a client patches any fields to /cards/Z
+// Then  the response is 404 with the error "no such card"
+//
+// Any fields — title alone, column alone, both: the identifier check is the
+// board transaction's first read, so every variant reaches the same stated
+// outcome and the board is exactly as it was (List probe).
+func TestPatchCardUnknownIDIsStated404(t *testing.T) {
+	store := openBoardStore(t)
+	srv := httptest.NewServer(NewHandler(openStore(t), store))
+	defer srv.Close()
+
+	createCardThroughAPI(t, srv.URL, "the only card")
+	before := boardSnapshot(t, store)
+
+	const missingID = 999
+	for _, body := range []string{
+		`{"title": "renamed away"}`,
+		`{"column": "done"}`,
+		`{"title": "both", "column": "in_progress"}`,
+	} {
+		resp, got := patchCard(t, srv.URL, missingID, body)
+		if resp.StatusCode != http.StatusNotFound {
+			t.Fatalf("status = %d for body %s, want 404 (body %s)", resp.StatusCode, body, got)
+		}
+		assertCreateError(t, []byte(got), "no such card")
+	}
+
+	assertBoardUnchanged(t, store, before)
+}
+
 // Shape violations are transport errors, not rule refusals — the module's
 // convention kept from create ("Malformed JSON is a transport error: 400
 // invalid request, distinct from the 422 rule refusals"; a field present but
