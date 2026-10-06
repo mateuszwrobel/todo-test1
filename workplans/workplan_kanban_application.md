@@ -93,6 +93,12 @@ Given no todo data store exists
 When the server starts
 Then the board is created empty with the three fixed columns
 
+### Scenario: Repeat activation while an operation is in flight
+Given the board is loaded with cards
+When the user activates the same control twice before the first response arrives
+Then no additional effect occurs beyond the single operation
+  And the board ends in the state produced by exactly one operation
+
 ## Decisions
 
 - Single fixed board — Rationale: the user asked for one board to work through; a board switcher is a second product. Rejected: multiple boards. (ADR-003) — see docs/adr/ADR-003-kanban-pivot.md
@@ -104,6 +110,7 @@ Then the board is created empty with the three fixed columns
 - The board lives in its own SQLite file; the todo file stays untouched as the migration source — Rationale: clean model separation, the old file remains evidence/backup. Rejected: extending the todos database in place, mixing the superseded model into the new store. SQLite engine choice unchanged (ADR-002), stack unchanged (ADR-001).
 - Card text keeps the todo app's rules: non-empty after trim, at most 500 characters — Rationale: proven rules, no reason to change. Rejected: new validation schemes.
 - Editing, moving and reordering all travel through one update operation carrying text, column, position, or any combination — Rationale: one observable "change a card" contract, same shape the todo app proved. Rejected: separate endpoints per field.
+- In-flight control blocking carries over unchanged from the todo app — the triggered control is disabled from the moment the request leaves until the response arrives — Rationale: proven rule against double-submits from stale pages; the page serializes its own mutations per control. Rejected: allowing repeated activation and relying on server-side dedup — new machinery a single-user app does not need.
 
 > Decomposition: this workplan is decomposed into sub-workplans only after all Open Questions below are resolved.
 
