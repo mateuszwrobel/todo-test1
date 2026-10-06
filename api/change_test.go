@@ -330,6 +330,40 @@ func TestPatchCardUnknownIDIsStated404(t *testing.T) {
 	assertBoardUnchanged(t, store, before)
 }
 
+// Card api/08 — Patch invalid column is a stated 422.
+// Given a card exists with identifier N
+// When  a client patches {"column": "someday"} to /cards/N
+// Then  the response is 422 with the error "invalid column"
+//
+//	And the card is unchanged
+//
+// The enum check is board's (api validates shape only), and it runs before
+// any write — the List probe shows the card exactly where it was. A string
+// of the right type but outside the enum is the rule-refusal class; a
+// non-string column value was a shape violation (400, pinned apart).
+func TestPatchCardInvalidColumnIsStated422(t *testing.T) {
+	store := openBoardStore(t)
+	srv := httptest.NewServer(NewHandler(openStore(t), store))
+	defer srv.Close()
+
+	card := createCardThroughAPI(t, srv.URL, "steady card")
+	id := int64(card["id"].(float64))
+	before := boardSnapshot(t, store)
+
+	for _, column := range []string{"someday", "BACKLOG", ""} {
+		resp, got := patchCard(t, srv.URL, id, fmt.Sprintf(`{"column": %q}`, column))
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Fatalf("column %q: status = %d, want 422 (body %s)", column, resp.StatusCode, got)
+		}
+		assertCreateError(t, []byte(got), "invalid column")
+	}
+
+	assertBoardUnchanged(t, store, before)
+	if list := boardSnapshot(t, store); len(list[0].Cards) != 1 || list[0].Cards[0].ID != id || list[0].Cards[0].Position != 0 {
+		t.Errorf("card changed after the refusal: %+v, want it alone in todo at position 0", list[0].Cards)
+	}
+}
+
 // Shape violations are transport errors, not rule refusals — the module's
 // convention kept from create ("Malformed JSON is a transport error: 400
 // invalid request, distinct from the 422 rule refusals"; a field present but

@@ -89,6 +89,11 @@ func handleCardChange(store BoardStore) http.HandlerFunc {
 				// board's existence check is its transaction's first read,
 				// so the rejected patch left the board exactly as it was.
 				errorJSON(w, http.StatusNotFound, "no such card")
+			case errors.Is(err, board.ErrInvalidColumn):
+				// Card api/08 — the contract's stated column refusal. The
+				// enum guard lives in board (shape-only validation here),
+				// and it runs before any write, so the card is unchanged.
+				errorJSON(w, http.StatusUnprocessableEntity, "invalid column")
 			case errors.Is(err, board.ErrTextRequired):
 				errorJSON(w, http.StatusUnprocessableEntity, "title is required")
 			case errors.Is(err, board.ErrTextTooLong):
