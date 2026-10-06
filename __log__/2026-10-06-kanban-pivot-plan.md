@@ -1,5 +1,5 @@
 ```json
-{"task": "kanban pivot planning artifacts", "status": "in-progress", "date": "2026-10-06"}
+{"task": "kanban pivot planning artifacts", "status": "done", "date": "2026-10-06"}
 ```
 
 - ADR-003 accepted: pivot to a single-board kanban — three fixed columns, cards with
@@ -10,3 +10,4 @@
 - Todo workplan family (parent, four sub-workplans, user journeys, dependency ledger)
   marked superseded with a blockquote under each H1; kept in the repo as history.
 - Parent kanban workplan follows in the next commit.
+- Parent kanban workplan authored from the draft; todo family superseded.
