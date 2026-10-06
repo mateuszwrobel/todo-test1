@@ -1,6 +1,7 @@
 package board
 
 import (
+	"errors"
 	"testing"
 )
 
@@ -176,4 +177,122 @@ func TestDeleteNeverReusesIdentifier(t *testing.T) {
 		t.Errorf("survivor of the delete = %s, want card %d still at the top",
 			titles(board[0].Cards), kept.ID)
 	}
+}
+
+// Card board/12 — Delete of unknown card is reported.
+// Given no card exists with identifier Z
+// When  a delete targets identifier Z
+// Then  nothing changes and the store reports no such card
+//
+// The existence read is Delete's first statement and strictly precedes the
+// DELETE, so every miss comes back as ErrCardNotFound with no write executed.
+// "Unknown" is exercised generally, not as one magic value: identifiers the
+// counter never issued (zero, negatives, anything past the highest, absurdly
+// far past it) and an identifier whose card is already deleted — deletion
+// removes the row, so deleting the same card twice is an unknown-card delete
+// whose board must be exactly what the first delete left. On top of the
+// cell-for-cell board pin, the autoincrement counter is pinned untouched: a
+// rejected delete issues no INSERT, so the next accepted create carries
+// exactly the next identifier after the highest ever handed out.
+func TestDeleteUnknownCardIsReported(t *testing.T) {
+	tests := []struct {
+		name string
+		// target answers the identifier the rejected delete will aim at; it
+		// may run a legal delete first (the already-gone-card case).
+		target func(t *testing.T, store *Store) int64
+	}{
+		{"zero identifier", func(*testing.T, *Store) int64 { return 0 }},
+		{"negative identifier", func(*testing.T, *Store) int64 { return -7 }},
+		{"identifier past the highest ever issued", unknownID},
+		{"identifier far past the highest", func(t *testing.T, store *Store) int64 {
+			return unknownID(t, store) + 1<<40
+		}},
+		{
+			"already gone — deleting the same card twice",
+			func(t *testing.T, store *Store) int64 {
+				board := mustList(t, store)
+				gone := board[columnIndex(t, board, Todo)].Cards[1]
+				if err := store.Delete(gone.ID); err != nil {
+					t.Fatalf("first Delete(%d): %v", gone.ID, err)
+				}
+				return gone.ID
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := openStore(t)
+			seedBoard(t, store, []columnFixture{
+				{Todo, []string{"t0", "t1", "t2"}},
+				{InProgress, []string{"p0"}},
+				{Done, []string{"d0"}},
+			})
+			z := tt.target(t, store)
+			before := mustList(t, store)
+			lastIssued := lastIssuedID(t, store)
+
+			if err := store.Delete(z); !errors.Is(err, ErrCardNotFound) {
+				t.Fatalf("Delete(%d) err = %v, want ErrCardNotFound", z, err)
+			}
+			after := mustList(t, store)
+			if !boardEqual(before, after) {
+				t.Errorf("delete of unknown card %d moved the board:\n before: %s\n after:  %s",
+					z, flatten(before), flatten(after))
+			}
+
+			next, err := store.Create("next card")
+			if err != nil {
+				t.Fatalf("Create: %v", err)
+			}
+			if next.ID != lastIssued+1 {
+				t.Errorf("identifier after rejected delete = %d, want %d — a rejected delete must not consume ids",
+					next.ID, lastIssued+1)
+			}
+		})
+	}
+}
+
+// lastIssuedID answers the highest identifier the table has ever handed out,
+// read straight from the autoincrement counter — robust even when the highest
+// card has been deleted, which is why unknownID (max over live rows) cannot
+// serve the identifier-consumption pin.
+func lastIssuedID(t *testing.T, store *Store) int64 {
+	t.Helper()
+	var seq int64
+	if err := store.db.QueryRow(`SELECT seq FROM sqlite_sequence WHERE name = 'cards'`).Scan(&seq); err != nil {
+		t.Fatalf("autoincrement sequence: %v", err)
+	}
+	return seq
+}
+
+// Pin from the delete side that a removed card is gone for the whole contract:
+// after a successful delete, Change targeting that identifier reports
+// ErrCardNotFound and the board stays cell-for-cell what the delete left.
+func TestDeletedCardCannotBeChangedAfterwards(t *testing.T) {
+	t.Run("change of a deleted identifier reports no such card", func(t *testing.T) {
+		store := openStore(t)
+		seedBoard(t, store, []columnFixture{
+			{Todo, []string{"A", "B", "C"}},
+			{Done, []string{"d0"}},
+		})
+		board := mustList(t, store)
+		target := board[columnIndex(t, board, Todo)].Cards[1]
+		if err := store.Delete(target.ID); err != nil {
+			t.Fatalf("Delete(%d): %v", target.ID, err)
+		}
+		before := mustList(t, store)
+
+		got, err := store.Change(target.ID, ptr("changed after delete"), nil)
+		if !errors.Is(err, ErrCardNotFound) {
+			t.Fatalf("Change(%d) after delete err = %v, want ErrCardNotFound", target.ID, err)
+		}
+		if got != (Card{}) {
+			t.Errorf("Change returned %+v on a deleted card, want the zero Card", got)
+		}
+		after := mustList(t, store)
+		if !boardEqual(before, after) {
+			t.Errorf("change of a deleted card moved the board:\n before: %s\n after:  %s",
+				flatten(before), flatten(after))
+		}
+	})
 }
