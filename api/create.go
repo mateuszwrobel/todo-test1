@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 
@@ -19,10 +20,9 @@ import (
 //
 // Outcome → transport mapping lives at one site below, keyed on the board's
 // typed outcomes via errors.Is (api workplan decision): blank → 422 "title
-// is required" (api/03); the over-limit outcome gains its stated message
-// with api/04, and until it lands answers the store-failure 500. No title
-// rule is restated here. Malformed JSON is a transport error: 400
-// `{"error": "invalid request"}`
+// is required" (api/03), over-limit → 422 stating the character limit
+// (api/04), anything else → the store-failure 500. No title rule is restated
+// here. Malformed JSON is a transport error: 400 `{"error": "invalid request"}`
 // (the module's standing convention, kept from the retired todo create
 // handler; distinct from the 422 rule refusals).
 //
@@ -69,6 +69,13 @@ func handleCreate(store BoardStore) http.HandlerFunc {
 			switch {
 			case errors.Is(err, board.ErrTextRequired):
 				respondError(http.StatusUnprocessableEntity, "title is required")
+			case errors.Is(err, board.ErrTextTooLong):
+				// The limit number has one owner — the board constant — so
+				// this message can never drift from the rule. The wording
+				// keeps the contract's subject ("title", as in "title is
+				// required") and board's phrasing of the bound.
+				respondError(http.StatusUnprocessableEntity,
+					fmt.Sprintf("title exceeds the %d character limit", board.MaxTextLen))
 			default:
 				http.Error(w, "failed to create card", http.StatusInternalServerError)
 			}

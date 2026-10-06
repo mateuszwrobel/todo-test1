@@ -224,6 +224,60 @@ func TestPostCardsMalformedJSONIs400(t *testing.T) {
 	assertBoardEmpty(t, store)
 }
 
+// Card api/04 — Create over-limit is a stated 422.
+// Given an open board
+// When  a client posts a title longer than 500 characters to /cards
+// Then  the response is 422 stating the character limit
+//
+//	And the board is unchanged
+//
+// The landed message, pinned verbatim (stated once, the number owned by
+// board.MaxTextLen so message and rule can never drift apart):
+//
+//	{"error":"title exceeds the 500 character limit"}
+//
+// The boundary is pinned too: the rule is "at most 500 characters", so a
+// title of exactly board.MaxTextLen characters creates.
+func TestPostCardsOverLimitStatesLimit(t *testing.T) {
+	store := openBoardStore(t)
+	srv := httptest.NewServer(NewHandler(openStore(t), store))
+	defer srv.Close()
+
+	long := strings.Repeat("x", board.MaxTextLen+1)
+	resp, err := http.Post(srv.URL+"/cards", "application/json",
+		strings.NewReader(`{"title": "`+long+`"}`))
+	if err != nil {
+		t.Fatalf("POST /cards: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422", resp.StatusCode)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	t.Logf("POST /cards over-limit body: %s", body)
+	assertCreateError(t, body, "title exceeds the 500 character limit")
+
+	// And the board is unchanged: the rejection inserted nothing and consumed
+	// no identifier.
+	assertBoardEmpty(t, store)
+
+	// Boundary: exactly the limit is within the rule and creates.
+	lim := strings.Repeat("x", board.MaxTextLen)
+	resp2, err := http.Post(srv.URL+"/cards", "application/json",
+		strings.NewReader(`{"title": "`+lim+`"}`))
+	if err != nil {
+		t.Fatalf("POST /cards (at limit): %v", err)
+	}
+	defer resp2.Body.Close()
+	if resp2.StatusCode != http.StatusCreated {
+		t.Fatalf("at-limit status = %d, want 201 (the rule is at most %d characters)",
+			resp2.StatusCode, board.MaxTextLen)
+	}
+}
+
 // assertCreateError asserts the contract's one error shape carries the stated
 // message verbatim.
 func assertCreateError(t *testing.T, body []byte, want string) {
