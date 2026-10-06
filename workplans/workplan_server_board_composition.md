@@ -58,7 +58,7 @@ Then the dependency directions of the parent plan hold: ui→api via HTTP only, 
 ## Decisions
 
 - The composition root owns data-file lifecycle and paths; the board module owns everything behind the path — Rationale: principle 8, one owner per lifecycle; the store workplan's matching assumption. Rejected: the store choosing its own path.
-- Import guard is "board already exists" (presence of the board schema), checked before import — Rationale: idempotence without extra state; the board store's own create/seed operations do the inserts. Rejected: a meta flag row, a "migrated" marker file.
+- Import guard is the board's recorded import decision — a marker row the board stores beside its cards, read before import — Amended 2026-10-07, defect fix (see `__log__/2026-10-07-kw6-import-guard-marker-fix.md`): the original wording ("board already exists", presence of the board schema) proved unimplementable — the store's open commits the schema before the import decision runs, so an interrupted import would read as a created board and never complete (violating the interrupted-import scenario's retry arm); the emptiness guard substituted in its place resurrects deleted todos when the user deletes every card and restarts with the todo file still present (live-reproduced — an emptied board re-answers "never created"). The marker answers both: `Import` commits it inside the import's own transaction, a first start that imported nothing records it alone, and no later card mutation can rewind it. Rejected then and now adopted: the meta flag row — the schema-existence and emptiness alternatives each fail an acceptance scenario, so the extra state is what the behavior costs. Rejected still: a "migrated" marker file beside the data file — a second lifecycle for one fact the data file already owns (principle 8).
 - Migration is composition-root code reading the todo file read-only through a narrow query — Rationale: the import policy (which column, which order) is startup policy, one behavior with one owner; the store only offers ordered seeding. Rejected: a migration-aware store, a standalone migration command.
 - The import runs through the board module's own create/seed operations inside one transaction — Rationale: schema knowledge stays in one module; the transaction guarantee belongs to the writer. Rejected: raw SQL in the composition root duplicating schema knowledge.
 - Existing server wiring (HTTP startup, static serving, shutdown drain) carries over; only what it composes changes — Rationale: same hidden decision (process lifecycle and composition), new parts. (ADR-003)
@@ -70,7 +70,7 @@ Then the dependency directions of the parent plan hold: ui→api via HTTP only, 
 
 ## Risks
 
-- The guard checks the schema while the data insert is in a separate step — Impact: schema exists but insert skipped, silently half-done import. Mitigation: guard check, schema creation, and seeding run inside the same transaction (the store's seeding operation), so the guard cannot observe a half state.
+- The marker is recorded while the data insert is a separate write — Impact: marker set with cards missing, a silently half-done import whose retry the guard would refuse. Mitigation: the import operation commits its cards AND the marker inside one transaction, so an interrupted import records neither and the guard retries; only a decision that imports nothing writes the marker alone, and it leaves no card state to be half of.
 - The todo file is present but corrupt — Impact: startup fails or imports nothing. Mitigation: stated loud failure; behavior then matches "start without todo data" only after the user removes/repairs the file — the server never invents data.
 
 ## Open Questions
@@ -83,7 +83,7 @@ None.
 SQLite `todos.db` with `todos(id, title, done)` — the superseded app's store, left exactly as found. This module reads it read-only, once, at first start; it never writes it. The board's own file (`kanban.db`, cards table) is owned by the board module; this module decides only its path and lifecycle (open at start, close at shutdown).
 
 ### Data Flow
-- Startup: resolve paths → open board store (fresh board when the file is absent) → if the board schema was just created AND the todo file exists: import in one transaction via the store's seed operation — not-done ordered by todo id → todo column top-to-bottom; done likewise → done column.
+- Startup: resolve paths → open board store (fresh board when the file is absent) → if no import decision is recorded AND the todo file exists: import in one transaction via the store's import operation, which commits the marker row together with the cards — not-done ordered by todo id → todo column top-to-bottom; done likewise → done column. A first start that finds no todo file records the decision without importing, so a file appearing later is past evidence, never migration material.
 - Serve: compose api handlers and ui over the one board store instance.
 - Shutdown: drain in-flight requests, close the store.
 
