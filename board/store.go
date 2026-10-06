@@ -163,6 +163,13 @@ func validateText(text string) (string, error) {
 	return trimmed, nil
 }
 
+// ErrCardNotFound reports a change that targets an identifier no card holds —
+// the store's "no such card" outcome. The existence check is a read inside the
+// transaction that runs before any write, so a rejected change leaves the
+// board exactly as it was and consumes no identifier (Change never inserts).
+// Callers map it with errors.Is.
+var ErrCardNotFound = errors.New("board: no card with that identifier")
+
 // Change applies the given directions to the card identified by id in one
 // transaction and returns the card as it now stands. A nil direction is left
 // untouched; at least one direction must be non-nil.
@@ -185,6 +192,10 @@ func validateText(text string) (string, error) {
 // reorder) are dedicated operations in their own cards (board/06, board/07,
 // KW5). Until the enum guard lands with board/10, a column outside the fixed
 // set is refused only by the schema CHECK, which rolls the write back.
+//
+// An identifier no card holds comes back as ErrCardNotFound: the existence
+// read is the transaction's first statement, before any write, so a rejected
+// change leaves the board exactly as it was and consumes no identifier.
 func (s *Store) Change(id int64, title *string, column *Column) (Card, error) {
 	if title == nil && column == nil {
 		return Card{}, fmt.Errorf("change card %d: nothing to change (title and column both nil)", id)
@@ -212,6 +223,9 @@ func (s *Store) Change(id int64, title *string, column *Column) (Card, error) {
 	err = tx.QueryRow(
 		`SELECT id, title, "column", position FROM cards WHERE id = ?`, id,
 	).Scan(&card.ID, &card.Title, &card.Column, &card.Position)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Card{}, fmt.Errorf("change card %d: %w", id, ErrCardNotFound)
+	}
 	if err != nil {
 		return Card{}, fmt.Errorf("change card %d: %w", id, err)
 	}

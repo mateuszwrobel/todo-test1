@@ -178,6 +178,95 @@ func TestChangeTitleRejectionsUseTheSameTextRules(t *testing.T) {
 	}
 }
 
+// Card board/09 — Change of unknown card is reported.
+// Given no card exists with identifier Z
+// When  any change targets identifier Z
+// Then  nothing changes and the store reports no such card
+//
+// "Any change" is exercised in every direction combination — title, column,
+// and both together, with the column value valid so the not-found outcome is
+// what the call reports. The existence read precedes every write, so the
+// board is pinned cell-for-cell identical afterwards, and the zero Card comes
+// back alongside the typed outcome.
+func TestChangeUnknownCardIsReported(t *testing.T) {
+	tests := []struct {
+		name   string
+		title  *string
+		column *Column
+	}{
+		{"title direction", ptr("new text"), nil},
+		{"column direction", nil, ptr(InProgress)},
+		{"column direction, empty target", nil, ptr(Done)},
+		{"both directions", ptr("new text"), ptr(Todo)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := openStore(t)
+			seedBoard(t, store, []columnFixture{
+				{Todo, []string{"t0", "t1"}},
+				{InProgress, []string{"p0"}},
+				{Done, nil},
+			})
+			before := mustList(t, store)
+			z := unknownID(t, store)
+
+			got, err := store.Change(z, tt.title, tt.column)
+			if !errors.Is(err, ErrCardNotFound) {
+				t.Fatalf("Change(%d, %+v, %+v) err = %v, want ErrCardNotFound", z, tt.title, tt.column, err)
+			}
+			if got != (Card{}) {
+				t.Errorf("Change returned %+v on no-such-card, want the zero Card", got)
+			}
+			after := mustList(t, store)
+			if !boardEqual(before, after) {
+				t.Errorf("change of unknown card moved the board:\n before: %s\n after:  %s",
+					flatten(before), flatten(after))
+			}
+		})
+	}
+}
+
+// A rejected change reports through a read, not a write, so no identifier is
+// burned either way — the next accepted create carries exactly the next id
+// after the last one ever handed out.
+func TestRejectedChangeDoesNotConsumeIdentifier(t *testing.T) {
+	store := openStore(t)
+	seedBoard(t, store, []columnFixture{{Todo, []string{"t0", "t1"}}})
+	lastCreated, err := store.Create("t2")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	z := unknownID(t, store)
+
+	if _, err := store.Change(z, ptr("burned?"), nil); !errors.Is(err, ErrCardNotFound) {
+		t.Fatalf("title-direction change of unknown card err = %v, want ErrCardNotFound", err)
+	}
+	if _, err := store.Change(z, nil, ptr(Done)); !errors.Is(err, ErrCardNotFound) {
+		t.Fatalf("column-direction change of unknown card err = %v, want ErrCardNotFound", err)
+	}
+
+	next, err := store.Create("next card")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if next.ID != lastCreated.ID+1 {
+		t.Errorf("identifier after rejected changes = %d, want %d — a rejected change must not consume ids",
+			next.ID, lastCreated.ID+1)
+	}
+}
+
+// unknownID answers an identifier no card holds: one past the highest ever
+// inserted (autoincrement never reuses, so it stays absent for the test's
+// lifetime).
+func unknownID(t *testing.T, store *Store) int64 {
+	t.Helper()
+	var max int64
+	if err := store.db.QueryRow(`SELECT coalesce(max(id), 0) FROM cards`).Scan(&max); err != nil {
+		t.Fatalf("max id: %v", err)
+	}
+	return max + 1
+}
+
 func ptr[T any](v T) *T { return &v }
 
 // boardEqual reports cell-for-cell equality of two listings: same columns in
