@@ -15,10 +15,11 @@ import (
 // exists anywhere on the page.
 const doneColumnTitle = "Done"
 
-// Page surfaces rendered by this module: the shell (the create band joins it
-// with card ui/04, KW2), the board (three column panels in the contract's
-// fixed order, cards top-to-bottom in array order), and the stated
-// load-failure state. Template-per-surface; procedural.
+// Page surfaces rendered by this module: the shell (the create band joined it
+// with card ui/04, KW2 — an htmx form beside the board area, swapped through
+// POST /ui/cards), the board (three column panels in the contract's fixed
+// order, cards top-to-bottom in array order), and the stated load-failure
+// state. Template-per-surface; procedural.
 var pageTmpl = template.Must(template.New("page").Parse(`<!doctype html>
 <html lang="en">
 <head>
@@ -35,7 +36,25 @@ var pageTmpl = template.Must(template.New("page").Parse(`<!doctype html>
 <main>
 <h1 class="heading">Board</h1>
 <div id="board-area">{{.State}}</div>
+{{.CreateArea}}
 </main>
+<script>
+// htmx swaps 2xx responses by default; a stated failure arrives as a 4xx
+// whose body is already-rendered HTML for the same surface the operation
+// acts on. Route those bodies through the same htmx swap engine — no
+// browser-side rendering happens here. Carried over from the retired todo
+// shell and scoped to the create control; card-operation refusals join this
+// routing as their controls wire up (edit KW3, delete KW4, drag KW5).
+document.body.addEventListener('htmx:responseError', function (event) {
+  var elt = event.detail && event.detail.elt;
+  if (elt && elt.closest && elt.closest('#create-form')) {
+    // A create refusal: the already-rendered create-area fragment.
+    htmx.swap(document.getElementById('create-area'),
+              event.detail.xhr.responseText,
+              { swapStyle: 'outerHTML' });
+  }
+});
+</script>
 </body>
 </html>
 `))
@@ -121,7 +140,10 @@ func renderBoard(w http.ResponseWriter, columns []column) {
 }
 
 func renderPage(w http.ResponseWriter, state template.HTML) {
-	_ = pageTmpl.Execute(w, struct{ State template.HTML }{state})
+	_ = pageTmpl.Execute(w, struct {
+		State      template.HTML
+		CreateArea template.HTML
+	}{state, createAreaHTML(createAreaData{})})
 }
 
 func renderState(w http.ResponseWriter, which *template.Template) {

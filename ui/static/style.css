@@ -48,13 +48,14 @@ body > main {
   letter-spacing: -0.01em;
 }
 
-/* Visual order is create row above the list (mockups) while the DOM keeps
-   its original order — #todos-area first, #create-area after — because the
-   region-swap wiring and structure are frozen. `order` is pure layout. */
+/* Visual order is create row above the board (mockups) while the DOM keeps
+   its original order — the swap-target region first, the create area after —
+   because the region-swap wiring and structure are frozen. `order` is pure
+   layout. */
 main > #create-area {
   order: 1;
 }
-main > #todos-area {
+main > #board-area {
   order: 2;
 }
 

@@ -41,10 +41,11 @@ type page struct {
 
 // NewHandler builds the ui module's handlers. apiBase is the address of the
 // api contract on the same listener (injected by the composition root); every
-// read of the board goes to that address over HTTP. The page's fragment
-// endpoints retired with the todo list surface; kanban operations land as
-// their own cards (create KW2, edit KW3, delete KW4, drag KW5) and re-extend
-// this route table then.
+// read of the board goes to that address over HTTP, and so does every write
+// the page's fragment endpoints perform. The todo list fragment endpoints
+// retired at KW1; the create endpoint (POST /ui/cards) re-extends the route
+// table at KW2, and the edit/delete/drag endpoints will at their own cards
+// (KW3–KW5; see workplans/dependencies_kanban.md).
 func NewHandler(apiBase string) http.Handler {
 	p := &page{
 		apiBase: apiBase,
@@ -52,6 +53,12 @@ func NewHandler(apiBase string) http.Handler {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", p.handleIndex)
+	// Create re-extends the fragment table at KW2 (card ui/04): the page's
+	// create band posts here, this module performs POST /cards over HTTP,
+	// and the answer is a swap fragment — the retired todo fragment
+	// endpoints' pattern on the board's surface. Edit/delete/drag re-extend
+	// it at their own waves (KW3–KW5).
+	mux.HandleFunc("POST /ui/cards", p.handleCreate)
 	mux.HandleFunc("GET /static/htmx.min.js", p.handleHTMX)
 	// tokens.css before style.css: style.css is pure var() consumption,
 	// so the token sheet must be parsed first. The <link> order in the
