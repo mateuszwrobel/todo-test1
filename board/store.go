@@ -161,9 +161,9 @@ const MaxTextLen = 500
 var ErrTextTooLong = fmt.Errorf("board: card text exceeds the %d character limit", MaxTextLen)
 
 // validateText is the module's single text rule: every entry point into the
-// board (Create now, Seed with board/14) runs candidate text through it before
-// storage is touched, so one rule source covers all paths and a rejection is
-// always a named store outcome, never a storage-constraint failure. The rules:
+// board (Create, Change, Seed) runs candidate text through it before storage
+// is touched, so one rule source covers all paths and a rejection is always
+// a named store outcome, never a storage-constraint failure. The rules:
 // non-blank once trimmed, at most MaxTextLen characters (runes) once trimmed.
 // It returns the normalized (trimmed) text to store.
 func validateText(text string) (string, error) {
@@ -522,4 +522,73 @@ func (s *Store) List() ([]ColumnCards, error) {
 		board = append(board, ColumnCards{Name: col, Cards: cards})
 	}
 	return board, nil
+}
+
+// Seed bulk-places a caller-supplied ordered list of texts into one column —
+// the store's seeding operation, the primitive a migration drives (the
+// composition root decides WHAT to import; the store only inserts). The
+// given order IS the result: the texts land below any cards already in the
+// column (a fresh board holds none, which is the scenario's "empty board"),
+// in exactly the order the list states them, and positions are assigned in
+// that order — the column's first seeded card takes the column's current
+// count, the next count+1, and so on — so when the seed commits the column
+// still satisfies the module invariant, contiguous 0..n-1 top-to-bottom,
+// and the given order is the stored order with nothing between. Each seeded
+// card carries a fresh identifier from the same autoincrement Create draws
+// from: seeding never imports or preserves identifiers, every card the seed
+// writes is new to this board.
+//
+// Validation is the board's own, and it decides before any write: the target
+// column is screened against the fixed enum first (ErrInvalidColumn — the
+// guard answers even when the list is empty), then every text runs through
+// validateText, the module's single text rule, at its list index. One bad
+// entry anywhere refuses the whole seed — ErrTextRequired or ErrTextTooLong
+// names the entry — with no statement executed, so the board is exactly as
+// it was and no identifier is consumed, the same all-or-nothing contract the
+// rejected mutations keep. An accepted seed runs in one transaction (count,
+// then one insert per text), so the column gains every card in order or not
+// at all. An empty list into a valid column is a no-op answered with nil:
+// nothing is read, nothing is written.
+func (s *Store) Seed(column Column, texts []string) error {
+	if !validColumn(column) {
+		return fmt.Errorf("seed column %q is not todo, in_progress, or done: %w",
+			string(column), ErrInvalidColumn)
+	}
+	titles := make([]string, len(texts))
+	for i, text := range texts {
+		title, err := validateText(text)
+		if err != nil {
+			return fmt.Errorf("seed entry %d: %w", i, err)
+		}
+		titles[i] = title
+	}
+	if len(titles) == 0 {
+		return nil
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("seed column %q: %w", column, err)
+	}
+	defer tx.Rollback() // no-op after Commit
+
+	var position int
+	if err := tx.QueryRow(
+		`SELECT count(*) FROM cards WHERE "column" = ?`, string(column),
+	).Scan(&position); err != nil {
+		return fmt.Errorf("seed column %q: %w", column, err)
+	}
+	for _, title := range titles {
+		if _, err := tx.Exec(
+			`INSERT INTO cards (title, "column", position) VALUES (?, ?, ?)`,
+			title, string(column), position,
+		); err != nil {
+			return fmt.Errorf("seed column %q: %w", column, err)
+		}
+		position++
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("seed column %q: %w", column, err)
+	}
+	return nil
 }
