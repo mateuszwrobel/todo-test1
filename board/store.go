@@ -29,6 +29,20 @@ const (
 // columns is the board's fixed column order. List always answers in it.
 var columns = []Column{Todo, InProgress, Done}
 
+// validColumn reports membership in the module's fixed column enum. Column is
+// a string type, so callers can hand the store anything; every column
+// direction passes this guard before storage is touched, making a bad value a
+// named store outcome (ErrInvalidColumn) rather than a storage-constraint
+// failure — the same guarantee validateText gives the text direction.
+func validColumn(c Column) bool {
+	for _, known := range columns {
+		if c == known {
+			return true
+		}
+	}
+	return false
+}
+
 // Card is a single board record. The fields are exactly the contract's Card
 // model — nothing more is stored.
 type Card struct {
@@ -170,6 +184,13 @@ func validateText(text string) (string, error) {
 // Callers map it with errors.Is.
 var ErrCardNotFound = errors.New("board: no card with that identifier")
 
+// ErrInvalidColumn reports a column direction naming something outside the
+// module's fixed enum (todo, in_progress, done) — the store's "column
+// invalid" outcome. The guard runs before the transaction opens, so a
+// rejected value touches no storage: the board is exactly as it was. Callers
+// map it with errors.Is.
+var ErrInvalidColumn = errors.New("board: column must be one of todo, in_progress, done")
+
 // Change applies the given directions to the card identified by id in one
 // transaction and returns the card as it now stands. A nil direction is left
 // untouched; at least one direction must be non-nil.
@@ -184,14 +205,16 @@ var ErrCardNotFound = errors.New("board: no card with that identifier")
 // editable, because no frozen state is stored anywhere (column membership is
 // the only done state).
 //
-// The column direction moves the card to the bottom of the target column and
+// The column direction guards the fixed enum (validColumn) BEFORE the
+// transaction opens — a value other than todo, in_progress, done is
+// ErrInvalidColumn with no statement executed, never a storage-constraint
+// failure — then moves the card to the bottom of the target column and
 // closes the gap in the source column, so every column's positions stay
 // contiguous 0..n-1 inside the same transaction. A requested column equal to
 // the card's current one places nothing — Change never reorders within a
 // column here; neighbor-ordering semantics (insert at an index, same-column
 // reorder) are dedicated operations in their own cards (board/06, board/07,
-// KW5). Until the enum guard lands with board/10, a column outside the fixed
-// set is refused only by the schema CHECK, which rolls the write back.
+// KW5).
 //
 // An identifier no card holds comes back as ErrCardNotFound: the existence
 // read is the transaction's first statement, before any write, so a rejected
@@ -201,9 +224,10 @@ func (s *Store) Change(id int64, title *string, column *Column) (Card, error) {
 		return Card{}, fmt.Errorf("change card %d: nothing to change (title and column both nil)", id)
 	}
 
-	// Validation precedes every write: the text rule is the first statement
-	// after the argument check, before Begin, before any SQL — same ordering
-	// guarantee Create gives, same rule function.
+	// Validation precedes every write: both directions are screened here —
+	// text through validateText, column through the fixed enum — before
+	// Begin, before any SQL. A rejection in either direction is a named
+	// store outcome with no statement executed.
 	trimmed := ""
 	if title != nil {
 		var err error
@@ -211,6 +235,10 @@ func (s *Store) Change(id int64, title *string, column *Column) (Card, error) {
 		if err != nil {
 			return Card{}, fmt.Errorf("change card %d: %w", id, err)
 		}
+	}
+	if column != nil && !validColumn(*column) {
+		return Card{}, fmt.Errorf("change card %d: column %q is not todo, in_progress, or done: %w",
+			id, string(*column), ErrInvalidColumn)
 	}
 
 	tx, err := s.db.Begin()
