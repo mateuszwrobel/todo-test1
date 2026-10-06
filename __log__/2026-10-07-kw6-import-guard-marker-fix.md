@@ -1,0 +1,5 @@
+```json
+{"task": "KW6 defect — migration guard emptiness resurrects deleted todos; guard moves to an import-marker row committed with the import", "status": "in-progress", "date": "2026-10-07", "workplan": "workplans/workplan_server_board_composition.md", "base": "1b35e19"}
+```
+
+Defect fix in progress. Live-reproduced by the verifier: the one-time migration guard observes "board holds no cards", so a user who imported at first start and later deleted every card resurrects the deleted todos with fresh ids on the next start — breaking "Existing todos import once, at first start" (parent plan) and card server/02's "the import does not run twice". The workplan's original schema-existence guard is unimplementable (board.Open commits the schema before the import decision), so the marker-row alternative it rejected is adopted, recorded in the plan's amended decision note. Guard becomes `board.Imported()`; Import commits its marker row in the same transaction as the cards so card server/05's retry arm holds.
