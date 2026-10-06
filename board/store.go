@@ -177,11 +177,12 @@ func validateText(text string) (string, error) {
 	return trimmed, nil
 }
 
-// ErrCardNotFound reports a change that targets an identifier no card holds —
-// the store's "no such card" outcome. The existence check is a read inside the
-// transaction that runs before any write, so a rejected change leaves the
-// board exactly as it was and consumes no identifier (Change never inserts).
-// Callers map it with errors.Is.
+// ErrCardNotFound reports a change or delete that targets an identifier no
+// card holds — the store's "no such card" outcome. The existence check is a
+// read inside the transaction that runs before any write, so a rejected
+// change or delete leaves the board exactly as it was and consumes no
+// identifier (neither operation inserts on the miss). Callers map it with
+// errors.Is.
 var ErrCardNotFound = errors.New("board: no card with that identifier")
 
 // ErrInvalidColumn reports a column direction naming something outside the
@@ -321,6 +322,52 @@ func renormalize(tx *sql.Tx, col Column) error {
 		if _, err := tx.Exec(`UPDATE cards SET position = ? WHERE id = ?`, pos, id); err != nil {
 			return fmt.Errorf("renormalize column %q: %w", col, err)
 		}
+	}
+	return nil
+}
+
+// Delete removes the card identified by id and closes the gap its departure
+// opened in the card's former column: the survivors' positions are
+// renormalized to contiguous 0..n-1 in their current top-to-bottom order,
+// while every other column keeps its cards at their current positions. The
+// existence read is the transaction's first statement and strictly precedes
+// the DELETE, so an identifier no card holds comes back as ErrCardNotFound
+// with no write executed — the board is exactly as it was — the same ordering
+// Change uses. The delete and the gap close run in one transaction, so no
+// caller ever observes the source column holding a gap. A deleted card's
+// identifier is never re-issued: ids come from the table's autoincrement,
+// which only counts forward, so a later Create hands out a fresh identifier
+// greater than every identifier ever assigned — a stale caller can never
+// address a different card.
+func (s *Store) Delete(id int64) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("delete card %d: %w", id, err)
+	}
+	defer tx.Rollback() // no-op after Commit
+
+	// Existence check before DELETE: this read is the first statement inside
+	// the transaction and its outcome decides everything after it. It does
+	// double duty — the column it reports names the column the delete opens a
+	// gap in (renormalize's target), and its miss is the named store outcome
+	// ErrCardNotFound with no write statement ever executed.
+	var col Column
+	err = tx.QueryRow(`SELECT "column" FROM cards WHERE id = ?`, id).Scan(&col)
+	if errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("delete card %d: %w", id, ErrCardNotFound)
+	}
+	if err != nil {
+		return fmt.Errorf("delete card %d: %w", id, err)
+	}
+
+	if _, err := tx.Exec(`DELETE FROM cards WHERE id = ?`, id); err != nil {
+		return fmt.Errorf("delete card %d: %w", id, err)
+	}
+	if err := renormalize(tx, col); err != nil {
+		return fmt.Errorf("delete card %d: %w", id, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("delete card %d: %w", id, err)
 	}
 	return nil
 }
