@@ -1,5 +1,7 @@
 # Workplan: Todo Application
 
+> **Status: superseded** by [workplan_kanban_application.md](workplan_kanban_application.md) — see [ADR-003](../docs/adr/ADR-003-kanban-pivot.md). Kept as history.
+
 ## Goal
 
 A single-user web app for managing a personal todo list: create todos, mark them done, edit their text, delete them. Todos persist between server restarts. Observable outcome: a browser page shows the list with each todo's done/not-done state and offers controls for all four operations; the state survives reloads and restarts.

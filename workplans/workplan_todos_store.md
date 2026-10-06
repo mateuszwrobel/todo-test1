@@ -1,5 +1,7 @@
 # Workplan: Todos Module — Durable Store and Operations
 
+> **Status: superseded** by [workplan_kanban_application.md](workplan_kanban_application.md) — see [ADR-003](../docs/adr/ADR-003-kanban-pivot.md). Kept as history.
+
 ## Goal
 
 The todo application needs exactly one owner of todo data and its durable state. The todos module lets the api module and the composition root create, list, change, and delete todos through one in-process contract, and guarantees every completed operation survives a process restart. Observable outcome for the user (via the other modules): a todo list that is always correct after restarts.

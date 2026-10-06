@@ -1,5 +1,7 @@
 # Workplan: Ui Module — htmx Page and Fragment Endpoints
 
+> **Status: superseded** by [workplan_kanban_application.md](workplan_kanban_application.md) — see [ADR-003](../docs/adr/ADR-003-kanban-pivot.md). Kept as history.
+
 ## Goal
 
 The user needs one browser page where the whole todo list is visible and every operation works without a full reload. The ui module renders the page and the server-side HTML fragments htmx swaps into it, talking to the api contract over HTTP only. Observable outcome: a single page that creates, toggles, edits, and deletes todos in place, shows stated errors, serializes its own operations, and always matches the server after a reload.

@@ -1,5 +1,7 @@
 # Scenario Dependencies — Feature Waves
 
+> **Status: superseded** by [workplan_kanban_application.md](workplan_kanban_application.md) — see [ADR-003](../docs/adr/ADR-003-kanban-pivot.md). Kept as history.
+
 Companion to the scenario cards in `workplans/scenarios/`. All ordering lives here (cards carry none). Work proceeds **feature by feature**: a wave delivers one feature vertically — store → contract translation → page — and ends with that feature integrated against the real code landed earlier in the same wave. No fake-then-replace staging, no module-by-module lanes: integration for a feature happens at its wave end, at the first moment all its pieces exist.
 
 The standing law: **a module is never implemented wholesale.** Every increment is a functional/common-scenario slice — the thinnest cut through the modules that makes one feature observable end to end. Whole-module waves are forbidden; a module grows one feature per wave it appears in.

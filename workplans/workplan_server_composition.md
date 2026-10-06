@@ -1,5 +1,7 @@
 # Workplan: Server Module — Composition Root and Entry Point
 
+> **Status: superseded** by [workplan_kanban_application.md](workplan_kanban_application.md) — see [ADR-003](../docs/adr/ADR-003-kanban-pivot.md). Kept as history.
+
 ## Goal
 
 The application must run as one command that starts everything and owns nothing else's behavior. The server module (cmd/todo) is the composition root: it opens the store at the configured path, wires the api handler and the ui handlers together — including the base URL the ui uses to reach the api contract — mounts them on one HTTP listener, and owns that lifecycle from start to clean shutdown. Observable outcome: one command serves the page and the JSON contract on one address; Ctrl-C stops it cleanly; restart resumes the same state.

@@ -1,5 +1,7 @@
 # User Journeys — Todo Application
 
+> **Status: superseded** by [workplan_kanban_application.md](workplan_kanban_application.md) — see [ADR-003](../docs/adr/ADR-003-kanban-pivot.md). Kept as history.
+
 These journeys are derived from the acceptance scenarios in [workplan_todo_application.md](workplan_todo_application.md). They are input for UI design: each journey states what the user does and what the page observably shows — behavior only, no visual design. The workplan's API section is the boundary of what the page can know; every step traces to a scenario or a contract line, and anything the page needs beyond that is explicitly marked as a derived page necessity (see Traceability). Illustrative literals from the scenarios ("Buy milk") stay illustrative.
 
 ## Actor

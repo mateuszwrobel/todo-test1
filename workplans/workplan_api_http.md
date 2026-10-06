@@ -1,5 +1,7 @@
 # Workplan: Api Module — HTTP Contract
 
+> **Status: superseded** by [workplan_kanban_application.md](workplan_kanban_application.md) — see [ADR-003](../docs/adr/ADR-003-kanban-pivot.md). Kept as history.
+
 ## Goal
 
 The application needs one stable JSON wire contract for todo operations. The api module exposes the endpoints and status semantics of the parent workplan and translates them into todos-module operations, mapping typed outcomes to HTTP responses. Observable outcome: any client can create, list, change, and delete todos over HTTP exactly as the parent contract states, including the stated refusals (done-todo text edits, missing todos, invalid titles).
