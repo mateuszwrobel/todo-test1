@@ -14,14 +14,17 @@ import (
 
 // BoardStore is this module's port onto the board contract: the read the
 // GET /board endpoint translates, the create POST /cards translates, the
-// change PATCH /cards/{id} translates, and the delete DELETE /cards/{id}
-// translates — the board operations the endpoints exist to reach, nothing
-// more. Consumer-defined port: the composition root injects the concrete
-// store, so no module depends on another's concrete type.
+// change PATCH /cards/{id} translates through Change and Move (the move
+// direction of the contract's "text, column, and/or position" line), and
+// the delete DELETE /cards/{id} translates — the board operations the
+// endpoints exist to reach, nothing more. Consumer-defined port: the
+// composition root injects the concrete store, so no module depends on
+// another's concrete type.
 type BoardStore interface {
 	List() ([]board.ColumnCards, error)
 	Create(text string) (board.Card, error)
 	Change(id int64, title *string, column *board.Column) (board.Card, error)
+	Move(id int64, column board.Column, position int) (board.Card, error)
 	Delete(id int64) error
 }
 
