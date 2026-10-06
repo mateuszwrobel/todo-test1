@@ -111,7 +111,7 @@ func TestStoryGalleryFixturesAreContractTrue(t *testing.T) {
 		{"state-board", []string{
 			`id="board"`, `id="column-to-do"`, `id="column-in-progress"`, `id="column-done"`,
 			"Draft the launch note", "Rotate the API keys", "Ship v1.2",
-			`id="card-903" class="card card--done"`, // done treatment derived from column membership
+			`id="card-903" class="card card--done"`,                   // done treatment derived from column membership
 			`<p class="column__empty" data-empty="true">No cards</p>`, // the empty column's stated treatment
 		}},
 		{"state-load-failure", []string{`id="load-error"`, "Could not load board.", `id="retry"`}},

@@ -60,23 +60,20 @@ all internal/infrastructure references. Copy it into your own projects and adapt
 
 ## Todo application (this repo's product code)
 
-Modules: `todos` (SQLite-backed store), `api` (JSON contract), `ui` (htmx page),
-`cmd/todo` (composition root). Run: `go run ./cmd/todo --addr 127.0.0.1:8080 --db todos.db`.
+Modules: `todos` (SQLite-backed store), `board` (SQLite-backed board store),
+`api` (JSON contract), `ui` (board page), `cmd/todo` (composition root). Run:
+`go run ./cmd/todo --addr 127.0.0.1:8080 --db todos.db --board-db kanban.db`.
 
-W5 — delete: rows carry a Delete control; the click issues an htmx DELETE to
-`/ui/todos/{id}`, which performs the api contract's `DELETE /todos/{id}` over HTTP
-(204; 404 `{"error":"no such todo"}` when gone) and swaps in the resulting list
-state — the row drops without a reload, deleting the last row lands the empty
-state, and deleted ids are never reused (schema autoincrement). Browser
-acceptance: `make e2e-w5` (also `make e2e-w1` for the foundation).
+KW1 — board page: `GET /` renders the board, read over HTTP from the contract's
+`GET /board` — the three fixed columns To Do / In Progress / Done with their
+cards top-to-bottom in server order, a stated empty treatment on each empty
+column, and a stated load-failure state (retry re-reads) instead of columns
+standing in for a truth the server could not give. The done treatment is
+carried purely by membership of the Done column — the contract carries no done
+field — so no row checkbox or toggle exists anywhere on the page. Browser
+acceptance: `make e2e` (the retired per-wave targets `e2e-w1..w11` are now
+this single suite).
 
-W8 — in-flight control serialization: while the operation triggered by a
-control is in flight, repeat activation of that control causes no request —
-all four controls (create Add, row checkbox, edit Save, row Delete) carry
-htmx `hx-disabled-elt` naming exactly the activated control, and each
-re-enables when the response arrives, success or failure. Blocking is
-per-control: controls on other rows stay usable. Browser acceptance:
-`make e2e-w8` — a Playwright route delay makes the in-flight window
-observable, a counting proxy proves exactly one request (and one server-side
-effect via `GET /todos`) per double activation, and a forced 500 proves the
-control never stays dead.
+Transitional state: the api contract's `POST /todos`, `PATCH /todos/{id}` and
+`DELETE /todos/{id}` endpoints still exist until KW2–KW4 retire them; the
+page's card controls are inert placeholders until their operations wire on.
