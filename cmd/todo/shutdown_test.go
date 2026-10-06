@@ -18,13 +18,20 @@ import (
 	"todo/board"
 )
 
-// Card server/04 — Clean shutdown completes in-flight work.
+// Card server/07 — Clean shutdown completes in-flight work.
 // Given a request is being processed
 // When  shutdown is signaled
 // Then  in-flight requests finish their responses
 //
-//	And the store is closed so completed operations are durable
-//	And the process exits without error
+//	And the board file is closed — no mutation is torn
+//	And the process exits without error, the listener released
+//
+// Already-proven machinery, formalized: built under the pre-kanban server/04
+// numbering and retargeted onto PATCH /cards at KW1 (the /todos change verb
+// retired at api/05); this citation now names its kanban card. Every arm the
+// card demands is pinned here: the in-flight request finishes after the
+// signal, the completed mutation survives a reopen (store closed after the
+// commit, nothing torn), the exit code is 0, and the address stops accepting.
 //
 // A real process gets SIGTERM while a PATCH request is genuinely mid-flight:
 // the request line and headers are sent, the body arrives only after the
@@ -146,11 +153,12 @@ func TestCleanShutdownCompletesInFlightWork(t *testing.T) {
 	}
 }
 
-// Exit codes contract: SIGINT/SIGTERM after successful start → 0. The
-// former seed arm rode the todo store; with the todo surface retired the
-// idle-shutdown story needs no data at all — startup with no board file
-// creates the empty board (fresh_path_test pins that behavior), and an
-// idle process still drains and exits 0.
+// Exit codes contract (card server/07's idle arm): SIGINT/SIGTERM after
+// successful start → 0, listener released. The former seed arm rode the todo
+// store; with the todo surface retired the idle-shutdown story needs no data
+// at all — startup with no board file creates the empty board
+// (fresh_path_test pins that behavior), and an idle process still drains and
+// exits 0.
 func TestCleanShutdownExitCodeZero(t *testing.T) {
 	boardPath := filepath.Join(t.TempDir(), "idle-board.db")
 
