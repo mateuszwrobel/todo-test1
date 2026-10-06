@@ -98,7 +98,24 @@ func (p *page) createCard(title string) (status int, reason string) {
 	if resp.StatusCode == http.StatusCreated {
 		return http.StatusCreated, ""
 	}
-	return resp.StatusCode, "could not create card"
+	return resp.StatusCode, statedReason(resp.Body)
+}
+
+// statedReason extracts the contract's error message (`{"error": message}`),
+// falling back to a plainly stated failure if the body says nothing. The
+// message's single owner is upstream: whatever api/board states ("title is
+// required", the character-limit sentence) is rendered verbatim at the create
+// control — this module never re-words a refusal (card ui/05).
+func statedReason(body io.Reader) string {
+	buf, err := io.ReadAll(io.LimitReader(body, 4<<10))
+	if err != nil {
+		return "could not create card"
+	}
+	var parsed map[string]string
+	if err := json.Unmarshal(buf, &parsed); err == nil && parsed["error"] != "" {
+		return parsed["error"]
+	}
+	return "could not create card"
 }
 
 // writeBoardAreaFragment writes the current board state as the swap content

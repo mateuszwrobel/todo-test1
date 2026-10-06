@@ -1,5 +1,5 @@
 ```json
-{"task": "KW2 ui lane — cards ui/04, ui/05 (create appends without reload; rejected create states the reason)", "status": "in-progress", "date": "2026-10-06", "workplan": "workplans/workplan_ui_board.md", "ledger": "workplans/dependencies_kanban.md#kw2"}
+{"task": "KW2 ui lane — cards ui/04, ui/05 (create appends without reload; rejected create states the reason)", "status": "done", "date": "2026-10-06", "workplan": "workplans/workplan_ui_board.md", "ledger": "workplans/dependencies_kanban.md#kw2"}
 ```
 
 What this lane changes and why.

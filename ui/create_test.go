@@ -168,3 +168,82 @@ func TestCreateTrimmedTitleLandsAtBottom(t *testing.T) {
 		t.Errorf("store To Do column = %q, want the trimmed card appended last", got)
 	}
 }
+
+// Card ui/05 — Rejected create states the reason.
+// Given the page shows the board
+// When  the user submits a create that the server rejects (blank or
+//
+//	over-long text)
+//
+// Then  no card appears
+//
+//	And the stated reason appears at the create control — the contract's
+//	own message, surfaced verbatim, board otherwise unchanged
+func TestRejectedCreateStatesTheReason(t *testing.T) {
+	t.Run("blank", func(t *testing.T) {
+		store, uiSrv := realChain(t, "Write weekly report")
+		// Given the page shows the board with the create control.
+		_, page := getPage(t, uiSrv.URL+"/")
+		if !strings.Contains(page, `id="create-area"`) {
+			t.Fatalf("page has no create control:\n%s", page)
+		}
+
+		// When a whitespace-only create submits.
+		status, frag := postCreate(t, uiSrv.URL, "   ")
+
+		// Then: the contract's refusal status, mirrored.
+		if status != http.StatusUnprocessableEntity {
+			t.Fatalf("POST /ui/cards status = %d, want 422 (body %s)", status, frag)
+		}
+		// The stated reason, the contract's exact string, at the create
+		// control — not re-worded here.
+		if !strings.Contains(frag, `id="create-area"`) || !strings.Contains(frag, `id="create-error"`) {
+			t.Errorf("refusal not stated at the create control:\n%s", frag)
+		}
+		if !strings.Contains(frag, `class="error-text">title is required<`) {
+			t.Errorf("contract's required-message not surfaced verbatim:\n%s", frag)
+		}
+		// The typed text stays in the input for the correcting submit
+		// (retired create precedent; journeys leave survival open).
+		if !strings.Contains(frag, `value="   "`) {
+			t.Errorf("typed text did not survive the rejection:\n%s", frag)
+		}
+		// Board unchanged: the response carries no board fragment at all,
+		// so no card — phantom or real — can appear, and the contract's
+		// truth gained nothing.
+		assertNoCardInResponse(t, frag)
+		if got := toDoCards(t, store); len(got) != 1 || got[0] != "Write weekly report" {
+			t.Errorf("store To Do column = %q, want the board untouched by the refusal", got)
+		}
+	})
+
+	t.Run("over the limit", func(t *testing.T) {
+		store, uiSrv := realChain(t, "Write weekly report")
+
+		// When an over-long create submits (one rune past the contract's
+		// limit — the number owned by board.MaxTextLen upstream).
+		status, frag := postCreate(t, uiSrv.URL, strings.Repeat("x", board.MaxTextLen+1))
+		if status != http.StatusUnprocessableEntity {
+			t.Fatalf("POST /ui/cards status = %d, want 422 (body %s)", status, frag)
+		}
+		// The limit message flows through with its stated number, exactly
+		// as the contract words it.
+		if !strings.Contains(frag, `class="error-text">title exceeds the 500 character limit<`) {
+			t.Errorf("contract's character-limit message not surfaced verbatim:\n%s", frag)
+		}
+		assertNoCardInResponse(t, frag)
+		if got := toDoCards(t, store); len(got) != 1 {
+			t.Errorf("store To Do column = %q, want the board untouched by the refusal", got)
+		}
+	})
+}
+
+// assertNoCardInResponse pins "board otherwise unchanged" on a refusal: the
+// response carries only the create area — no board content, no card element
+// anywhere — so nothing can look created that was not.
+func assertNoCardInResponse(t *testing.T, frag string) {
+	t.Helper()
+	if strings.Contains(frag, `id="board"`) || strings.Contains(frag, `id="card-`) || strings.Contains(frag, "Write weekly report") {
+		t.Errorf("refusal carried board content — a card could appear despite the rejection:\n%s", frag)
+	}
+}
