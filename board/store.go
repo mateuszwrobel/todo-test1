@@ -88,6 +88,40 @@ func (s *Store) Close() error {
 	return s.db.Close()
 }
 
+// Create inserts a card at the bottom of the todo column — position equals the
+// current todo count, so the column's positions stay contiguous 0..n-1 — with
+// a fresh store-assigned identifier, and returns the Card. The count and the
+// insert run in one transaction, so the append is all-or-nothing. The text is
+// stored as given; full text validation lands with the create-rejection cards
+// (board/03, board/04) — until then only the schema CHECK bounds it.
+func (s *Store) Create(text string) (Card, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return Card{}, fmt.Errorf("create card: %w", err)
+	}
+	defer tx.Rollback() // no-op after Commit
+
+	var position int
+	if err := tx.QueryRow(`SELECT count(*) FROM cards WHERE "column" = 'todo'`).Scan(&position); err != nil {
+		return Card{}, fmt.Errorf("create card: %w", err)
+	}
+	res, err := tx.Exec(
+		`INSERT INTO cards (title, "column", position) VALUES (?, 'todo', ?)`,
+		text, position,
+	)
+	if err != nil {
+		return Card{}, fmt.Errorf("create card: %w", err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return Card{}, fmt.Errorf("create card: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return Card{}, fmt.Errorf("create card: %w", err)
+	}
+	return Card{ID: id, Title: text, Column: Todo, Position: position}, nil
+}
+
 // List returns the board: the three fixed columns in the order todo,
 // in_progress, done — all three always present, empty ones holding no cards —
 // each column's cards top-to-bottom by position. The ordered read is grouped
