@@ -43,16 +43,42 @@ var pageTmpl = template.Must(template.New("page").Parse(`<!doctype html>
 // whose body is already-rendered HTML for the same surface the operation
 // acts on. Route those bodies through the same htmx swap engine — no
 // browser-side rendering happens here. Carried over from the retired todo
-// shell and scoped to the create control; card-operation refusals join this
-// routing as their controls wire up (edit KW3, delete KW4, drag KW5).
+// shell and scoped to the create control; the edit control's refusals join
+// this routing (422 states the reason at the re-rendered card, 404 states
+// the missing card above the truth without it — both bodies are the board
+// area). Delete and drag refusals join at their own cards (KW4, KW5).
 document.body.addEventListener('htmx:responseError', function (event) {
   var elt = event.detail && event.detail.elt;
+  var text = event.detail.xhr.responseText;
   if (elt && elt.closest && elt.closest('#create-form')) {
     // A create refusal: the already-rendered create-area fragment.
-    htmx.swap(document.getElementById('create-area'),
-              event.detail.xhr.responseText,
+    htmx.swap(document.getElementById('create-area'), text,
               { swapStyle: 'outerHTML' });
+  } else if (elt && elt.closest && elt.closest('.edit-form')) {
+    // An edit refusal: the already-rendered board area — the editing card
+    // with its original text and the stated reason, or the missing-card
+    // banner over the truth.
+    htmx.swap(document.getElementById('board-area'), text,
+              { swapStyle: 'innerHTML' });
   }
+});
+// The inline edit band: a card's Edit control reveals the band — prefilled
+// with the card's title — without any request; Cancel hides it again, so a
+// discarded edit sends nothing by construction. Save submits the band's
+// form through htmx (PATCH /ui/cards/{id} → the swap paths above).
+document.body.addEventListener('click', function (event) {
+  var control = event.target.closest
+    ? event.target.closest('.card__edit, .edit-form .cancel')
+    : null;
+  if (!control) return;
+  var band = control.closest('.card');
+  if (control.classList.contains('cancel')) {
+    band.classList.remove('editing');
+    return;
+  }
+  band.classList.add('editing');
+  var input = band.querySelector('.edit-form .input');
+  if (input) input.focus();
 });
 </script>
 </body>
@@ -62,12 +88,12 @@ document.body.addEventListener('htmx:responseError', function (event) {
 // boardTmpl renders the three column panels in the contract's array order
 // (the contract fixes the order To Do / In Progress / Done, and the page
 // renders the server's truth rather than re-imposing its own). Each card
-// carries its edit and delete affordance hooks from day one: the buttons
-// are inert placeholders — no hx-* wiring, no fragment endpoint behind them
-// until their operation cards land (edit KW3, delete KW4; see
-// workplans/dependencies_kanban.md wave rows for ui/06 and ui/07). They
-// must exist as elements now so the card's surface is complete when the
-// operations wire onto these very hooks.
+// carries its edit and delete affordance hooks: the edit band is live since
+// KW3 (card ui/06) — the Edit control reveals an inline form prefilled with
+// the card's title, and Save submits PATCH /ui/cards/{id} through htmx, on
+// every card in every column including Done (J6: done is just a column, a
+// done card's text is editable). The delete button stays an inert
+// placeholder — no wiring until KW4 (card ui/07).
 var boardTmpl = template.Must(template.New("board").Parse(`<div id="board" class="board">
 {{- range .}}
 <section id="column-{{.Anchor}}" class="column" data-column="{{.Title}}">
@@ -75,8 +101,14 @@ var boardTmpl = template.Must(template.New("board").Parse(`<div id="board" class
 {{if .Cards}}<ul class="column__cards">{{- range .Cards}}
 <li id="card-{{.ID}}" class="card{{if .Done}} card--done{{end}}" data-card="{{.ID}}">
 <span class="card__title">{{.Title}}</span>
+<form class="edit-form" hx-patch="/ui/cards/{{.ID}}" hx-target="#board-area" hx-swap="innerHTML">
+<input class="input" type="text" name="title" value="{{.Title}}">
+<button type="submit" class="btn btn--primary save">Save</button>
+<button type="button" class="btn btn--secondary cancel">Cancel</button>
+</form>
 <button type="button" class="btn btn--secondary card__edit">Edit</button>
-<button type="button" class="btn btn--secondary card__delete">Delete</button>
+<button type="button" class="btn btn--secondary card__delete">Delete</button>{{if .EditError}}
+<p id="edit-error-{{.ID}}" class="error-text">{{.EditError}}</p>{{end}}
 </li>
 {{- end}}
 </ul>{{else}}<p class="column__empty" data-empty="true">No cards</p>{{end}}
@@ -100,9 +132,10 @@ type column struct {
 }
 
 type card struct {
-	ID    int64
-	Title string
-	Done  bool // derived from column membership — drives the card--done class
+	ID        int64
+	Title     string
+	Done      bool   // derived from column membership — drives the card--done class
+	EditError string // stated refusal rendering at this card, empty when nothing was rejected
 }
 
 // columnsOf maps the contract body to the render model: columns in array
@@ -122,6 +155,21 @@ func columnsOf(board boardResponse) []column {
 		columns = append(columns, out)
 	}
 	return columns
+}
+
+// attachEditError puts the contract's stated refusal on one card of the
+// render model — the card the user was editing, wherever it sits. The card
+// keeps the server's original title (the refusal never applied), and the
+// reason renders at the card.
+func attachEditError(columns []column, id int64, reason string) {
+	for i := range columns {
+		for j := range columns[i].Cards {
+			if columns[i].Cards[j].ID == id {
+				columns[i].Cards[j].EditError = reason
+				return
+			}
+		}
+	}
 }
 
 // columnAnchor makes an element id out of a display title ("In Progress" →

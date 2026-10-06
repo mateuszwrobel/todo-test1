@@ -43,9 +43,10 @@ type page struct {
 // api contract on the same listener (injected by the composition root); every
 // read of the board goes to that address over HTTP, and so does every write
 // the page's fragment endpoints perform. The todo list fragment endpoints
-// retired at KW1; the create endpoint (POST /ui/cards) re-extends the route
-// table at KW2, and the edit/delete/drag endpoints will at their own cards
-// (KW3–KW5; see workplans/dependencies_kanban.md).
+// retired at KW1; the create endpoint (POST /ui/cards) re-extended the route
+// table at KW2 and the edit endpoint (PATCH /ui/cards/{id}) at KW3; the
+// delete/drag endpoints re-extend it at their own cards (KW4–KW5; see
+// workplans/dependencies_kanban.md).
 func NewHandler(apiBase string) http.Handler {
 	p := &page{
 		apiBase: apiBase,
@@ -56,9 +57,12 @@ func NewHandler(apiBase string) http.Handler {
 	// Create re-extends the fragment table at KW2 (card ui/04): the page's
 	// create band posts here, this module performs POST /cards over HTTP,
 	// and the answer is a swap fragment — the retired todo fragment
-	// endpoints' pattern on the board's surface. Edit/delete/drag re-extend
-	// it at their own waves (KW3–KW5).
+	// endpoints' pattern on the board's surface. Edit re-extends it at KW3
+	// (card ui/06): a card's edit band patches here and this module
+	// performs PATCH /cards/{id} over HTTP. Delete/drag re-extend it at
+	// their own waves (KW4–KW5).
 	mux.HandleFunc("POST /ui/cards", p.handleCreate)
+	mux.HandleFunc("PATCH /ui/cards/{id}", p.handleEdit)
 	mux.HandleFunc("GET /static/htmx.min.js", p.handleHTMX)
 	// tokens.css before style.css: style.css is pure var() consumption,
 	// so the token sheet must be parsed first. The <link> order in the

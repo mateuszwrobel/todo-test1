@@ -161,9 +161,10 @@ func TestBoardRendersThreeFixedColumns(t *testing.T) {
 		t.Errorf("page carries a done checkbox/toggle:\n%s", page)
 	}
 
-	// Every card carries its edit and delete affordance hooks. Until the
-	// operation cards land (edit KW3, delete KW4) they are inert
-	// placeholder elements — no request wiring — but the elements exist.
+	// Every card carries its edit and delete affordance hooks. The edit
+	// band is live since KW3 (card ui/06 — every card, every column); the
+	// delete button stays an inert placeholder element — no request
+	// wiring — until KW4 (card ui/07).
 	for _, id := range []int64{1, 2, 3, 4} {
 		card := cardHTML(t, page, id)
 		if !strings.Contains(card, `class="btn btn--secondary card__edit"`) {
