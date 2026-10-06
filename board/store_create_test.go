@@ -3,6 +3,7 @@ package board
 import (
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -227,6 +228,98 @@ func TestCreateStoresTrimmedText(t *testing.T) {
 				t.Errorf("listed title = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+// Card board/04 — Create rejects over-long text.
+// Given an open board
+// When  a card with text longer than 500 characters is created
+// Then  no card is created and the store reports the limit as exceeded
+//
+// Length is characters (runes), not bytes: the multibyte rows pin that a text
+// over 500 bytes but within 500 runes passes and one over 500 runes is
+// rejected even under 1500 bytes. The check runs on the trimmed text, so
+// surrounding whitespace never pushes an otherwise-valid card over the limit.
+func TestCreateRejectsOverLongText(t *testing.T) {
+	repeat := func(r rune, n int) string { return strings.Repeat(string(r), n) }
+
+	tests := []struct {
+		name string
+		text string
+	}{
+		{"501 ASCII characters", repeat('a', MaxTextLen+1)},
+		{"501 multibyte characters (1002 bytes)", repeat('é', MaxTextLen+1)},
+		{"501 characters plus trailing whitespace", repeat('a', MaxTextLen+1) + "  \n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := openStore(t)
+
+			created, err := store.Create(tt.text)
+			if !errors.Is(err, ErrTextTooLong) {
+				t.Fatalf("Create err = %v, want ErrTextTooLong", err)
+			}
+			if created != (Card{}) {
+				t.Errorf("Create returned %+v on rejection, want the zero Card", created)
+			}
+			board := mustList(t, store)
+			for _, col := range board {
+				if len(col.Cards) != 0 {
+					t.Errorf("rejected over-long Create wrote into column %q: %+v", col.Name, col.Cards)
+				}
+			}
+		})
+	}
+
+	t.Run("exactly 500 characters passes", func(t *testing.T) {
+		store := openStore(t)
+
+		text := repeat('a', MaxTextLen)
+		created, err := store.Create(text)
+		if err != nil {
+			t.Fatalf("Create(500 chars): %v", err)
+		}
+		if created.Title != text {
+			t.Errorf("created.Title length = %d, want %d intact", len(created.Title), MaxTextLen)
+		}
+		board := mustList(t, store)
+		if got := board[0].Cards[0].Title; got != text {
+			t.Errorf("listed title = %q, want the 500-character text", got)
+		}
+	})
+
+	t.Run("500 multibyte characters pass despite 1000 bytes", func(t *testing.T) {
+		store := openStore(t)
+
+		text := repeat('é', MaxTextLen)
+		if len(text) <= MaxTextLen {
+			t.Fatalf("fixture is not multibyte: %d bytes", len(text))
+		}
+		if _, err := store.Create(text); err != nil {
+			t.Fatalf("Create(500 runes / %d bytes): %v — length must be runes, not bytes", len(text), err)
+		}
+	})
+}
+
+// A rejected over-long create must not consume an identifier either — the
+// length rule runs before the insert, same guarantee as the blank rule.
+func TestOverLongCreateDoesNotConsumeIdentifier(t *testing.T) {
+	store := openStore(t)
+
+	first, err := store.Create("valid first")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if _, err := store.Create(strings.Repeat("x", MaxTextLen+1)); !errors.Is(err, ErrTextTooLong) {
+		t.Fatalf("over-long Create err = %v, want ErrTextTooLong", err)
+	}
+
+	next, err := store.Create("valid second")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if next.ID != first.ID+1 {
+		t.Errorf("identifier after rejection = %d, want %d — a rejected create must not consume ids", next.ID, first.ID+1)
 	}
 }
 

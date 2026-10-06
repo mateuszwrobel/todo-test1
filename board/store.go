@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	_ "modernc.org/sqlite" // pure-Go, cgo-free SQLite driver
 )
@@ -96,9 +97,10 @@ func (s *Store) Close() error {
 // current todo count, so the column's positions stay contiguous 0..n-1 — with
 // a fresh store-assigned identifier, and returns the Card. The text is trimmed
 // and screened by the module's text rule before storage is touched: blank text
-// comes back as ErrTextRequired with no insert attempted, so a rejected card
-// neither changes the board nor consumes an identifier. The count and the
-// insert run in one transaction, so the append is all-or-nothing.
+// comes back as ErrTextRequired and over-long text as ErrTextTooLong, each
+// with no insert attempted, so a rejected card neither changes the board nor
+// consumes an identifier. The count and the insert run in one transaction, so
+// the append is all-or-nothing.
 func (s *Store) Create(text string) (Card, error) {
 	title, err := validateText(text)
 	if err != nil {
@@ -136,15 +138,27 @@ func (s *Store) Create(text string) (Card, error) {
 // trimmed — the store's "required" outcome. Callers map it with errors.Is.
 var ErrTextRequired = errors.New("board: card text is required (empty or whitespace-only)")
 
+// MaxTextLen is the card text limit in characters — counted as Unicode code
+// points (runes), not bytes.
+const MaxTextLen = 500
+
+// ErrTextTooLong reports trimmed card text longer than MaxTextLen characters —
+// the store's "limit exceeded" outcome. Callers map it with errors.Is.
+var ErrTextTooLong = fmt.Errorf("board: card text exceeds the %d character limit", MaxTextLen)
+
 // validateText is the module's single text rule: every entry point into the
 // board (Create now, Seed with board/14) runs candidate text through it before
 // storage is touched, so one rule source covers all paths and a rejection is
-// always a named store outcome, never a storage-constraint failure. It returns
-// the normalized (trimmed) text to store.
+// always a named store outcome, never a storage-constraint failure. The rules:
+// non-blank once trimmed, at most MaxTextLen characters (runes) once trimmed.
+// It returns the normalized (trimmed) text to store.
 func validateText(text string) (string, error) {
 	trimmed := strings.TrimSpace(text)
 	if trimmed == "" {
 		return "", ErrTextRequired
+	}
+	if utf8.RuneCountInString(trimmed) > MaxTextLen {
+		return "", ErrTextTooLong
 	}
 	return trimmed, nil
 }
