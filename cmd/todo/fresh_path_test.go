@@ -1,34 +1,47 @@
 package main
 
 import (
-	"io"
-	"net/http"
+	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
-// Card server/02 — Fresh path starts empty.
-// Given no data file exists at the configured path
+// Card server/03 — Start without todo data creates an empty board.
+// Given no todo data file exists and the board has never been created
 // When  the command is started
-// Then  it starts successfully and the page shows the "no todos" state
+// Then  GET /board answers 200 with the three fixed columns
+//
+//	And the columns hold no cards
+//	And the board data file exists afterward
+//
+// (This is the board-flavored rewrite of the old fresh-path start test,
+// which asserted the page's "no todos" state through the retired todo list
+// read; empty-board page rendering is a ui card, the board's existence on
+// startup is the server-side behavior pinned here.)
 func TestFreshPathStartsEmpty(t *testing.T) {
-	dbPath := filepath.Join(t.TempDir(), "not-yet-created.db") // dir exists, file absent
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "todos.db")     // dir exists, file absent
+	boardPath := filepath.Join(dir, "kanban.db") // dir exists, file absent
 
-	// Given: nothing exists at the configured path.
 	addr := freeAddr(t)
-	startServer(t, addr, dbPath, filepath.Join(t.TempDir(), "not-yet-board.db")) // must start successfully
+	startServer(t, addr, dbPath, boardPath) // must start successfully
 
-	resp, err := http.Get("http://" + addr + "/")
-	if err != nil {
-		t.Fatalf("GET /: %v", err)
+	// The board exists with the three fixed columns holding no cards.
+	got := getBoard(t, addr)
+	if len(got.Columns) != len(wantColumnTitles) {
+		t.Fatalf("GET /board columns = %d, want %d: %+v", len(got.Columns), len(wantColumnTitles), got.Columns)
 	}
-	page, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("GET / status = %d, want 200", resp.StatusCode)
+	for i, want := range wantColumnTitles {
+		if got.Columns[i].Title != want {
+			t.Errorf("column %d title = %q, want %q", i, got.Columns[i].Title, want)
+		}
+		if len(got.Columns[i].Cards) != 0 {
+			t.Errorf("column %q holds %d cards, want 0", got.Columns[i].Title, len(got.Columns[i].Cards))
+		}
 	}
-	if !strings.Contains(string(page), "No todos") {
-		t.Errorf("page does not state the empty (no todos) state:\n%s", page)
+
+	// The started process created the board data file on disk.
+	if _, err := os.Stat(boardPath); err != nil {
+		t.Errorf("board data file after start: %v", err)
 	}
 }
