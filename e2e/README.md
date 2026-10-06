@@ -213,6 +213,63 @@ go through htmx, which processes what it swaps. The fix belongs to the
 drag swap site (`htmx.process` the swapped region, or route the fetch answer
 through `htmx.swap`) — see `__log__/2026-10-06-kw5-e2e-drag.md`.
 
+## KW6 — Lifecycle: restart, migration, in-flight activation (`e2e/kw6-lifecycle.js`)
+
+Re-executes the parent scenarios "Board survives server restart", "Migrate
+existing todos on first start" and "Repeat activation while an operation is
+in flight", plus a process-level poisoned-migration check mirroring
+`cmd/todo/interrupted_import_test.go`. Every leg gets its own temp dir,
+port and server (SIGTERM teardown), browser legs a fresh page — the
+KW1–KW5 idiom. Every spawn passes an explicit `--todo-db` (temp fixture or
+a never-created path): the repo-root `todos.db` is never touched.
+
+The in-flight proofs extend kw5's request-counter pattern: one
+`page.on('request')`/`page.on('response')` pair per page counts every
+mutation per endpoint (id matching covers both `/ui/cards/{id}` and its
+`/move` suffix), and `page.route` holds a chosen request in flight — the
+route handler stores the deferred `route.continue()`, so the held-URL
+array is the in-flight witness and a repeat activation provably lands
+before the response. Counts (one request per attempted pair) are the hard
+proof; statuses come from the response events. Drags measure their landing
+target LIVE mid-drag (a 2px dragover nudge then re-measure): until KW7 the
+columns stack vertically without board CSS, and pre-drag boxes diverge
+from mid-drag layout by roughly a card row — releasing into a stale gap
+abandons the drag silently.
+
+### What it asserts
+
+1. **Board survives server restart** — create, edit and drag on a live
+   board; SIGTERM must EXIT the process with code 0, not merely stop
+   answering; respawn on the same address and the same board file; the
+   revived page equals the pre-restart board card-for-card and mirrors a
+   fresh `GET /board` with contiguous positions; one further create then
+   succeeds — exactly one POST answering the contract's 201, DOM tracking
+   the truth.
+2. **Migrate existing todos on first start** — a `todos.db` fixture built
+   with the sqlite3 CLI using the schema verbatim from git `48a4ca5^`
+   (`todos` table), rows created in deliberately interleaved done order
+   with two deleted mid-sequence so source ids are gapped `[1,2,4,5,7]`.
+   First start imports them in creation order onto the board with fresh
+   contiguous ids `[1..5]` (To Do gets the three not-done rows bottom-up,
+   Done the two done rows). The fixture's sha256 is identical before and
+   after every start — the reader is mode=ro, the source is untouched —
+   and a restart never re-imports.
+3. **Repeat activation while an operation is in flight** — four legs, each
+   holding its own request mid-flight: a double-clicked Delete is exactly
+   ONE DELETE; a second Enter during a create's POST adds zero POSTs; a
+   drag attempted mid-PATCH starts no second PATCH (the dragged card
+   carries `draggable=false` in flight) while the third, legitimate drag
+   after the response succeeds with one PATCH; an out-of-band card removal
+   turns a stale Delete into one 404, after which NO `[disabled]` controls
+   remain and a further legitimate delete succeeds — controls restored
+   even after a 4xx. These are the browser proofs `ui/inflight_test.go`
+   defers.
+4. **Poisoned migration fails loud** — process-level, no browser: a
+   fixture row the board's own text rule refuses makes the composed
+   process fail startup with a non-zero exit and the stated stderr,
+   leaving at most an empty board file — never a half board. Mirrors
+   `cmd/todo/interrupted_import_test.go`.
+
 ## Seeding
 
 `e2e/testdata/` is a go tool (test-support, not served application code;

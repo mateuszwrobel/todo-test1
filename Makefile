@@ -10,7 +10,9 @@
 # "Delete card" + "Operation on missing card" (delete leg); the KW5 lane
 # covers "Drag card between columns" + "Drag reorder within a column" +
 # "Done is column membership" + "Operation on missing card" (move leg, which
-# completes that scenario). The retired
+# completes that scenario); the KW6 lane covers "Board survives server
+# restart" + "Migrate existing todos on first start" + "Repeat activation
+# while an operation is in flight". The retired
 # todo-app lanes (w1..w11) deleted with the pivot's wave-end swap; the
 # visual-regression lane returns with KW7's baselines.
 .PHONY: e2e
@@ -23,3 +25,4 @@ e2e:
 	NODE_PATH=$$(npm root -g) node e2e/kw3-edit.js
 	NODE_PATH=$$(npm root -g) node e2e/kw4-delete.js
 	NODE_PATH=$$(npm root -g) node e2e/kw5-drag.js
+	NODE_PATH=$$(npm root -g) node e2e/kw6-lifecycle.js
