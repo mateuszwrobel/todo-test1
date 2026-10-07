@@ -346,6 +346,59 @@ contract).
    before — DOM card-for-card and ≡ a fresh GET /board — and the contract's
    name-or-null per identifier matches an independent staging table.
 
+## KW10 — Filter (`e2e/kw10-filter.js`)
+
+Re-executes the parent scenarios "Filter board by user", "All and
+Unassigned filters" and "Move under filter keeps whole-board truth" (cards
+ui/16–18; the filtered contract reads and slot resolution landed through
+KW10 lanes 1–2). Own temp board, port and server per scenario (SIGTERM
+teardown), mirroring the other lanes; Given-state assignments and the
+assigned card in Done ride the contract seam out-of-band (kw9's staging
+role), so no browser leg stages its own precondition. The dropdown's pick is
+exercised as what it is — a plain GET navigation, which is the page's whole
+history mechanism (no client-side filter state exists).
+
+### What it asserts
+
+1. **Filter board by user** — on a mixed-assignee board (four names plus
+   unassigned cards across all three columns), the dropdown offers exactly
+   All users, the GET /users roster in order, Unassigned. Picking Grace
+   navigates to `?assignee=Grace`: only her cards render (every visible chip
+   names her), all three columns keep their place, her To Do cards keep
+   their relative order, the filtered read GET /board?assignee=Grace agrees
+   card-for-card, and her empty Done column states "Nothing for Grace
+   here". A reload replays the URL's view; the back button lands on the
+   plain address showing the full board ≡ GET /board, whose dropdown markup
+   again marks All users (after a history traversal the live select property
+   is the browser's form restore, not page state) — history works precisely
+   because each entry is a GET.
+2. **All and Unassigned filters** — from a live Grace filter (where her two
+   nameless columns state "Nothing for Grace here"), picking "All users"
+   drops the parameter entirely (`search` empty, full board ≡ GET /board,
+   dropdown reads All users off the URL); restoring the filter and picking
+   "Unassigned" instead shows exactly the cards nobody holds (To Do's two
+   nobody-cards and the unassigned Done card; the all-assigned In Progress
+   states "Nothing unassigned here") with `?assignee=unassigned` in the URL,
+   ≡ GET /board?assignee=unassigned.
+3. **Move under filter keeps whole-board truth** — under a Grace filter over
+   an interleaved board (hidden Ada cards sit between her cards: To Do
+   stores [1,2,3,4], the page shows [2,4]), a drop to the visible slot
+   before card 2 is EXACTLY ONE PATCH whose whole body is
+   `{column: "To Do", slot: 0, within: "Grace"}`, and a drop of the same
+   card into In Progress after the visible card there is one PATCH with
+   `{column: "In Progress", slot: 1, within: "Grace"}` — the slot+within
+   pair, never an absolute position. The filtered view updates with no
+   reload (window marker survives) ≡ the filtered contract read; clearing
+   the filter shows the true interleaved order — To Do [1,2,3], In Progress
+   [5,4,6], Done [7] — hidden cards unmoved in their relative order, DOM ≡
+   GET /board, against an expectation derived from staging + contract slot
+   semantics, not from the reads it checks.
+
+No assign-while-filtered leg exists here: no parent scenario describes
+assigning under a filter, and inventing one is out of lane scope — kw9's
+chip legs ride the unfiltered page exactly as kw9 shipped them, untouched
+by the kw10 chrome.
+
 ## Seeding
 
 `e2e/testdata/` is a go tool (test-support, not served application code;

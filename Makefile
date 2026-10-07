@@ -28,6 +28,7 @@ e2e:
 	NODE_PATH=$$(npm root -g) node e2e/kw6-lifecycle.js
 	NODE_PATH=$$(npm root -g) node e2e/kw8-freeze.js
 	NODE_PATH=$$(npm root -g) node e2e/kw9-assign.js
+	NODE_PATH=$$(npm root -g) node e2e/kw10-filter.js
 
 # Visual regression — committed pixel baselines under
 # e2e/visual/__snapshots__/ compared by Playwright's own toHaveScreenshot
