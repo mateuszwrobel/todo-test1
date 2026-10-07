@@ -13,15 +13,23 @@ import (
 )
 
 // BoardStore is this module's port onto the board contract: the read the
-// GET /board endpoint translates, the create POST /cards translates, the
-// change PATCH /cards/{id} translates through Change and Move (the move
-// direction of the contract's "text, column, and/or position" line), and
-// the delete DELETE /cards/{id} translates — the board operations the
-// endpoints exist to reach, nothing more. Consumer-defined port: the
-// composition root injects the concrete store, so no module depends on
-// another's concrete type.
+// GET /board endpoint translates (and its filtered sibling, since KW10, for
+// the ?assignee= leg), the create POST /cards translates, the change PATCH
+// /cards/{id} translates through Change, Move and — since the api/15 slot
+// pair — MoveFiltered (the move direction of the contract's "text, column,
+// and/or position" line, the pair standing instead of position), and the
+// delete DELETE /cards/{id} translates — the board operations the endpoints
+// exist to reach, nothing more. Consumer-defined port: the composition root
+// injects the concrete store, so no module depends on another's concrete
+// type.
 type BoardStore interface {
 	List() ([]board.ColumnCards, error)
+	// ListFiltered serves the GET /board ?assignee= leg: the same three-
+	// column listing narrowed to the keyword's matching cards — an exact
+	// roster name or the "unassigned" sentinel — with stored positions
+	// unchanged. An unknown keyword is board's ErrUnknownAssignee, the
+	// same outcome the PATCH legs carry to 422 "unknown user".
+	ListFiltered(keyword string) ([]board.ColumnCards, error)
 	Create(text string) (board.Card, error)
 	// Change mirrors the store contract's fourth direction (the assignee):
 	// the PATCH handler parses it into an AssigneeDirection — AssignTo for a
@@ -29,6 +37,14 @@ type BoardStore interface {
 	// it here; the move legs' Move call carries no direction by contract.
 	Change(id int64, title *string, column *board.Column, assignee *board.AssigneeDirection) (board.Card, error)
 	Move(id int64, column board.Column, position int) (board.Card, error)
+	// MoveFiltered serves the PATCH "slot"+"within" pair (card api/15):
+	// the target column as a direction (nil = the card's current column)
+	// and the slot counted among the keyword's matching cards of that
+	// column; the returned card's Position is the resolved ABSOLUTE index.
+	// A nil column and the keyword's validity are decided inside the store,
+	// so the contract's rank (validity over not-found) holds without a
+	// read-first window at the transport.
+	MoveFiltered(id int64, column *board.Column, slot int, keyword string) (board.Card, error)
 	Delete(id int64) error
 }
 

@@ -12,31 +12,38 @@ import (
 )
 
 // handleCardChange implements PATCH /cards/{id}: parse the body — a JSON
-// object carrying "title", "column", "position" and/or "assignee" — hand the
-// present fields to the board operations (the contract's "at least one field"
-// distinction), and map outcomes to transport at one site keyed on the
-// board's typed errors with errors.Is (the api workplan's mapping-table
-// decision). Success is 200 with the updated Card encoded straight from
-// board's JSON tags — the contract's five fields (id, title, column,
-// position, assignee; the assignee as name or null, api/13), so a move
-// answers the card in its NEW column and position (card api/06) and an
-// assignee edit answers the assignment it just made. The table now covers
-// the full board.Change and board.Move outcome enumeration: not-found api/07,
-// invalid-column api/08 (the enum guard is the same typed outcome in both
-// operations), the title class api/05, the shape-only empty-change refusal
-// api/09, the unknown-user class api/13, and the done freeze (api/05
-// amendment 2026-10-07, user decision, widened by api/13): a title or an
-// assignee present for a card whose CURRENT column is done is refused with
-// one stated 422 before anything moves — every leg that reaches Change
-// answers it, and Move never carries either, so moving out of Done stays the
-// one-request unlock.
+// object carrying "title", "column", "position", "assignee", and/or the
+// move pair "slot"+"within" — hand the present fields to the board
+// operations (the contract's "at least one field" distinction), and map
+// outcomes to transport at one site keyed on the board's typed errors with
+// errors.Is (the api workplan's mapping-table decision). Success is 200 with
+// the updated Card encoded straight from board's JSON tags — the contract's
+// five fields (id, title, column, position, assignee; the assignee as name
+// or null, api/13), so a move answers the card in its NEW column and
+// position (card api/06) — the slot pair's move likewise, its position the
+// ABSOLUTE index the slot resolved to (card api/15) — and an assignee edit
+// answers the assignment it just made. The table now covers the full
+// board.Change and board.Move outcome enumeration plus the filtered move's
+// additions: not-found api/07, invalid-column api/08 (the enum guard is the
+// same typed outcome in both operations), the title class api/05, the
+// shape-only empty-change refusal api/09, the unknown-user class api/13
+// (shared by the pair's "within", card api/15), the slot-range class
+// api/15, and the done freeze (api/05 amendment 2026-10-07, user decision,
+// widened by api/13): a title or an assignee present for a card whose
+// CURRENT column is done is refused with one stated 422 before anything
+// moves — every leg that reaches Change answers it, and Move and
+// MoveFiltered never carry either, so moving out of Done stays the
+// one-request unlock — the filtered move being such a placement.
 //
 // Field combinations route through applyPatch below: the title/column legs
 // keep Change's shipped mapping (title edit, bottom-append column move),
-// column+position is the card's move leg straight to Move, and position
-// alone is the same-column reorder — the contract lists position as an
-// independent field under "and/or", so the handler finds the card's current
-// column through the read and Moves into it.
+// column+position is the card's move leg straight to Move, position alone is
+// the same-column reorder — the contract lists position as an independent
+// field under "and/or", so the handler finds the card's current column
+// through the read and Moves into it — and the "slot"+"within" pair, which
+// stands instead of position as the filtered move leg, is one MoveFiltered
+// call after the handler's pair-shape guards have refused every illegal
+// company (position beside it, half a pair, an edit direction beside it).
 //
 // The title direction reaches board's text rule — the same single rule
 // source create uses — so its refusals are worded identically across verbs:
@@ -90,6 +97,8 @@ func handleCardChange(store BoardStore) http.HandlerFunc {
 		var title *string
 		var column *board.Column
 		var position *int
+		var slot *int
+		var within *string
 		var assignee *board.AssigneeDirection
 		if obj, ok := body.(map[string]any); ok {
 			if v, present := obj["title"]; present && v != nil {
@@ -127,6 +136,40 @@ func handleCardChange(store BoardStore) http.HandlerFunc {
 				}
 				position = &index
 			}
+			// The slot half of the move pair (card api/15) has position's
+			// shape rules — an integer literal or the standing wrong-type/
+			// non-integer transport class, 400 — and the standing leniency
+			// for a well-formed negative: the contract's slot range is a
+			// semantic rule ("slot": <int ≥ 0>), so a negative integer
+			// travels to board and comes back as ErrInvalidSlot, the same
+			// one-rule-one-owner pattern the column enum follows. The
+			// within half is a plain string field: its roster validity is
+			// board's rule through the users contract, never screened here;
+			// the literal "unassigned" is the sentinel keyword, board's to
+			// interpret. JSON null on either half means absent, this
+			// handler's standing rule (assignee's null-direction is the one
+			// stated exception, and it is not a move field).
+			if v, present := obj["slot"]; present && v != nil {
+				number, ok := v.(json.Number)
+				if !ok { // not a number at all — the wrong-type class again
+					errorJSON(w, http.StatusBadRequest, "invalid request")
+					return
+				}
+				index, err := strconv.Atoi(number.String())
+				if err != nil { // fraction or overflow: position's exact class
+					errorJSON(w, http.StatusBadRequest, "invalid request")
+					return
+				}
+				slot = &index
+			}
+			if v, present := obj["within"]; present && v != nil {
+				name, ok := v.(string)
+				if !ok { // same transport class as a non-string title
+					errorJSON(w, http.StatusBadRequest, "invalid request")
+					return
+				}
+				within = &name
+			}
 			// The assignee field (card api/13) is the one field whose JSON
 			// null CARRIES a direction instead of meaning absent: the
 			// contract spells clear as null ("assignee": <roster name or
@@ -158,18 +201,55 @@ func handleCardChange(store BoardStore) http.HandlerFunc {
 		// values, empty body, well-formed JSON that is not an object) — is
 		// rejected here, 422 with the rule stated. Any one of the fields
 		// satisfies the clause; position included (the contract lists it
-		// beside title and column), and assignee likewise — including its
+		// beside title and column), assignee likewise — including its
 		// null spelling, which is a direction (clear), not an absence
-		// (card api/13). Unlike the title class, where the empty value is
-		// handed to board so its required outcome words the refusal once, no
-		// store outcome carries this rule; the all-nil call is never made
-		// and nothing reaches storage.
-		if title == nil && column == nil && position == nil && assignee == nil {
+		// (card api/13) — and the move pair's halves likewise, since
+		// "slot"+"within" stand INSTEAD of position (api workplan
+		// amendment 2026-10-07). Unlike the title class, where the empty
+		// value is handed to board so its required outcome words the
+		// refusal once, no store outcome carries this rule; the all-nil
+		// call is never made and nothing reaches storage.
+		if title == nil && column == nil && position == nil && assignee == nil && slot == nil && within == nil {
 			errorJSON(w, http.StatusUnprocessableEntity, "at least one field is required")
 			return
 		}
 
-		updated, err := applyPatch(store, id, title, column, position, assignee)
+		// The pair's shape rules (card api/15, api workplan amendment
+		// 2026-10-07: errors "422 stated (slot+position combined, slot
+		// without within, negative slot)"). These are body-shape rules —
+		// which fields a body may carry together — so this module states
+		// the refusals at one site, exactly as api/09's "at least one
+		// field" clause is stated: no board call, nothing read, nothing
+		// written. The pair stands INSTEAD of position ("slot": <int ≥ 0>
+		// + "within": <exact roster name or "unassigned"> — "a move
+		// positioned among the matching cards"): position beside slot is
+		// contradictory targeting and refused; half a pair locates nothing
+		// and is refused; and because the contract spells the pair a MOVE,
+		// the edit directions it would otherwise combine with at this verb
+		// — title, assignee — are refused beside it: a slot body that also
+		// edits would answer two contracts at once, and no card asks for
+		// that combo. A negative slot is NOT refused here: it is well-
+		// formed JSON of the contract's field type, the contract's range
+		// is board's rule, and board answers it as ErrInvalidSlot through
+		// the one mapping site.
+		if position != nil && slot != nil {
+			errorJSON(w, http.StatusUnprocessableEntity, "position and slot are mutually exclusive")
+			return
+		}
+		if slot != nil && within == nil {
+			errorJSON(w, http.StatusUnprocessableEntity, "slot requires within")
+			return
+		}
+		if within != nil && slot == nil {
+			errorJSON(w, http.StatusUnprocessableEntity, "within requires slot")
+			return
+		}
+		if slot != nil && (title != nil || assignee != nil) {
+			errorJSON(w, http.StatusUnprocessableEntity, "cannot combine slot with title or assignee")
+			return
+		}
+
+		updated, err := applyPatch(store, id, title, column, position, slot, within, assignee)
 		if err != nil {
 			writeChangeError(w, err)
 			return
@@ -214,8 +294,20 @@ func handleCardChange(store BoardStore) http.HandlerFunc {
 // text rules, then the enum, then not-found, then the freeze — instead of a
 // second ordering invented at the transport. The assignee-nil legs route
 // exactly as before this increment, operation for operation.
-func applyPatch(store BoardStore, id int64, title *string, column *board.Column, position *int, assignee *board.AssigneeDirection) (board.Card, error) {
+//
+// The slot+within pair (card api/15) routes last and alone: the guard site
+// in the handler has already established that a present slot travels with a
+// present within and with no title, no assignee and no position, so the pair
+// is ONE MoveFiltered call — the column direction passed through as stated
+// (nil re-slots within the card's current column, board resolves that inside
+// the transaction, keeping validity's rank over not-found without a
+// read-first window). board owns every semantic decision of the leg —
+// keyword validity, the column enum, slot non-negativity, existence — in
+// its one order; this function only names the operation.
+func applyPatch(store BoardStore, id int64, title *string, column *board.Column, position *int, slot *int, within *string, assignee *board.AssigneeDirection) (board.Card, error) {
 	switch {
+	case slot != nil:
+		return store.MoveFiltered(id, column, *slot, *within)
 	case position == nil:
 		return store.Change(id, title, column, assignee)
 	case title != nil && column != nil:
@@ -297,14 +389,18 @@ func writeChangeError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, board.ErrUnknownAssignee):
 		// Card api/13 — the contract's stated unknown-user body. The
-		// validity rule has one owner (the users module, screened by board's
-		// Change before anything else is consulted), so this site maps an
-		// outcome, never restates the roster. The board's ordering is
-		// contract — roster validity "outranking text rules, not-found, and
-		// the done freeze" (board/store.go, Change) — and applyPatch routes
-		// every assignee-bearing leg through that one Change, so the
-		// combined requests (unknown + Done, unknown + blank title, unknown
-		// + missing id) arrive here already decided in favor of this class.
+		// validity rule has one owner (the users module, screened by board
+		// before anything else is consulted — Change's ordering for the
+		// assignee direction, MoveFiltered's for the pair's "within", so
+		// card api/15's "within names a stranger to the roster" answers
+		// this same body). The board's ordering is contract — roster
+		// validity "outranking text rules, not-found, and the done freeze"
+		// (board/store.go, Change) and outranking even the slot guards and
+		// the missing target for the move pair (board/store_filter.go) —
+		// and every assignee-bearing leg routes through that one screen,
+		// so the combined requests (unknown + Done, unknown + blank title,
+		// unknown + missing id, unknown + bad slot) arrive here already
+		// decided in favor of this class.
 		errorJSON(w, http.StatusUnprocessableEntity, "unknown user")
 	case errors.Is(err, board.ErrCardNotFound):
 		// Card api/07 — the contract's stated not-found body. The board's
@@ -317,6 +413,15 @@ func writeChangeError(w http.ResponseWriter, err error) {
 		// guard lives in board (shape-only validation here), and it runs
 		// before any write in both Change and Move, so the card is unchanged.
 		errorJSON(w, http.StatusUnprocessableEntity, "invalid column")
+	case errors.Is(err, board.ErrInvalidSlot):
+		// Card api/15 — the contract's stated slot-range refusal ("422
+		// stated (slot+position combined, slot without within, negative
+		// slot)", api workplan amendment 2026-10-07; the first two are
+		// body-shape rules stated at the handler, this one is board's
+		// semantic rule and arrives typed). The guard runs before the
+		// transaction opens in MoveFiltered, so the card is unchanged —
+		// the same one-rule-one-owner pattern as the column enum.
+		errorJSON(w, http.StatusUnprocessableEntity, "invalid slot")
 	case errors.Is(err, board.ErrDoneFrozen):
 		// Card api/05 amendment 2026-10-07, widened by the assignee contract
 		// (api/13): a title OR an assignee aimed at a card whose current
