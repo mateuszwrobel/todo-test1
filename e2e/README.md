@@ -301,6 +301,51 @@ legs (refusal + unlock).
    the card endpoint — title updated, no reload, done treatment left with
    the column, and a later reload agrees with GET /board.
 
+## KW9 — Assignments (`e2e/kw9-assign.js`)
+
+Re-executes the parent scenarios "Assign a user to a card", "Unassign a
+card", "Unknown user is refused", "Done card assignment is frozen" and
+"Assignments survive restart" (cards users/01–02, board/15–18, api/12–13,
+ui/14–15, server/09 landed through KW9 lanes 1–3). Own temp board, port and
+server per scenario (SIGTERM teardown), mirroring the other lanes;
+Given-state assignments ride the contract seam (`PATCH /cards/{id}`
+out-of-band, kw6's staging role), off-cast submissions and Done changes are
+forced form-encoded `page.request` probes at the ui seam (kw8's reasoning:
+`handleEdit` reads `r.FormValue`, so form is the shape that reaches the
+contract).
+
+### What it asserts
+
+1. **Assign a user to a card** — GET /users serves exactly the fixed cast
+   in order; the band select offers exactly Unassigned then those names,
+   preselecting the card's current state. Picking a name is EXACTLY ONE
+   PATCH to the card endpoint whose form carries the name; the chip appears
+   with no reload (window marker survives), a reload keeps it, and
+   GET /board carries the name for that card — chip ≡ contract.
+2. **Unassign a card** — on a seam-staged assigned card (chip + contract
+   agree), picking "Unassigned" is one PATCH carrying the empty field; the
+   chip element is gone with no reload, and the contract reports the card
+   as null; reload agrees with a fresh GET /board.
+3. **Unknown user is refused** — an off-cast name forced at the seam
+   answers 422 stating "unknown user" verbatim in the card's edit-error
+   slot; the rendered board is untouched (the probe never moved the page)
+   and a fresh GET /board repeats the pre-probe truth; the refused card
+   still shows nobody.
+4. **Done card assignment is frozen** — an assigned Done card (staged
+   assign-then-move) renders the chip ONLY — no band, no select, no Edit —
+   while delete and drag stay; forcing a SET on one Done card and a CLEAR
+   on the other both answer 422 "cannot edit a done card" at the card with
+   DOM and GET /board unchanged and the chip intact. One drag out of Done
+   (one move PATCH) returns the band with the select preselected to the
+   carried name, and picking another name there succeeds — exactly one
+   PATCH, chip shows it, reload agrees with GET /board.
+5. **Assignments survive restart** — assignments staged across all columns
+   (To Do, In Progress, one assigned then cleared, one moved into Done
+   while assigned, one never assigned); SIGTERM must EXIT the process with
+   code 0, respawn on the same board file shows every chip exactly as
+   before — DOM card-for-card and ≡ a fresh GET /board — and the contract's
+   name-or-null per identifier matches an independent staging table.
+
 ## Seeding
 
 `e2e/testdata/` is a go tool (test-support, not served application code;

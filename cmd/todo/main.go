@@ -87,6 +87,7 @@ func run(args []string, stderr io.Writer) error {
 	mux.Handle("/board", apiHandler)  // JSON contract: board read
 	mux.Handle("/cards", apiHandler)  // JSON contract: card create (KW2, api/02)
 	mux.Handle("/cards/", apiHandler) // JSON contract: /cards/{id} items (change at KW3/api/05, delete at KW4/api/10)
+	mux.Handle("/users", apiHandler)  // JSON contract: simulated roster (KW9, api/12)
 	mux.Handle("/", uiHandler)        // page, fragments, static
 
 	fmt.Fprintf(stderr, "todo: serving on http://%s (board db %s)\n", ln.Addr(), *boardDBPath)
