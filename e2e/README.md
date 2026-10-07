@@ -81,9 +81,12 @@ board, port, and server (SIGTERM teardown), mirroring the KW1/KW2 lanes.
    columns, editing a middle To Do card shows the new text at the same
    position between the same neighbors under the same identifier *without
    a page reload* (window marker survives), without the done treatment;
-   editing a Done card keeps that card's done treatment; the band opens
-   prefilled with the existing text; a reload shows the same board as a
-   fresh GET /board.
+   the band opens prefilled with the existing text; the Done card renders
+   **no edit affordance at all** — the done freeze (amendment 2026-10-07,
+   parent scenario 15; re-executed fully in the KW8 lane) retired this
+   lane's former "editing a Done card keeps the done treatment" leg —
+   while the Done card's delete control and drag hooks stay; a reload
+   shows the same board as a fresh GET /board.
 2. **Operation on missing card — edit leg** — after the page is rendered,
    the target card is removed server-side out-of-band (direct `sqlite3`
    DELETE against the board data file from the lane process: no card
@@ -166,13 +169,16 @@ what the lane counts.
    lands it with the done treatment (`card--done` off membership), and
    dragging it back out clears the treatment. No separate done control
    exists anywhere on the page at any point: zero checkbox/radio/switch
-   markup, no done/toggle button or link. A cross-check block then
-   re-exercises kw3's "editing a Done card keeps the treatment" on a card
-   the DRAG placed in Done — asserted on the fresh truth render (one PATCH
-   to the card endpoint, no reload, treatment kept) — and pins the
-   post-drop wiring hard: on markup the drag's fetch swap injected, an
-   edit Save is exactly one PATCH to the card endpoint with no navigation,
-   and a Delete is exactly one DELETE with the card gone.
+   markup, no done/toggle button or link. A cross-check block then pins
+   the done freeze (amendment 2026-10-07, parent scenario 15) on a card
+   the DRAG placed in Done — the drag INTO Done makes the edit affordance
+   disappear (delete + drag hooks stay; the fresh render agrees), and the
+   drag back OUT restores it, the edit there landing exactly one PATCH to
+   the card endpoint ("becomes editable after it is moved out of Done";
+   kw3's former "editing a Done card keeps the treatment" leg retires
+   here too). The same block pins the post-drop wiring hard: on markup
+   the drag's fetch swap injected, the edit Save is exactly one PATCH with
+   no navigation, and a Delete is exactly one DELETE with the card gone.
 
 ### Post-drop interaction wiring (asserted)
 
@@ -269,6 +275,31 @@ abandons the drag silently.
    process fail startup with a non-zero exit and the stated stderr,
    leaving at most an empty board file — never a half board. Mirrors
    `cmd/todo/interrupted_import_test.go`.
+
+## KW8 — Done freeze (`e2e/kw8-freeze.js`)
+
+Re-executes the parent scenario "Edit of a done card is rejected"
+(scenario 15, appended by the amendment 2026-10-07 to the
+one-update-operation decision — the contract-level done freeze; cards
+board/08, api/05, ui/06 with their amendments). Own temp board, port and
+server (SIGTERM teardown), mirroring the other lanes; one scenario, two
+legs (refusal + unlock).
+
+### What it asserts
+
+1. **Edit of a done card is rejected** — with a card seeded in Done, the
+   page renders no edit control and no edit band on it (delete and the
+   drag hook stay — neither is an edit), while every card outside Done
+   still carries its Edit control. Forcing the card's seam anyway — a
+   form-encoded `PATCH /ui/cards/{id}` sent via `page.request` straight to
+   the server, the native-submit shape `handleEdit` reads — answers 422
+   carrying the contract's "cannot edit a done card" verbatim in the
+   card's edit-error slot; the rendered board is untouched and a fresh
+   GET /board repeats the pre-probe truth. Dragging the card out of Done
+   (exactly one move PATCH) brings the edit control back on the swapped
+   markup; the band opens prefilled and Save lands exactly one PATCH to
+   the card endpoint — title updated, no reload, done treatment left with
+   the column, and a later reload agrees with GET /board.
 
 ## Seeding
 

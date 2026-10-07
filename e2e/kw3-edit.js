@@ -7,11 +7,16 @@
 // `require('playwright')` resolves via NODE_PATH=$(npm root -g).
 //
 // Flow: build binaries -> seed a board across all three columns -> start
-// server -> edit a middle To Do card and a Done card, asserting the in-place
-// swap (no reload, same id, same position, done treatment kept), then the
-// stale-page edit against a card removed out-of-band, then the two
-// rejections stated at the card -> SIGTERM teardown. Fresh server per
-// scenario, mirroring the KW1/KW2 lanes.
+// server -> edit a middle To Do card, asserting the in-place swap (no
+// reload, same id, same position), and pin that a Done card carries no edit
+// affordance at all — the contract-level done freeze (amendment 2026-10-07
+// to the one-update-operation decision, parent scenario 15 "Edit of a done
+// card is rejected") retired this lane's former "editing a Done card keeps
+// the done treatment" leg; the forced-PATCH refusal and the drag-out unlock
+// are re-executed in the kw8 lane (e2e/kw8-freeze.js). Then the stale-page
+// edit against a card removed out-of-band, then the two rejections stated at
+// the card -> SIGTERM teardown. Fresh server per scenario, mirroring the
+// KW1/KW2 lanes.
 //
 // Missing-card mutation (scenario 2): the lane deletes the target card's row
 // straight from the board data file with the sqlite3 CLI, from its own
@@ -181,14 +186,14 @@ async function main() {
 
   try {
     // --- Scenario 1: "Edit card text keeps place" — a seeded board spans
-    // all three columns (the done leg needs a Done card; three To Do cards
+    // all three columns (the freeze leg needs a Done card; three To Do cards
     // give the edited one real neighbors above and below). Editing a middle
     // To Do card's text shows the new title at the same position in the
     // same column, between the same neighbors, under the same identifier,
-    // without a page reload and without the done treatment; editing a Done
-    // card keeps that card's done treatment — done is column membership,
-    // untouched by a title change. A reload then agrees with a fresh
-    // GET /board.
+    // without a page reload and without the done treatment; the Done card
+    // shows no edit affordance at all (done freeze 2026-10-07, parent
+    // scenario 15) while its delete control and drag hooks stay. A reload
+    // then agrees with a fresh GET /board.
     const seededTitles = [
       'Write the weekly report', // -> To Do
       'Call the plumber',        // -> To Do (the middle card — this lane edits it)
@@ -249,32 +254,25 @@ async function main() {
     assert.strictEqual(editedAfter1.id, edited.id, 'the edited card\'s identifier is unchanged');
     assert.ok(!editedAfter1.done, 'a card edited in To Do does not carry the done treatment');
 
-    // The Done leg: editing a Done card's text keeps its done treatment —
-    // the treatment belongs to the column membership the edit never touches.
+    // The Done leg — a retired behavior pinned honestly by its absence:
+    // the contract-level done freeze (amendment 2026-10-07, parent scenario
+    // 15) makes a Done card non-editable, and card ui/06 renders no edit
+    // affordance on it. This block used to EDIT a Done card and assert the
+    // done treatment survived; that leg retires with the affordance — no
+    // browser path to an edit on a Done card exists anymore. What stays is
+    // the affordance's absence on the rendered card: no Edit control, no
+    // edit band — while delete and drag, which are not edits, stay present
+    // on the same card. (Forced-PATCH refusal + drag-out unlock: kw8 lane.)
     const doneCard = before1.find((c) => c.column === 'Done').cards[0];
-    await cardById(page, doneCard.id).locator(EDIT_BUTTON).click();
-    const doneBand = cardById(page, doneCard.id).locator(EDIT_INPUT);
-    await doneBand.waitFor({ state: 'visible' });
-    assert.strictEqual(await doneBand.inputValue(), doneCard.title,
-      'the edit band on a Done card must also open prefilled (done cards stay editable)');
-    const doneTitle = 'Ship v1.2 (final)';
-    await doneBand.fill(doneTitle);
-    await cardById(page, doneCard.id).locator(EDIT_SAVE).click();
-    await cardById(page, doneCard.id).locator('.card__title')
-      .waitForFunction((el, text) => el.textContent === text, doneTitle);
-
-    const after1b = await snapshot(page);
-    const expected1b = after1.map((col) => ({
-      ...col,
-      cards: col.cards.map((card) =>
-        card.id === doneCard.id && col.column === 'Done' ? { ...card, title: doneTitle } : card
-      ),
-    }));
-    assert.deepStrictEqual(after1b, expected1b,
-      'editing a Done card changed something beyond its text');
-    const doneAfter = after1b.find((c) => c.column === 'Done').cards[0];
-    assert.strictEqual(doneAfter.id, doneCard.id, 'the edited Done card\'s identifier is unchanged');
-    assert.ok(doneAfter.done, 'an edited Done card keeps the done treatment (it stays in the Done column)');
+    const doneLi = cardById(page, doneCard.id);
+    assert.strictEqual(await doneLi.locator(EDIT_BUTTON).count(), 0,
+      'a Done card renders no edit control (done freeze — parent scenario 15)');
+    assert.strictEqual(await doneLi.locator('.edit-form').count(), 0,
+      'a Done card renders no edit band (done freeze — parent scenario 15)');
+    assert.strictEqual(await doneLi.locator('.card__delete').count(), 1,
+      'a Done card keeps its delete control — deleting is not editing');
+    assert.strictEqual(await doneLi.getAttribute('draggable'), 'true',
+      'a Done card stays draggable — dragging it out of Done is the unlock');
 
     // Reload: the fresh render is the stored truth — DOM agrees with GET
     // /board card-for-card, column-for-column.
@@ -283,8 +281,8 @@ async function main() {
     const freshJSON1 = await getJSON(`http://127.0.0.1:${port1}/board`);
     assert.deepStrictEqual(boardView(freshJSON1), reloaded1,
       'the reloaded page does not agree with a fresh GET /board');
-    assert.deepStrictEqual(reloaded1, after1b,
-      'the reloaded page shows different cards than the in-place edits produced');
+    assert.deepStrictEqual(reloaded1, after1,
+      'the reloaded page shows different cards than the in-place edit produced');
 
     await stopServer(srv1);
     console.log('scenario 1 (edit card text keeps place): OK');
