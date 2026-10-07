@@ -111,6 +111,42 @@ Behavior-frozen styling pass, mirroring the retired todo-app W9–W11 pattern in
 
 **Wave end:** the page matches the kanban mockups; every state renders on one gallery page; two back-to-back visual runs green; KW1–KW6 e2e and unit suites stay green (styling is behavior-frozen).
 
+## KW9 — Simulated users: assignment
+
+Parent scenarios covered: "Assign a user to a card", "Unassign a card", "Unknown user is refused", "Done card assignment is frozen", "Assignments survive restart".
+
+| Card | Depends on | Note |
+|------|-----------|------|
+| users/01 roster lists the simulation names | — | new bottom module: constant list + membership, imported by board, served by api |
+| board/15 assigning and clearing keeps the card | users/01 | assignee direction of Change; card identity/column/position untouched |
+| board/16 assignment on a done card is frozen | board/15 | freeze check widened to the assignee direction |
+| board/17 unknown assignee is rejected | board/15 | validity check precedes text rules, not-found, freeze |
+| board/18 assignment survives store reopen | board/15 | assignee column added on Open when missing |
+| api/12 users roster contract | users/01 | GET /users |
+| api/13 PATCH assignee returns the card | board/15, board/16, board/17 | assignee field on every Card payload; 422 unknown user / done freeze |
+| ui/14 assignee control assigns and unassigns | api/13 | chip on the card, select in the edit band |
+| ui/15 done card shows the chip only | ui/14 | no assign control on Done; chip always visible |
+| server/09 assignments survive restart | board/18 | process restart over the same db |
+
+**Wave end:** parent scenarios above re-executed through the browser; go suite green; archspec strict green with the users package in the layering; KW1–KW8 lanes stay green.
+
+## KW10 — Filtering by user
+
+Parent scenarios covered: "Filter board by user", "All and Unassigned filters", "Move under filter keeps whole-board truth".
+
+| Card | Depends on | Note |
+|------|-----------|------|
+| board/19 filtered-slot move keeps whole-board order | KW9 (assignee column) | slot-among-matching resolution with whole-column renormalization |
+| api/14 board filtered by assignee | KW9 | ?assignee= read filter; unknown → 422 |
+| api/15 move with a filter-relative slot | board/19 | slot+within pair; mutually exclusive with position |
+| ui/16 filter dropdown filters the board | api/14 | dropdown over the board; URL-encoded filter |
+| ui/17 filtered columns state the empty | ui/16 | stated empty per column |
+| ui/18 hidden truth under a filter | ui/16, api/15 | drag under filter; clearing reveals true interleave |
+| ui/19 assignment and filter states in the gallery | ui/14–ui/18 | new gallery anchors + visual baselines |
+
+**Wave end:** parent scenarios above re-executed through the browser; visual baselines regenerated for the new/changed anchors, two back-to-back runs green; all earlier lanes green.
+
+
 ## Wave dependencies (the parallel graph)
 
 | Wave | Requires | Can run parallel with |
@@ -122,8 +158,11 @@ Behavior-frozen styling pass, mirroring the retired todo-app W9–W11 pattern in
 | KW5 drag | KW2, KW3, KW4 | — |
 | KW6 lifecycle+migration+in-flight | KW3, KW4, KW5 | — |
 | KW7 styling | KW6 | — |
+| KW8 done-freeze (patch) | KW7 | — |
+| KW9 assignment | KW8 | — |
+| KW10 filter | KW9 | — |
 
-After KW1 the widest parallel spread is {KW2 ∥ KW3 ∥ KW4}; KW5 is a join on KW2+KW3+KW4; KW6 and KW7 are the tail.
+After KW1 the widest parallel spread is {KW2 ∥ KW3 ∥ KW4}; KW5 is a join on KW2+KW3+KW4; KW6 and KW7 are the tail. KW8 (done-freeze patch), KW9 (assignment), and KW10 (filter) append as a serial tail after KW7.
 
 ## Lane rules
 
