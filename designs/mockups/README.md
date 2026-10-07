@@ -18,8 +18,10 @@ Superseded todo-app renders below are kept as history (ADR-003); the current set
 | `kanban/k5-done-column.png` | J5 done rendering — green-bordered Done column focal; arrow drawn in reopen direction | `kanban/prompts/k5-done-column.json` |
 | `kanban/k6-edit-card.png` | J6 inline edit — prefilled input + blue Save replacing the card row (Cancel affordance deliberately absent from the render) | `kanban/prompts/k6-edit-card.json` |
 | `kanban/k7-delete-card.png` | J7 delete hover — red Delete on the acted card; other rows render controls on hover only | `kanban/prompts/k7-delete-card.json` |
+| `kanban/k8-assign-card.png` | assignment increment — assignee chips on cards, edit band with name select + Save, Done card chip + Delete only (frozen) | `kanban/prompts/k8-assign-card.json` |
+| `kanban/k9-filtered-board.png` | filter increment — ?assignee=Grace in URL, dropdown on Grace, only her cards visible with chips, Done column states "Nothing for Grace here" | `kanban/prompts/k9-filtered-board.json` |
 
-Kanban rendering notes: all accepted on first seeded draw except k6 (two rerolls: "Cancel" label produced ghost fragments — removed from caption; a seed reroll duplicated a row) and k7 (first caption repeated per-row controls and duplicated label rows — simplified to hover-only controls on the acted row). Residual artifacts across the set: small checkbox glyphs leak beside Edit/Delete labels; occasional letter slips. Board copy is shared across mockups (same six cards) — deliberate, aids cross-mockup comparison.
+Kanban rendering notes: all accepted on first seeded draw except k6 (two rerolls: "Cancel" label produced ghost fragments — removed from caption; a seed reroll duplicated a row) and k7 (first caption repeated per-row controls and duplicated label rows — simplified to hover-only controls on the acted row). Residual artifacts across the set: small checkbox glyphs leak beside Edit/Delete labels; occasional letter slips. Board copy is shared across mockups (same six cards) — deliberate, aids cross-mockup comparison. These two mock the user-assignment/filter increment (2026-10-07); residual artifacts: create-input placeholder renders "Add a card 202.." in both; k9 URL "=" slightly overstriken; k9 needed one reroll for chip text.
 
 ## Todo app mockups (superseded)
 
