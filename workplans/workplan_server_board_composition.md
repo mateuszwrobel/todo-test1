@@ -55,6 +55,11 @@ Given all four packages (board, api, ui, server) are present
 When the architecture gate runs
 Then the dependency directions of the parent plan hold: ui→api via HTTP only, api→board in-process, server composing all, nothing importing server or reading data files outside its owner
 
+### Scenario: Assignments survive restart
+Given assignments set over HTTP across all columns, including an assigned card in Done and cards with no assignee
+When the process restarts with the same data files
+Then every card reports exactly the same assignee state as before
+
 ## Decisions
 
 - The composition root owns data-file lifecycle and paths; the board module owns everything behind the path — Rationale: principle 8, one owner per lifecycle; the store workplan's matching assumption. Rejected: the store choosing its own path.

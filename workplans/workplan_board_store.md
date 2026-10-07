@@ -86,6 +86,40 @@ When cards are seeded in bulk — a list of texts with a target column
 Then the column holds exactly those texts top-to-bottom in the given order
   And each card carries a fresh identifier
 
+### Scenario: Assigning and clearing the assignee keeps the card
+Given a card on the board
+When the card is changed with an assignee set to a roster name
+Then the returned card carries that assignee
+  And its column, position, and identifier are unchanged
+When the card is later changed with the assignee cleared
+Then the returned card carries no assignee
+  And its column, position, and identifier are unchanged
+
+### Scenario: Assignment on a done card is frozen
+Given a card in the Done column
+When a change carrying an assignee targets it
+Then the freeze error answers and nothing is written
+  And the same card moved out of Done accepts the assignee change afterwards
+
+### Scenario: Unknown assignee is rejected
+Given any card
+When a change carries an assignee outside the roster
+Then the unknown-assignee error answers before any write — roster validity outranks the text rules, the not-found lookup, and the freeze
+  And the board is unchanged cell-for-cell
+
+### Scenario: Assignment survives store reopen
+Given a board with assigned and unassigned cards
+When the store is closed and reopened
+Then every card carries exactly the assignee it carried before
+
+### Scenario: Filtered-slot move keeps whole-board order
+Given a column whose cards interleave those matching an assignee filter with those not matching it
+When a card is moved with a target column and a slot counted among the matching cards only
+Then the card lands at that slot relative to the matching cards
+  And the non-matching cards keep their relative order cell-for-cell
+  And positions stay contiguous 0..n-1 in every column
+  And slot 0 into a column holding no matching cards places the card at that column's front
+
 ## Decisions
 
 - Title validation lives here, not in callers — Rationale: one rule source; every path into the board (API, import) gets the same guarantee. Rejected: validating only in the HTTP layer, letting direct callers insert junk.
@@ -137,6 +171,15 @@ None — single table.
 - Delete: remove and renormalize the card's column in one transaction.
 - Seed: insert a caller-supplied ordered list into one column, positions assigned in order.
 - The schema satisfies the API Card model exactly (id, title, column, position) — nothing more is stored.
+
+### Proposed Tables — cards table addition (2026-10-07)
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| assignee | TEXT | NULL allowed | the card's one simulated user; NULL = unassigned; no foreign key — the roster is a built-in constant (users module), membership is a code rule |
+
+Schema upgrade: Open adds the column when missing; every existing row then reads as unassigned. No users table.
+
+Data flow: the assignee column serves the contract's per-card "assignee" field (name or null). Filtered reads select `assignee = <name>` or `assignee IS NULL` (keyword "unassigned"); stored positions and order pass through unchanged. The filtered-slot move resolves its slot against the matching rows of the target column and normalizes contiguity whole-column. Roster membership is validated through the users contract before any write, outranking text rules, not-found, and the done freeze. The Done freeze check in Change now fires when either the title or the assignee direction is present while the card's current column is Done.
 
 ## Modularity
 

@@ -89,6 +89,48 @@ When the component gallery route is opened with fixture data
 Then every state renders from fixtures without a live server
   And the styled board follows the kanban mockups' structure: three fixed columns, card treatment, green-check done rendering
 
+### Scenario: Assignee control assigns and unassigns
+Given a card in To Do or In Progress
+When the user opens its edit band and picks a roster name
+Then exactly one change request leaves and the card now shows that person's chip
+When the band picks "Unassigned"
+Then the chip disappears and the card shows no assignee
+  And an active filter is left untouched
+
+### Scenario: Done card shows the chip only
+Given an assigned card in Done
+Then the card shows its chip with the name
+  And no assign control appears anywhere on the card
+  And forcing an assignee change over the seam states the refusal at the card
+When the card is dragged out of Done
+Then the edit band offers the assignee select again
+
+### Scenario: Filter dropdown filters the board
+Given the board page
+When the filter control is opened
+Then it lists "All users", each roster name, and "Unassigned" — exactly the roster
+When a name is chosen
+Then the board shows only that person's cards in their columns and order, the URL gains the assignee parameter, and a reload keeps the filtered view
+When "All users" is chosen
+Then the parameter leaves the URL and the full board returns
+
+### Scenario: Filtered columns state the empty
+Given a filter under which one column holds no matching cards
+When the filtered view renders
+Then that column shows the stated empty treatment with the filter named
+
+### Scenario: Hidden truth under a filter
+Given a filter active with hidden cards interleaved among visible ones
+When the user drags a visible card to a visible slot
+Then the view updates as moved
+  And clearing the filter reveals the true interleaved order with the hidden cards untouched
+
+### Scenario: Assignment and filter states in the gallery
+Given the component gallery route
+When it is opened
+Then it shows an assigned card, an unassigned card, a Done card with chip and no assign control, an edit band with the assignee select, and a filtered column with its empty treatment
+  And the visual baselines cover these anchors
+
 ## Decisions
 
 - Drag-and-drop is the page's only movement mechanic — Rationale: parent decision; no button or menu fallback exists. Rejected: a move menu duplicating PATCH calls.

@@ -73,6 +73,42 @@ Given no card exists with identifier Z
 When a client sends DELETE /cards/Z
 Then the response is 404 with the error "no such card"
 
+### Scenario: Users roster contract
+Given the server is running
+When GET /users is requested
+Then 200 answers with the five roster names in fixed order
+
+### Scenario: PATCH assignee returns the card
+Given a card that is not in Done
+When PATCH /cards/{id} carries {"assignee":"Grace"}
+Then 200 answers with the full card including that assignee and unchanged column and position
+When a later PATCH carries {"assignee":null}
+Then the card answers unassigned
+When the field carries a name outside the roster
+Then 422 answers with {"error":"unknown user"} and the card is unchanged
+When the card is in Done and the request carries a title or an assignee
+Then 422 answers with {"error":"cannot edit a done card"}
+
+### Scenario: Board filtered by assignee
+Given a board mixing assigned and unassigned cards
+When GET /board carries ?assignee=Grace
+Then 200 answers the same board shape with only Grace's cards, stored order and positions unchanged
+When it carries ?assignee=unassigned
+Then only the cards without an assignee appear
+When it carries an assignee value outside the roster
+Then 422 answers with {"error":"unknown user"}
+When it carries no assignee parameter
+Then the answer is the full board, unchanged from today
+
+### Scenario: Move with a filter-relative slot
+Given a filtered view whose visible cards sit among hidden ones
+When PATCH /cards/{id} carries {"column":"doing","slot":1,"within":"Grace"}
+Then 200 answers with the moved card and an absolute position that puts it at slot 1 among Grace's cards with the hidden cards unmoved
+When the body carries "position" and "slot" together, or "slot" without "within"
+Then 422 answers with a stated error
+When "within" names a stranger to the roster
+Then 422 answers with {"error":"unknown user"}
+
 ## Decisions
 
 - Board operations map 1:1 onto the parent contract — Rationale: the parent workplan's API section is the contract; this module exists to serve it, not to revise it.
@@ -107,6 +143,32 @@ Contracts, request/response bodies, and error strings are exactly the parent wor
 
 ### Data Models / DTOs
 The Card model of the parent contract: id (int, stable, never reused), title (non-blank ≤500), column (todo|in_progress|done), position (0-based, contiguous per column).
+
+### Endpoints (added 2026-10-07)
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | /users | the simulated roster |
+| GET | /board?assignee= | board read narrowed by user (also served to the page fragment route) |
+| PATCH | /cards/{id} | gains "assignee" and the "slot"+"within" move pair |
+
+### Contracts (added 2026-10-07)
+#### GET /users
+**Success response**
+- Status: 200
+- Body: `{"users":["Ada","Grace","Alan","Barbara","Linus"]}`
+
+#### PATCH /cards/{id} — increment
+- Body may carry `"assignee": <roster name or null>` — an edit direction, frozen on Done like the title.
+- Body may carry `"slot": <int ≥ 0>` + `"within": <exact roster name or "unassigned">` instead of `"position"` — a move positioned among the matching cards of the target column.
+- Errors added: 422 `{"error":"unknown user"}` (assignee/within outside the roster; validity outranks text rules, not-found, and the freeze); 422 `{"error":"cannot edit a done card"}` (title or assignee on a Done card); 422 stated (slot+position combined, slot without within, negative slot).
+
+#### GET /board?assignee= (and the page's board fragment)
+- exact roster name → same shape, columns narrowed to that user's cards; `unassigned` → cards with no assignee; unknown value → 422 `{"error":"unknown user"}`; absent → unchanged full board.
+
+### Data Models / DTOs (added 2026-10-07)
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| assignee | string or null on every Card | roster name or null, enforced at the contract | the card's simulated user |
 
 ## Modularity
 
