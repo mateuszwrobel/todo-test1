@@ -6,6 +6,8 @@
 #   ui       — server-rendered page (htmx); reaches api over HTTP at RUNTIME only
 #   cmd/todo — composition root (package main): wires store + api + ui. Chosen over
 #              a root main package so the root stays clean of wiring code.
+#   cmd/db-diagram — schema-diagram generator (package main): dev tool, reads the
+#              live schema through board and renders docs/db-schema.md.
 #
 # (The `todos` entry retired with the package at KW4/api/10 — the last todo
 # endpoint's retirement, per dependencies_kanban.md §KW4.)
@@ -64,8 +66,20 @@ matches = { units = ["*/cmd/todo"] }
 [module.allowed]
 depend_on = ["board", "api", "ui"]
 
+# Schema-diagram generator: cmd/db-diagram, package main — a dev tool, not the
+# app's composition root. Its one internal edge is board: board.Open
+# materializes the current schema in a temp file and the generator reads it
+# back with PRAGMA introspection. It composes no api/ui handlers and must not
+# start reaching for them.
+[[module]]
+name = "db-diagram"
+matches = { units = ["*/cmd/db-diagram"] }
+[module.allowed]
+depend_on = ["board"]
+forbidden = ["api", "ui", "server"]
+
 # No dependency cycles among the declared modules.
 [[constraint]]
 type = "no_cycles"
-modules = ["board", "api", "ui", "server"]
+modules = ["board", "api", "ui", "server", "db-diagram"]
 severity = "error"

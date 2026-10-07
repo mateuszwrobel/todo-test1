@@ -39,3 +39,12 @@ e2e-visual:
 	go build -o e2e/bin/todo ./cmd/todo
 	go build -o e2e/bin/seed ./e2e/testdata
 	NODE_PATH=$$(npm root -g) node $$(npm root -g)/@playwright/test/cli.js test --config e2e/playwright.visual.config.js $(PW_ARGS)
+
+# Schema diagram — regenerate docs/db-schema.md from the live schema:
+# cmd/db-diagram materializes the schema through board.Open on a throwaway
+# file (board owns the schema SQL; the tool copies none) and renders a
+# Mermaid ER diagram from PRAGMA introspection. The doc is tool-owned: the
+# schema changes in board/store.go, the diagram regenerates, never by hand.
+.PHONY: db-diagram
+db-diagram:
+	go run ./cmd/db-diagram
