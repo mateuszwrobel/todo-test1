@@ -107,7 +107,9 @@ func (s *Store) ListFiltered(keyword string) ([]ColumnCards, error) {
 // a slot counted among the MATCHING cards only of the target column — the
 // operation behind a drag made while a filter is on, where the visible list
 // is a subset of the column. Matching means the same keyword semantics as
-// ListFiltered: exact roster name, or UnassignedKeyword for unassigned.
+// ListFiltered: exact roster name, or UnassignedKeyword for unassigned. A
+// nil column states no target — the card is re-slotted within the column it
+// already sits in, the same nil-direction convention Change carries.
 //
 // Slot resolution (workplan amendment, Database → Data Flow: "the
 // filtered-slot move resolves its slot against the matching rows of the
@@ -139,21 +141,23 @@ func (s *Store) ListFiltered(keyword string) ([]ColumnCards, error) {
 // Change's rank: keyword validity through the users contract FIRST (an
 // unknown filter is a request defect — ErrUnknownAssignee outranks the
 // column enum, the slot guard and the not-found lookup, exactly as board/17
-// ranks the assignee direction), then the target column enum
-// (ErrInvalidColumn), then the slot's non-negativity (ErrInvalidSlot), then
-// inside the transaction the existence read (ErrCardNotFound). Like Move,
-// this is placement and NOTHING ELSE: no title, no assignee direction, so
-// the done freeze never fires — a Done card filtered-moves out exactly as it
-// plain-moves out, and an assigned card arrives still assigned. A slot past
-// the matching count clamps as described; a negative slot is refused.
-func (s *Store) MoveFiltered(id int64, column Column, slot int, keyword string) (Card, error) {
+// ranks the assignee direction), then the target column enum when one is
+// stated (ErrInvalidColumn; a nil column means "the card's current column",
+// Change's nil-direction convention), then the slot's non-negativity
+// (ErrInvalidSlot), then inside the transaction the existence read
+// (ErrCardNotFound). Like Move, this is placement and NOTHING ELSE: no
+// title, no assignee direction, so the done freeze never fires — a Done card
+// filtered-moves out exactly as it plain-moves out, and an assigned card
+// arrives still assigned. A slot past the matching count clamps as
+// described; a negative slot is refused.
+func (s *Store) MoveFiltered(id int64, column *Column, slot int, keyword string) (Card, error) {
 	clause, arg, err := filterCondition(keyword)
 	if err != nil {
 		return Card{}, fmt.Errorf("filtered move card %d: %w", id, err)
 	}
-	if !validColumn(column) {
+	if column != nil && !validColumn(*column) {
 		return Card{}, fmt.Errorf("filtered move card %d: column %q is not todo, in_progress, or done: %w",
-			id, string(column), ErrInvalidColumn)
+			id, string(*column), ErrInvalidColumn)
 	}
 	if slot < 0 {
 		return Card{}, fmt.Errorf("filtered move card %d: slot %d is negative: %w", id, slot, ErrInvalidSlot)
@@ -178,10 +182,18 @@ func (s *Store) MoveFiltered(id int64, column Column, slot int, keyword string) 
 	}
 	card.Assignee = storedAssignee.String
 
+	// A nil target column means "where the card already is" — the same-column
+	// filtered reorder, resolved inside the transaction so the request-shape
+	// guards above never depend on a read.
+	target := card.Column
+	if column != nil {
+		target = *column
+	}
+
 	// Departure first for a cross-column move (Move's pattern): the flip lets
 	// the source renormalization see the card as gone and close its gap.
-	if column != card.Column {
-		if _, err := tx.Exec(`UPDATE cards SET "column" = ? WHERE id = ?`, string(column), id); err != nil {
+	if target != card.Column {
+		if _, err := tx.Exec(`UPDATE cards SET "column" = ? WHERE id = ?`, string(target), id); err != nil {
 			return Card{}, fmt.Errorf("filtered move card %d: %w", id, err)
 		}
 		if err := renormalize(tx, card.Column); err != nil {
@@ -193,7 +205,7 @@ func (s *Store) MoveFiltered(id int64, column Column, slot int, keyword string) 
 	// and the ids among them the keyword matches — the slot is counted
 	// against that matching list, in column order.
 	restQuery := `SELECT id FROM cards WHERE "column" = ? AND id <> ? ORDER BY position ASC, id ASC`
-	restArgs := []any{string(column), id}
+	restArgs := []any{string(target), id}
 	rows, err := tx.Query(restQuery, restArgs...)
 	if err != nil {
 		return Card{}, fmt.Errorf("filtered move card %d: %w", id, err)
@@ -219,7 +231,7 @@ func (s *Store) MoveFiltered(id int64, column Column, slot int, keyword string) 
 		`SELECT id FROM cards WHERE "column" = ? AND %s AND id <> ? ORDER BY position ASC, id ASC`,
 		clause,
 	)
-	matchingArgs := []any{string(column)}
+	matchingArgs := []any{string(target)}
 	if arg != nil {
 		matchingArgs = append(matchingArgs, arg)
 	}
@@ -277,11 +289,11 @@ func (s *Store) MoveFiltered(id int64, column Column, slot int, keyword string) 
 		}
 	}
 	if _, err := tx.Exec(
-		`UPDATE cards SET "column" = ?, position = ? WHERE id = ?`, string(column), insertion, id,
+		`UPDATE cards SET "column" = ?, position = ? WHERE id = ?`, string(target), insertion, id,
 	); err != nil {
 		return Card{}, fmt.Errorf("filtered move card %d: %w", id, err)
 	}
-	card.Column, card.Position = column, insertion
+	card.Column, card.Position = target, insertion
 
 	if err := tx.Commit(); err != nil {
 		return Card{}, fmt.Errorf("filtered move card %d: %w", id, err)

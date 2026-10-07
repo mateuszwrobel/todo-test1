@@ -103,7 +103,7 @@ func TestFilteredSlotMoveCrossColumn(t *testing.T) {
 	store, before, by := filterFixture(t)
 	moved := by["a0"] // Ada, in_progress position 0
 
-	got, err := store.MoveFiltered(moved.ID, Todo, 1, "Grace")
+	got, err := store.MoveFiltered(moved.ID, ptr(Todo), 1, "Grace")
 	if err != nil {
 		t.Fatalf("MoveFiltered(%d, Todo, 1, \"Grace\"): %v", moved.ID, err)
 	}
@@ -191,7 +191,7 @@ func TestFilteredSlotMoveSameColumn(t *testing.T) {
 	store, _, by := filterFixture(t)
 	moved := by["g0"] // Grace at todo position 0
 
-	got, err := store.MoveFiltered(moved.ID, Todo, 2, "Grace")
+	got, err := store.MoveFiltered(moved.ID, ptr(Todo), 2, "Grace")
 	if err != nil {
 		t.Fatalf("MoveFiltered(%d, Todo, 2, \"Grace\"): %v", moved.ID, err)
 	}
@@ -209,8 +209,9 @@ func TestFilteredSlotMoveSameColumn(t *testing.T) {
 
 	// A slot that does exist among the remaining matches: g0 back to Grace
 	// slot 1 → the earliest spot after the preceding match g2 → absolute 2
-	// (hidden h3 shifts down one cell, its order kept).
-	got, err = store.MoveFiltered(moved.ID, Todo, 1, "Grace")
+	// (hidden h3 shifts down one cell, its order kept). NO stated column:
+	// the nil direction re-slots within the card's current column.
+	got, err = store.MoveFiltered(moved.ID, nil, 1, "Grace")
 	if err != nil {
 		t.Fatalf("second MoveFiltered: %v", err)
 	}
@@ -243,7 +244,7 @@ func TestFilteredSlotMoveHiddenCardSameColumn(t *testing.T) {
 	store, _, by := filterFixture(t)
 	moved := by["h3"] // unassigned, todo position 3
 
-	got, err := store.MoveFiltered(moved.ID, Todo, 1, "Grace")
+	got, err := store.MoveFiltered(moved.ID, ptr(Todo), 1, "Grace")
 	if err != nil {
 		t.Fatalf("MoveFiltered hidden card: %v", err)
 	}
@@ -267,7 +268,7 @@ func TestFilteredSlotMoveIntoNoMatchColumnGoesToTheFront(t *testing.T) {
 	store, _, by := filterFixture(t)
 	moved := by["g4"] // Grace, todo position 4
 
-	got, err := store.MoveFiltered(moved.ID, InProgress, 0, "Grace")
+	got, err := store.MoveFiltered(moved.ID, ptr(InProgress), 0, "Grace")
 	if err != nil {
 		t.Fatalf("MoveFiltered into no-match column: %v", err)
 	}
@@ -289,7 +290,7 @@ func TestFilteredSlotMoveIntoNoMatchColumnGoesToTheFront(t *testing.T) {
 
 	// The same front rule through the EMPTY end: slot 0 into the done column
 	// (d0 is unassigned — no Grace there) front-places ahead of d0.
-	got, err = store.MoveFiltered(moved.ID, Done, 0, "Grace")
+	got, err = store.MoveFiltered(moved.ID, ptr(Done), 0, "Grace")
 	if err != nil {
 		t.Fatalf("MoveFiltered into done at slot 0: %v", err)
 	}
@@ -314,7 +315,7 @@ func TestFilteredSlotMoveUnassignedSentinel(t *testing.T) {
 	// Into todo at slot 2 among the UNASSIGNED cards. Remaining todo
 	// [g0(G), h1(—), g2(G), h3(—), g4(G)]; matching (NULL) at indices [1,3].
 	// Slot 2 = at/past the matching count → right after h3 → index 4.
-	got, err := store.MoveFiltered(moved.ID, Todo, 2, UnassignedKeyword)
+	got, err := store.MoveFiltered(moved.ID, ptr(Todo), 2, UnassignedKeyword)
 	if err != nil {
 		t.Fatalf("MoveFiltered sentinel: %v", err)
 	}
@@ -335,7 +336,7 @@ func TestFilteredSlotMoveOutOfDoneIsNotAnEdit(t *testing.T) {
 	store, _, by := filterFixture(t)
 	moved := by["d0"] // unassigned, done position 0
 
-	got, err := store.MoveFiltered(moved.ID, Todo, 0, "Grace")
+	got, err := store.MoveFiltered(moved.ID, ptr(Todo), 0, "Grace")
 	if err != nil {
 		t.Fatalf("filtered move out of Done: %v — placement is never an edit", err)
 	}
@@ -363,20 +364,20 @@ func TestFilteredSlotMoveValidation(t *testing.T) {
 	legs := []struct {
 		label   string
 		id      int64
-		column  Column
+		column  *Column
 		slot    int
 		keyword string
 		wantErr error
 	}{
-		{"unknown keyword outranks the column enum", target.ID, Column("backlog"), 0, "Zoidberg", ErrUnknownAssignee},
-		{"unknown keyword outranks the slot guard", target.ID, Todo, -1, "grace", ErrUnknownAssignee},
-		{"unknown keyword on a missing card — validity first", unknownID(t, store), Todo, 0, "GRACE", ErrUnknownAssignee},
-		{"empty keyword is not a name and not the sentinel", target.ID, Todo, 0, "", ErrUnknownAssignee},
-		{"padded name is not a name", target.ID, Todo, 0, "Grace ", ErrUnknownAssignee},
-		{"invalid column before the existence read", unknownID(t, store), Column("someday"), 0, "Grace", ErrInvalidColumn},
-		{"invalid column outranks the slot guard", target.ID, Column("someday"), -1, "Grace", ErrInvalidColumn},
-		{"negative slot before the existence read", unknownID(t, store), Todo, -1, "Grace", ErrInvalidSlot},
-		{"missing card answers not-found", unknownID(t, store), Todo, 0, "Grace", ErrCardNotFound},
+		{"unknown keyword outranks the column enum", target.ID, ptr(Column("backlog")), 0, "Zoidberg", ErrUnknownAssignee},
+		{"unknown keyword outranks the slot guard", target.ID, ptr(Todo), -1, "grace", ErrUnknownAssignee},
+		{"unknown keyword on a missing card — validity first", unknownID(t, store), nil, 0, "GRACE", ErrUnknownAssignee},
+		{"empty keyword is not a name and not the sentinel", target.ID, ptr(Todo), 0, "", ErrUnknownAssignee},
+		{"padded name is not a name", target.ID, ptr(Todo), 0, "Grace ", ErrUnknownAssignee},
+		{"invalid column before the existence read", unknownID(t, store), ptr(Column("someday")), 0, "Grace", ErrInvalidColumn},
+		{"invalid column outranks the slot guard", target.ID, ptr(Column("someday")), -1, "Grace", ErrInvalidColumn},
+		{"negative slot before the existence read", unknownID(t, store), nil, -1, "Grace", ErrInvalidSlot},
+		{"missing card with no stated column answers not-found", unknownID(t, store), nil, 0, "Grace", ErrCardNotFound},
 	}
 	for _, leg := range legs {
 		got, err := store.MoveFiltered(leg.id, leg.column, leg.slot, leg.keyword)
