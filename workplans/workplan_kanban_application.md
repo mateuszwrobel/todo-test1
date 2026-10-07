@@ -106,6 +106,59 @@ Then the change is refused with a stated error
   And the board is unchanged
   And the card becomes editable after it is moved out of "Done"
 
+### Scenario: Assign a user to a card
+Given the app ships a fixed roster of simulated users — Ada, Grace, Alan, Barbara, Linus
+  And a card that shows no assignee
+When the user picks a roster name for that card
+Then the card shows the chosen name
+  And after reload the card still shows that name
+  And the board contract carries the assignee for that card
+
+### Scenario: Unassign a card
+Given a card assigned to a user
+When the user chooses "Unassigned" for it
+Then the card shows nobody
+  And the board contract reports the card as unassigned
+
+### Scenario: Unknown user is refused
+Given a card
+When a name outside the roster is submitted as its assignee
+Then the submission is refused with a stated error
+  And the card is unchanged
+
+### Scenario: Done card assignment is frozen
+Given a card in the "Done" column
+When a change tries to set or clear its assignee
+Then the change is refused with a stated error and the board is unchanged
+  And the assignee becomes changeable again after the card is moved out of "Done"
+
+### Scenario: Filter board by user
+Given cards assigned to different users, and some to nobody
+When the user picks a name in the filter control
+Then only that user's cards are shown — each in its own column, in its own order
+  And the filter control offers exactly: All users, each roster name, Unassigned
+  And the chosen filter is part of the page URL, so reload and back-button keep the filtered view
+
+### Scenario: All and Unassigned filters
+Given a board under an active user filter
+When the user picks "All users"
+Then the full board is shown again
+  And the filter leaves the URL
+When the user instead picks "Unassigned"
+Then exactly the cards with no assignee are shown
+
+### Scenario: Move under filter keeps whole-board truth
+Given a filter active that hides some cards, with hidden cards interleaved among the visible ones
+When the user drags a visible card to a slot between two visible cards, or into a column
+Then the drop lands at that slot relative to the visible cards
+  And the hidden cards keep their relative order and their places
+  And clearing the filter shows the true interleaved order
+
+### Scenario: Assignments survive restart
+Given a board with assigned cards, unassigned cards, and an assigned card in "Done"
+When the server process restarts with the same data files
+Then every card reports exactly the same assignee state as before
+
 ## Decisions
 
 - Single fixed board — Rationale: the user asked for one board to work through; a board switcher is a second product. Rejected: multiple boards. (ADR-003) — see docs/adr/ADR-003-kanban-pivot.md
@@ -118,6 +171,12 @@ Then the change is refused with a stated error
 - Card text keeps the todo app's rules: non-empty after trim, at most 500 characters — Rationale: proven rules, no reason to change. Rejected: new validation schemes.
 - Editing, moving and reordering all travel through one update operation carrying text, column, position, or any combination — Rationale: one observable "change a card" contract, same shape the todo app proved. Rejected: separate endpoints per field. Amended 2026-10-07 (user decision): the operation's title direction is frozen while the card sits in the "Done" column — a change carrying text for a card whose current column is Done is refused with a stated error; dragging the card out of Done is the only way to make it editable again (scenario "Edit of a done card is rejected"). This supersedes the pivot's 2026-10-06 reading that done cards' text was editable and restores the todo app's frozen-text rule at the contract level. Delete, column-direction moves (out of and into Done), and Create/Seed/Import into Done are not edits and stay allowed. Rejected: editing done text — the freeze is the requested behavior, and a stored second done-state would split the truth.
 - In-flight control blocking carries over unchanged from the todo app — the triggered control is disabled from the moment the request leaves until the response arrives — Rationale: proven rule against double-submits from stale pages; the page serializes its own mutations per control. Rejected: allowing repeated activation and relying on server-side dedup — new machinery a single-user app does not need.
+- Simulated users are a built-in fixed roster — Ada, Grace, Alan, Barbara, Linus — with no auth and no user table — Rationale: the user asked for simulation of users, not an auth system; the cast is part of the program. Rejected: editable roster, real accounts — second products nobody asked for. The cast lives in the users module; changing it touches nothing else.
+- A card carries at most one optional assignee, stored on the card row — Rationale: chosen cardinality; absent assignee means unassigned. Rejected: multiple users per card — filter and card semantics multiply without a request.
+- Assignee values are validated against the roster at the contract — unknown names are refused with a stated error even though the dropdown makes them unselectable — Rationale: the simulation has rules and the seam enforces them, same posture as the text rules. Rejected: storing arbitrary strings.
+- The done freeze covers the assignee direction too (user decision 2026-10-07) — a card in "Done" changes nothing but its column and its existence; dragging it out is the unlock — Rationale: "done means finished" reads as read-only; the text-only freeze of the same date was half the rule. Rejected: assignable Done cards — an asymmetric freeze is a rule users must memorize. Scenario "Edit of a done card is rejected" extends to assignment; delete and moves stay allowed.
+- The user filter is a read parameter on the board read contract (?assignee=<exact roster name> or ?assignee=unassigned) and the page encodes it in the URL — Rationale: the server-rendered board stays the single truth; the view is reload- and link-stable. Rejected: client-side filtering of the full payload (a second rendering truth), session-only state (reload loses the view).
+- While a filter is active a drop position means the slot among the visible cards; the server maps it to the whole-board position — Rationale: what the user sees is what the user orders; hidden cards keep their places. Rejected: disabling dragging while filtered (a disabled feature), computing whole-board positions in the browser (the client would need hidden truth).
 
 > Decomposition: this workplan is decomposed into sub-workplans only after all Open Questions below are resolved.
 
@@ -197,6 +256,40 @@ Then the change is refused with a stated error
 | column | string enum | one of `todo`, `in_progress`, `done` | which column holds the card |
 | position | integer | ≥ 0, contiguous 0..n-1 within its column | priority order, top-to-bottom |
 
+### Endpoints (added 2026-10-07, assignment + filter increment)
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | /users | the simulated user roster |
+| GET | /board?assignee= | board read narrowed to one user's cards or the unassigned ones |
+| PATCH | /cards/{id} | gains the assignee direction and the filter-relative move fields (below) |
+
+### Contracts (added 2026-10-07)
+#### GET /users
+**Success response**
+- Status: 200
+- Body: `{"users":["Ada","Grace","Alan","Barbara","Linus"]}` — the roster in contract order
+
+#### PATCH /cards/{id} — assignment and filtered-move increment
+**Request**
+- Body may now also carry:
+  - `"assignee": <roster name or null>` — an edit direction; setting or clearing the assignee. Frozen on "Done" cards exactly like the title direction.
+  - `"slot": <int ≥ 0>` together with `"within": <exact roster name or "unassigned">` — a move whose position counts only the cards matching that filter. Mutually exclusive with `"position"`.
+
+**Error responses (added)**
+- Status: 422 — Body: `{"error":"unknown user"}` — assignee/within names outside the roster (roster validity outranks text rules, not-found, and the freeze)
+- Status: 422 — Body: `{"error":"cannot edit a done card"}` — title or assignee direction on a card whose current column is "Done"
+- Status: 422 — Body: a stated error — `"slot"` without `"within"`, `"slot"`/`"position"` combined, or negative/out-of-range slot
+
+#### GET /board?assignee=
+- `?assignee=<exact roster name>` — the same board shape, each column's cards narrowed to that user's, stored order and positions unchanged
+- `?assignee=unassigned` — only cards with no assignee
+- unknown value — 422 `{"error":"unknown user"}`; absent parameter — full board, unchanged from today
+
+### Data Models / DTOs (added 2026-10-07)
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| assignee | string or null on every Card in every payload | must be a roster name or null; enforced at the contract | the card's one simulated user, absent = unassigned |
+
 ## Database
 
 ### Existing Data Store
@@ -223,6 +316,13 @@ None — single table. Deleting a card removes its only row; positions renormali
 - DELETE /cards/{id} removes the row and renormalizes its column; no match is 404.
 - Migration (owned by the composition root at startup): if `kanban.db` records no import decision AND `todos.db` exists — in a single transaction insert: not-done todos → `('todo', position by todos.id order, title)`, done todos → `('done', likewise)`, the import marker row committed with them; guard against re-import is the recorded marker, not the schema and not the card count — the schema exists from the first open (proving nothing) and an emptied board is not an un-created one (corrected 2026-10-07; the earlier "existence of the `cards` table" wording and the emptiness guard built on it each fail an acceptance scenario — see workplan_server_board_composition.md Decisions). The todo file is never written.
 - The schema must satisfy the API Card fields exactly: id, title, column, position — nothing more is stored.
+
+### cards table — assignment column (added 2026-10-07)
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| assignee | TEXT | NULL allowed | the card's simulated user; NULL = unassigned; no foreign key — the roster is built into the program, validity is a code rule |
+
+No users table: the roster is a constant, not stored data. Opening a pre-assignment board database adds the column and every existing row reads as unassigned.
 
 ## Modularity
 
@@ -251,3 +351,14 @@ None — single table. Deleting a card removes its only row; positions renormali
 - api depends on board through its in-process contract only.
 - ui depends on the API contract over HTTP only; it never reaches board or the data files.
 - Migration is the only place that reads the todo store, owned by server; board and api never see `todos.db`.
+
+### Behavior Analysis (added 2026-10-07)
+- The simulation's cast — who exists as an assignable user, in display order — changes when the simulation changes (new cast, real accounts); independent of board mechanics, wire, and page.
+
+### Module Placement (added row 2026-10-07)
+| Behavior | Fits Existing Module | New Module | Reason |
+|----------|---------------------|------------|--------|
+| Simulated roster | board would mix "who exists" into "what the board stores" | users | one behavior: the cast of the simulation, owned where a cast changes |
+
+### Boundaries (added 2026-10-07)
+- users is imported by board (assignee validity) and surfaced by api (GET /users); it imports nothing and owns no state. ui never imports it — names reach the page through the contract only.
