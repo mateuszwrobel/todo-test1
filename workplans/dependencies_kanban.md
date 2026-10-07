@@ -43,7 +43,7 @@ The board read is the first feature; composition wires from the start so every l
 
 ## KW3 — Edit (+ the change operation's foundations)
 
-The PATCH surface lands here (title direction first); move extends it in KW5. Done cards stay editable — no frozen-text rule survives the pivot.
+The PATCH surface lands here (title direction first); move extends it in KW5. Done cards stay editable — no frozen-text rule survives the pivot. Superseded 2026-10-07 (user decision, KW8): contract-level done freeze — title edits on cards in Done are refused (parent scenario "Edit of a done card is rejected"), and the edit affordance leaves Done cards in the ui lane that follows; moves and deletes are unaffected.
 
 | Card | Depends on | Note |
 |------|-----------|------|
@@ -54,7 +54,7 @@ The PATCH surface lands here (title direction first); move extends it in KW5. Do
 | api/07 patch-unknown-id-stated-404 | api/05, board/09 | 404 mapping |
 | api/08 patch-invalid-column-stated-422 | api/05, board/10 | 422 mapping |
 | api/09 patch-empty-body-stated-422 | api/05 | defensive mapping |
-| ui/06 edit-updates-in-place | ui/01, api/05 | edit affordance on every card in every column + stated rejection |
+| ui/06 edit-updates-in-place | ui/01, api/05 | edit affordance on every card in every column + stated rejection (amended 2026-10-07: Done cards carry no edit control — done freeze, next lane) |
 
 **Wave end:** edit end-to-end including rejections and the missing-card path for PATCH. Parent scenario **"Edit card text keeps place"** passes; **"Operation on missing card"** green for the edit leg.
 

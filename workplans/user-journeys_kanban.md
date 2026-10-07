@@ -139,7 +139,7 @@ Consequence: the page never issues a second mutation for an operation already in
 
 ## J6 — Edit a card's text
 
-**Goal:** change a card's text without changing its column, position, or identity. Unlike the todo app, a done card's text is editable — done is just a column, and editing does not touch position.
+**Goal:** change a card's text without changing its column, position, or identity. Amended 2026-10-07 (user decision): a card sitting in the "Done" column refuses text changes — the contract-level done freeze restores the todo app's frozen-text rule and supersedes this journey's pivot-era sentence ("Unlike the todo app, a done card's text is editable", 2026-10-06). Dragging the card out of "Done" is the way to make it editable again.
 
 **Entry state:** board loaded; the card is visible in any column.
 
@@ -151,16 +151,17 @@ Consequence: the page never issues a second mutation for an operation already in
 **Alternate/error flows:**
 - New text empty or whitespace-only → rejected (422 "title is required"); the card keeps its original text and the page states that the text is required.
 - New text longer than 500 characters → rejected (422, states the limit); the card keeps its original text.
+- The card sits in the "Done" column → the change is refused with a stated error (amended 2026-10-07, user decision: done freeze); the card keeps its original text and the board is unchanged. Dragging it out of "Done" first unlocks editing.
 - The card no longer exists (stale page — see J8) → the edit does not take effect; the page states that the card does not exist.
 
 **Exit state:** the card shows the new text with the same id, column, and position — or, on rejection, the original text intact.
 
 **UI design hooks:**
-- Editing must be reachable on every card in every column — unlike the todo app there is no done-state that hides the edit affordance.
+- Editing must be reachable on every card outside the "Done" column — Done cards carry no edit control at all (amended 2026-10-07, user decision: the contract-level done freeze restores the todo app's hidden-affordance rule, superseding the pivot's "unlike the todo app there is no done-state that hides the edit affordance"). The contract's stated refusal stays the guarantee underneath, whatever a stale or hand-made request submits.
 - A rejected edit must surface its stated reason tied to that card while the card keeps displaying its original text.
 - The save control is disabled from request until response (in-flight blocking).
 
-**API calls used:** PATCH /cards/{id} carrying title — 200 with the updated card; 422 on validation failure; 404 per J8.
+**API calls used:** PATCH /cards/{id} carrying title — 200 with the updated card; 422 on validation failure; 422 with the done-freeze stated refusal for a card in "Done" (amended 2026-10-07); 404 per J8.
 
 ## J7 — Delete a card
 

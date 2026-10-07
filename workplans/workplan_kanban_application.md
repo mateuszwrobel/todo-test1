@@ -99,6 +99,13 @@ When the user activates the same control twice before the first response arrives
 Then no additional effect occurs beyond the single operation
   And the board ends in the state produced by exactly one operation
 
+### Scenario: Edit of a done card is rejected
+Given a card in the "Done" column
+When the user submits a text change for it
+Then the change is refused with a stated error
+  And the board is unchanged
+  And the card becomes editable after it is moved out of "Done"
+
 ## Decisions
 
 - Single fixed board — Rationale: the user asked for one board to work through; a board switcher is a second product. Rejected: multiple boards. (ADR-003) — see docs/adr/ADR-003-kanban-pivot.md
@@ -109,7 +116,7 @@ Then no additional effect occurs beyond the single operation
 - Existing todos import once, at first start, inside a single transaction — Rationale: the user's list becomes the board without a manual step; transactional import means a crash yields either a fully imported or a clean empty board, never half. Rejected: a manual migration command, reading both stores on every start.
 - The board lives in its own SQLite file; the todo file stays untouched as the migration source — Rationale: clean model separation, the old file remains evidence/backup. Rejected: extending the todos database in place, mixing the superseded model into the new store. SQLite engine choice unchanged (ADR-002), stack unchanged (ADR-001).
 - Card text keeps the todo app's rules: non-empty after trim, at most 500 characters — Rationale: proven rules, no reason to change. Rejected: new validation schemes.
-- Editing, moving and reordering all travel through one update operation carrying text, column, position, or any combination — Rationale: one observable "change a card" contract, same shape the todo app proved. Rejected: separate endpoints per field.
+- Editing, moving and reordering all travel through one update operation carrying text, column, position, or any combination — Rationale: one observable "change a card" contract, same shape the todo app proved. Rejected: separate endpoints per field. Amended 2026-10-07 (user decision): the operation's title direction is frozen while the card sits in the "Done" column — a change carrying text for a card whose current column is Done is refused with a stated error; dragging the card out of Done is the only way to make it editable again (scenario "Edit of a done card is rejected"). This supersedes the pivot's 2026-10-06 reading that done cards' text was editable and restores the todo app's frozen-text rule at the contract level. Delete, column-direction moves (out of and into Done), and Create/Seed/Import into Done are not edits and stay allowed. Rejected: editing done text — the freeze is the requested behavior, and a stored second done-state would split the truth.
 - In-flight control blocking carries over unchanged from the todo app — the triggered control is disabled from the moment the request leaves until the response arrives — Rationale: proven rule against double-submits from stale pages; the page serializes its own mutations per control. Rejected: allowing repeated activation and relying on server-side dedup — new machinery a single-user app does not need.
 
 > Decomposition: this workplan is decomposed into sub-workplans only after all Open Questions below are resolved.

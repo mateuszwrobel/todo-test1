@@ -133,7 +133,7 @@ None — single table.
 ### Data Flow
 - Create: insert with position = count(cards in 'todo'), return the Card.
 - List: select ordered by column order then position; grouped by the module into the three-column shape.
-- Change: apply the given fields in one transaction; when column or position changes, place the card at the requested index of the target column and renormalize target (and source when changed).
+- Change: apply the given fields in one transaction; when column or position changes, place the card at the requested index of the target column and renormalize target (and source when changed). Amended 2026-10-07 (user decision, contract-level done freeze): the title direction is frozen against the card's CURRENT column — a change carrying text for a card that sits in done is refused with a done-frozen outcome before any write (the board is exactly as it was, no identifier consumed); the column directions on done cards are unchanged — moving out of (or into) done is not an edit, and moving out of done unlocks the title direction.
 - Delete: remove and renormalize the card's column in one transaction.
 - Seed: insert a caller-supplied ordered list into one column, positions assigned in order.
 - The schema satisfies the API Card model exactly (id, title, column, position) — nothing more is stored.
