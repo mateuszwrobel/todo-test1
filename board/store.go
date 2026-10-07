@@ -7,6 +7,7 @@ package board
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -56,17 +57,47 @@ func validColumn(c Column) bool {
 // lets every cell-for-cell pin in this package's tests (boardEqual) compare
 // two listings directly.
 //
-// For the api layer the mapping to the contract's name-or-null is one line:
-// Assignee != "" is the name, Assignee == "" is null. The JSON tag is
-// omitempty so an unassigned card encodes exactly as it did before assignment
-// existed (the field absent); the api lane's contract leg replaces that with
-// the explicit null this field maps to.
+// For the api layer the mapping to the contract's name-or-null is exact: a
+// non-empty Assignee is the name, the empty sentinel is null. The tag carries
+// the field on every encode and MarshalJSON below spells the sentinel the way
+// the contract spells it ("assignee: string or null on every Card", parent
+// contract DTO row added 2026-10-07). The earlier omitempty tag was a KW9
+// transitional that kept payloads byte-identical while every card was still
+// unassigned; the api/13 contract leg replaces it with the explicit null
+// this field maps to — name-or-null is contract, field-absent is not.
 type Card struct {
 	ID       int64  `json:"id"`
 	Title    string `json:"title"`
 	Column   Column `json:"column"`
 	Position int    `json:"position"`
-	Assignee string `json:"assignee,omitempty"`
+	Assignee string `json:"assignee"`
+}
+
+// MarshalJSON gives the record its contract representation: the five fields
+// every Card payload carries — id, title, column, position, assignee — with
+// the optional one spelled as the contract spells it: a roster name or null.
+// The empty-string sentinel stays internal: it is the read of a stored NULL,
+// and the roster contract excludes the empty name, so "" ↔ null is exact in
+// both directions and no real assignee can ever be mistaken for unassigned.
+// The rule sits on the type because every endpoint that answers a Card
+// answers this one — GET /board, POST /cards, PATCH /cards/{id}: one sentence
+// of contract with one owner at the field it names, where per-handler copies
+// would be per-handler drift (the api/13 byte-pins catch exactly that).
+// Decoding needs no twin: the tags decode a name into the field and leave a
+// null at the "" sentinel.
+func (c Card) MarshalJSON() ([]byte, error) {
+	var assignee *string
+	if c.Assignee != "" {
+		a := c.Assignee
+		assignee = &a
+	}
+	return json.Marshal(struct {
+		ID       int64   `json:"id"`
+		Title    string  `json:"title"`
+		Column   Column  `json:"column"`
+		Position int     `json:"position"`
+		Assignee *string `json:"assignee"`
+	}{c.ID, c.Title, c.Column, c.Position, assignee})
 }
 
 // ColumnCards is one column of a listed board: its name and its cards

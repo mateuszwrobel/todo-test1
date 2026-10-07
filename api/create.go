@@ -13,10 +13,11 @@ import (
 // handleCreate implements POST /cards: shape-only request validation (is the
 // body well-formed JSON carrying a string title?), one call to the board
 // store's Create, 201 with the created Card JSON on success — the board
-// module's own JSON tags are the contract's four fields (id, title, column,
-// position), so the created card encodes straight through. The board trims
-// the title before storing, so the 201 states the created card as stored:
-// trimmed.
+// module's own JSON tags are the contract's five fields (id, title, column,
+// position, assignee — a fresh card is unassigned, so the new card answers
+// "assignee": null, api/13), so the created card encodes straight through.
+// The board trims the title before storing, so the 201 states the created
+// card as stored: trimmed.
 //
 // Outcome → transport mapping lives at one site below, keyed on the board's
 // typed outcomes via errors.Is (api workplan decision): blank → 422 "title

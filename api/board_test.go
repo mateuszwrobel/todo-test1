@@ -90,8 +90,14 @@ func TestGetBoardIsFixedColumnsWithDisplayTitlesInPositionOrder(t *testing.T) {
 			t.Errorf("column %d title = %q, want %q (fixed order with display titles)", i, col.Title, wantTitles[i])
 		}
 		for pos, card := range col.Cards {
-			if !equalKeys(mapKeys(card), []string{"column", "id", "position", "title"}) {
-				t.Fatalf("column %d card %d keys = %v, want exactly the four contract fields id, title, column, position", i, pos, mapKeys(card))
+			if !equalKeys(mapKeys(card), []string{"assignee", "column", "id", "position", "title"}) {
+				t.Fatalf("column %d card %d keys = %v, want exactly the five contract fields id, title, column, position, assignee", i, pos, mapKeys(card))
+			}
+			// These cards are all seeded unassigned, and the contract's
+			// DTO row says assignee is present on EVERY card — name or
+			// null — so each payload here carries the explicit null (api/13).
+			if v, present := card["assignee"]; !present || v != nil {
+				t.Errorf("column %d card %d assignee = %v (present=%v), want explicit null — seeded cards are unassigned (api/13)", i, pos, v, present)
 			}
 			if got := card["title"]; got != wantOrder[i][pos] {
 				t.Errorf("column %d position %d title = %v, want %q (cards in position order)", i, pos, got, wantOrder[i][pos])

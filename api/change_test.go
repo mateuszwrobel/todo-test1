@@ -52,16 +52,21 @@ func createCardThroughAPI(t *testing.T, srvURL, title string) map[string]interfa
 	return card
 }
 
-// assertCardKeys pins that a body is the full Card JSON — exactly the four
-// contract fields, nothing more, nothing less.
+// assertCardKeys pins that a body is the full Card JSON — exactly the five
+// contract fields, nothing more, nothing less. The fifth (assignee, present
+// as name or null on every Card) joined at api/13: the pin was flipped
+// honestly from its four-field pre-assignment claim, the field additive.
 func assertCardKeys(t *testing.T, body string) map[string]interface{} {
 	t.Helper()
 	var card map[string]interface{}
 	if err := json.Unmarshal([]byte(body), &card); err != nil {
 		t.Fatalf("body is not card JSON: %v (body %s)", err, body)
 	}
-	if got := mapKeys(card); !equalKeys(got, []string{"column", "id", "position", "title"}) {
-		t.Fatalf("card keys = %v, want exactly the four contract fields id, title, column, position (body %s)", got, body)
+	if got := mapKeys(card); !equalKeys(got, []string{"assignee", "column", "id", "position", "title"}) {
+		t.Fatalf("card keys = %v, want exactly the five contract fields id, title, column, position, assignee (body %s)", got, body)
+	}
+	if _, present := card["assignee"]; !present {
+		t.Fatalf("assignee key missing from a Card payload (body %s) — name-or-null on every Card is contract (api/13)", body)
 	}
 	return card
 }

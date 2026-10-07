@@ -12,21 +12,24 @@ import (
 )
 
 // handleCardChange implements PATCH /cards/{id}: parse the body — a JSON
-// object carrying "title", "column" and/or "position" — hand the present
-// fields to the board operations (the contract's "at least one field"
+// object carrying "title", "column", "position" and/or "assignee" — hand the
+// present fields to the board operations (the contract's "at least one field"
 // distinction), and map outcomes to transport at one site keyed on the
 // board's typed errors with errors.Is (the api workplan's mapping-table
 // decision). Success is 200 with the updated Card encoded straight from
-// board's JSON tags — the contract's four fields (id, title, column,
-// position), so a move answers the card in its NEW column and position
-// (card api/06). The table now covers the full board.Change and board.Move
-// outcome enumeration: not-found api/07, invalid-column api/08 (the enum
-// guard is the same typed outcome in both operations), the title class
-// api/05, the shape-only empty-change refusal api/09, and the done freeze
-// (api/05 amendment 2026-10-07, user decision): a title present for a card
-// whose CURRENT column is done is refused with one stated 422 before
-// anything moves — every leg that reaches Change answers it, and Move never
-// carries a title, so moving out of Done stays the one-request unlock.
+// board's JSON tags — the contract's five fields (id, title, column,
+// position, assignee; the assignee as name or null, api/13), so a move
+// answers the card in its NEW column and position (card api/06) and an
+// assignee edit answers the assignment it just made. The table now covers
+// the full board.Change and board.Move outcome enumeration: not-found api/07,
+// invalid-column api/08 (the enum guard is the same typed outcome in both
+// operations), the title class api/05, the shape-only empty-change refusal
+// api/09, the unknown-user class api/13, and the done freeze (api/05
+// amendment 2026-10-07, user decision, widened by api/13): a title or an
+// assignee present for a card whose CURRENT column is done is refused with
+// one stated 422 before anything moves — every leg that reaches Change
+// answers it, and Move never carries either, so moving out of Done stays the
+// one-request unlock.
 //
 // Field combinations route through applyPatch below: the title/column legs
 // keep Change's shipped mapping (title edit, bottom-append column move),
@@ -56,9 +59,12 @@ import (
 //
 // Body-shape decisions mirror create: an empty body (io.EOF), a well-formed
 // JSON body that is not an object, an absent key, and a key whose value is
-// JSON null all mean "field absent"; the pointers stay nil. A column value
-// is handed over as-is — the enum guard is board's, so a bad name arrives
-// as board's invalid-column outcome rather than a second copy here.
+// JSON null all mean "field absent"; the pointers stay nil. The assignee
+// field is the stated exception (api/13): its null is the CLEAR direction,
+// not an absence — the contract spells the edit pair "roster name or null".
+// A column value is handed over as-is — the enum guard is board's, so a bad
+// name arrives as board's invalid-column outcome rather than a second copy
+// here; an assignee name likewise, never screened here.
 func handleCardChange(store BoardStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
@@ -84,6 +90,7 @@ func handleCardChange(store BoardStore) http.HandlerFunc {
 		var title *string
 		var column *board.Column
 		var position *int
+		var assignee *board.AssigneeDirection
 		if obj, ok := body.(map[string]any); ok {
 			if v, present := obj["title"]; present && v != nil {
 				text, ok := v.(string)
@@ -120,24 +127,49 @@ func handleCardChange(store BoardStore) http.HandlerFunc {
 				}
 				position = &index
 			}
+			// The assignee field (card api/13) is the one field whose JSON
+			// null CARRIES a direction instead of meaning absent: the
+			// contract spells clear as null ("assignee": <roster name or
+			// null>), so a present key branches on its value — null is the
+			// ClearAssignee direction, a string is AssignTo, absent leaves
+			// the card's assignee alone. A value that is neither (a number,
+			// a bool, an array) is the same wrong-type transport class as a
+			// non-string title: 400. Roster names are NOT checked here —
+			// validity is board's rule through the users contract
+			// (shape-only validation here), so an unknown name arrives as
+			// board's ErrUnknownAssignee, never a second copy of the rule.
+			if v, present := obj["assignee"]; present {
+				if v == nil {
+					assignee = board.ClearAssignee()
+				} else {
+					name, ok := v.(string)
+					if !ok {
+						errorJSON(w, http.StatusBadRequest, "invalid request")
+						return
+					}
+					assignee = board.AssignTo(name)
+				}
+			}
 		}
 
 		// Card api/09 — the contract's "at least one field" clause is a
 		// request-shape rule, so this module states the refusal: an empty
 		// object — and every other no-fields body (absent keys, JSON null
 		// values, empty body, well-formed JSON that is not an object) — is
-		// rejected here, 422 with the rule stated. Any one of the three
-		// fields satisfies the clause; position included (the contract
-		// lists it beside title and column). Unlike the title class, where
-		// the empty value is handed to board so its required outcome words
-		// the refusal once, no store outcome carries this rule; the
-		// all-nil call is never made and nothing reaches storage.
-		if title == nil && column == nil && position == nil {
+		// rejected here, 422 with the rule stated. Any one of the fields
+		// satisfies the clause; position included (the contract lists it
+		// beside title and column), and assignee likewise — including its
+		// null spelling, which is a direction (clear), not an absence
+		// (card api/13). Unlike the title class, where the empty value is
+		// handed to board so its required outcome words the refusal once, no
+		// store outcome carries this rule; the all-nil call is never made
+		// and nothing reaches storage.
+		if title == nil && column == nil && position == nil && assignee == nil {
 			errorJSON(w, http.StatusUnprocessableEntity, "at least one field is required")
 			return
 		}
 
-		updated, err := applyPatch(store, id, title, column, position)
+		updated, err := applyPatch(store, id, title, column, position, assignee)
 		if err != nil {
 			writeChangeError(w, err)
 			return
@@ -174,18 +206,44 @@ func handleCardChange(store BoardStore) http.HandlerFunc {
 //     makes position an independent field, so the handler finds the card's
 //     current column through the contract's own read and Moves into it.
 //     A miss is the stated not-found outcome without touching storage.
-func applyPatch(store BoardStore, id int64, title *string, column *board.Column, position *int) (board.Card, error) {
+//
+// An assignee direction (card api/13) joins the Change call each routed leg
+// already makes — or, on a leg that was a bare Move, makes one first (Change
+// edits the assignee before Move places): every validity and freeze decision
+// then stays at Change's single ordering — roster validity first, then the
+// text rules, then the enum, then not-found, then the freeze — instead of a
+// second ordering invented at the transport. The assignee-nil legs route
+// exactly as before this increment, operation for operation.
+func applyPatch(store BoardStore, id int64, title *string, column *board.Column, position *int, assignee *board.AssigneeDirection) (board.Card, error) {
 	switch {
 	case position == nil:
-		return store.Change(id, title, column, nil)
+		return store.Change(id, title, column, assignee)
 	case title != nil && column != nil:
 		// The returned card is superseded by Move's placement below.
-		if _, err := store.Change(id, title, column, nil); err != nil {
+		if _, err := store.Change(id, title, column, assignee); err != nil {
 			return board.Card{}, err
 		}
 		return store.Move(id, *column, *position)
 	case title != nil:
-		updated, err := store.Change(id, title, nil, nil)
+		updated, err := store.Change(id, title, nil, assignee)
+		if err != nil {
+			return board.Card{}, err
+		}
+		return store.Move(id, updated.Column, *position)
+	case column != nil && assignee != nil:
+		// The Change-first pattern of the title+column+position leg: Change
+		// screens the column enum and the assignee before any write and
+		// appends at the target's bottom; Move then places at the index.
+		if _, err := store.Change(id, nil, column, assignee); err != nil {
+			return board.Card{}, err
+		}
+		return store.Move(id, *column, *position)
+	case assignee != nil:
+		// Position reorder plus an assignee edit: Change carries the edit
+		// (validity and freeze decided at its one ordering) and answers the
+		// card's current column; Move then reorders within it. A Done card
+		// refuses here — the assignee makes this an edit, not a bare move.
+		updated, err := store.Change(id, nil, nil, assignee)
 		if err != nil {
 			return board.Card{}, err
 		}
@@ -237,6 +295,17 @@ func currentColumn(store BoardStore, id int64) (board.Column, bool, error) {
 // demands their wording wherever they do appear).
 func writeChangeError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, board.ErrUnknownAssignee):
+		// Card api/13 — the contract's stated unknown-user body. The
+		// validity rule has one owner (the users module, screened by board's
+		// Change before anything else is consulted), so this site maps an
+		// outcome, never restates the roster. The board's ordering is
+		// contract — roster validity "outranking text rules, not-found, and
+		// the done freeze" (board/store.go, Change) — and applyPatch routes
+		// every assignee-bearing leg through that one Change, so the
+		// combined requests (unknown + Done, unknown + blank title, unknown
+		// + missing id) arrive here already decided in favor of this class.
+		errorJSON(w, http.StatusUnprocessableEntity, "unknown user")
 	case errors.Is(err, board.ErrCardNotFound):
 		// Card api/07 — the contract's stated not-found body. The board's
 		// existence check is its transaction's first read (and the reorder
@@ -249,12 +318,14 @@ func writeChangeError(w http.ResponseWriter, err error) {
 		// before any write in both Change and Move, so the card is unchanged.
 		errorJSON(w, http.StatusUnprocessableEntity, "invalid column")
 	case errors.Is(err, board.ErrDoneFrozen):
-		// Card api/05 amendment 2026-10-07 (contract-level done freeze, user
-		// decision): a title aimed at a card whose current column is done is
-		// refused — 422 with one stated message, mirroring the retired todo
-		// app's frozen-todo class verbatim in shape ("cannot edit a done
-		// todo", api/change.go at 8195fde) restated for cards. The board's
-		// typed error is the single rule source; its freeze check precedes
+		// Card api/05 amendment 2026-10-07, widened by the assignee contract
+		// (api/13): a title OR an assignee aimed at a card whose current
+		// column is done is refused — 422 with one stated message, one site
+		// for both directions, mirroring the retired todo app's frozen-todo
+		// class verbatim in shape ("cannot edit a done todo", api/change.go
+		// at 8195fde) restated for cards. The board's typed error is the
+		// single rule source — the freeze is one rule, so the message is
+		// one message wherever it appears — and its freeze check precedes
 		// any write, so the card is unchanged.
 		errorJSON(w, http.StatusUnprocessableEntity, "cannot edit a done card")
 	case errors.Is(err, board.ErrTextRequired):

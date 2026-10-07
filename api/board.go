@@ -30,7 +30,9 @@ type boardColumnResponse struct {
 
 // handleBoard maps GET /board to the board store's List: one call, translated
 // into the contract shape, answered 200. The Card fields encode from the
-// board module's own JSON tags (id, title, column, position). A List failure
+// board module's own JSON tags and MarshalJSON — the contract's five fields
+// (id, title, column, position, assignee; api/13 put assignee on every card
+// payload as name or null). A List failure
 // is the stated-failure path of every store read here: 500 (mirroring the
 // todo list handler's store-failure convention).
 func handleBoard(store BoardStore) http.HandlerFunc {

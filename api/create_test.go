@@ -50,8 +50,14 @@ func TestPostCardsCreates(t *testing.T) {
 	if err := json.Unmarshal(body, &card); err != nil {
 		t.Fatalf("body is not card JSON: %v (body %s)", err, body)
 	}
-	if got := mapKeys(card); !equalKeys(got, []string{"column", "id", "position", "title"}) {
-		t.Fatalf("card keys = %v, want exactly the four contract fields id, title, column, position (body %s)", got, body)
+	if got := mapKeys(card); !equalKeys(got, []string{"assignee", "column", "id", "position", "title"}) {
+		t.Fatalf("card keys = %v, want exactly the five contract fields id, title, column, position, assignee (body %s)", got, body)
+	}
+	// A created card starts unassigned (the board contract: fresh rows carry
+	// NULL), and the contract keeps assignee present on every Card payload —
+	// so the 201 answers the explicit null (api/13).
+	if v, present := card["assignee"]; !present || v != nil {
+		t.Errorf("assignee = %v (present=%v), want explicit null — a created card starts unassigned (body %s)", v, present, body)
 	}
 	if got := card["title"]; got != "Buy milk" {
 		t.Errorf("title = %v, want %q", got, "Buy milk")
