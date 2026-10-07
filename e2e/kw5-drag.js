@@ -736,7 +736,7 @@ async function main() {
     const urlBefore = await page3x.evaluate(() => location.href);
     const renamedPostDrop = 'Renamed on fetch-swapped markup';
     await page3x.locator(`li.card[data-card="${demoX.id}"] .card__edit`).click();
-    await page3x.locator(`li.card[data-card="${demoX.id}"] .edit-form .input`).fill(renamedPostDrop);
+    await page3x.locator(`li.card[data-card="${demoX.id}"] .edit-form input.input[name=title]`).fill(renamedPostDrop);
     log3x.reset();
     await page3x.locator(`li.card[data-card="${demoX.id}"] .edit-form .save`).click();
     // A buggy native submit navigates, which Playwright survives by

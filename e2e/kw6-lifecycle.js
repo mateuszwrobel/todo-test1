@@ -373,7 +373,7 @@ async function createCard(page, title) {
 
 async function editCardTitle(page, card, newTitle) {
   await card.locator('.card__edit').click();
-  await card.locator('.edit-form .input').fill(newTitle);
+  await card.locator('.edit-form input.input[name=title]').fill(newTitle);
   await card.locator('.edit-form .save').click();
   await card.locator('.card__title').waitForFunction(
     (el, t) => el.textContent === t,
