@@ -20,6 +20,7 @@ import (
 	"todo/api"
 	"todo/board"
 	"todo/ui"
+	"todo/users"
 )
 
 // shutdownDrainTimeout bounds how long shutdown waits for in-flight requests.
@@ -76,7 +77,11 @@ func run(args []string, stderr io.Writer) error {
 	}
 
 	baseURL := "http://" + ln.Addr().String()
-	uiHandler := ui.NewHandler(baseURL)
+	// The cast reaches the page through ui's consumer port (KW9): the page
+	// lists these names in the edit band's assignee select and owns no
+	// roster of its own — ui imports no users module (architecture spec),
+	// the wiring is the injection point.
+	uiHandler := ui.NewHandler(baseURL, ui.RosterFunc(users.Names))
 
 	mux := http.NewServeMux()
 	mux.Handle("/board", apiHandler)  // JSON contract: board read

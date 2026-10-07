@@ -32,26 +32,65 @@ type boardCardResponse struct {
 	Title    string `json:"title"`
 	Column   string `json:"column"`
 	Position int    `json:"position"`
+	// Assignee is the contract's name-or-null (KW9): JSON null decodes to
+	// the empty string, which the render model reads as unassigned — the
+	// same sentinel board uses, and the roster contract excludes an empty
+	// name, so no real assignee can ever look like none.
+	Assignee string `json:"assignee"`
 }
+
+// Roster is the ui module's consumer port for the simulation's cast (KW9):
+// the fixed list of names the assignee select offers. ui never imports the
+// users package — the architecture spec forbids the ui→users edge (names
+// reach the page over the contract only, workplan_users_roster.md
+// Boundaries) — so the module declares what it needs and the composition
+// root wires the provider, exactly as it injects the api base URL the board
+// reads flow through. The order the port answers in is contract: the select
+// lists the cast in one fixed order (users/01 pins it at the source).
+type Roster interface {
+	Names() []string
+}
+
+// RosterFunc adapts a bare function (users.Names at the composition root)
+// to the Roster port, so wiring stays one expression with no adapter type.
+type RosterFunc func() []string
+
+func (f RosterFunc) Names() []string { return f() }
 
 type page struct {
 	apiBase string
 	client  *http.Client
+	roster  Roster
+}
+
+// rosterNames answers the port defensively: no provider wired means no
+// names, which the select renders as the Unassigned option alone — a page
+// never invents roster names of its own.
+func (p *page) rosterNames() []string {
+	if p.roster == nil {
+		return nil
+	}
+	return p.roster.Names()
 }
 
 // NewHandler builds the ui module's handlers. apiBase is the address of the
 // api contract on the same listener (injected by the composition root); every
 // read of the board goes to that address over HTTP, and so does every write
-// the page's fragment endpoints perform. The todo list fragment endpoints
+// the page's fragment endpoints perform. roster is the cast provider, also
+// injected by the composition root (the Roster port above); the page lists
+// those names in the edit band's assignee select and nowhere else — the
+// card's chip shows only the name the contract carries on the card itself.
+// The todo list fragment endpoints
 // retired at KW1; the create endpoint (POST /ui/cards) re-extended the route
 // table at KW2 and the edit endpoint (PATCH /ui/cards/{id}) at KW3; the
 // delete endpoint (DELETE /ui/cards/{id}) re-extends it at KW4 and the drag
 // endpoint at KW5 (see
 // workplans/dependencies_kanban.md).
-func NewHandler(apiBase string) http.Handler {
+func NewHandler(apiBase string, roster Roster) http.Handler {
 	p := &page{
 		apiBase: apiBase,
 		client:  &http.Client{Timeout: defaultLoadTimeout},
+		roster:  roster,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", p.handleIndex)
@@ -94,7 +133,7 @@ func (p *page) handleIndex(w http.ResponseWriter, r *http.Request) {
 		renderState(w, failedTmpl)
 		return
 	}
-	renderBoard(w, columnsOf(board))
+	p.renderBoard(w, columnsOf(board))
 }
 
 func (p *page) handleHTMX(w http.ResponseWriter, r *http.Request) {

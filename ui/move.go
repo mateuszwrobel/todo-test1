@@ -103,7 +103,7 @@ func (p *page) handleMove(w http.ResponseWriter, r *http.Request) {
 		if board, err := p.loadBoard(); err == nil {
 			columns := columnsOf(board)
 			attachEditError(columns, id, reason)
-			err = writeFragment(&b, boardTmpl, columns)
+			err = writeFragment(&b, boardTmpl, p.viewFor(columns))
 		} else {
 			err = writeFragment(&b, failedTmpl, nil)
 		}

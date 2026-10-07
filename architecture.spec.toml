@@ -28,10 +28,12 @@ language = "go"
 
 # The simulation's cast (KW9): a bottom module — one constant roster and a
 # membership check, no state, no I/O, no imports at all. It is imported by
-# board (assignee validity) and by api (GET /users, the roster endpoint); ui
-# never imports it — names reach the page over the contract only
-# (workplan_users_roster.md Boundaries). Declared at the wave that lands the
-# package; the board edge arrived with board/15, the api edge with api/12.
+# board (assignee validity), by api (GET /users, the roster endpoint), and by
+# the composition root (KW9 ui/14: wiring users.Names into ui's Roster
+# consumer port); ui never imports it — the names reach the page through the
+# injected port only (workplan_users_roster.md Boundaries). Declared at the
+# wave that lands the package; the board edge arrived with board/15, the api
+# edge with api/12, the server edge with ui/14.
 [[module]]
 name = "users"
 matches = { units = ["*/users"] }
@@ -69,7 +71,9 @@ forbidden = ["ui", "server"]
 # Page module: coupling to api is HTTP at runtime (invisible to the driver), so
 # no in-process dependency is allowed — including none on the data modules
 # (workplan boundary: ui never reaches board or the data files) and none on
-# users (KW9 boundary: names reach the page through the contract only).
+# users (KW9 boundary: the page receives roster names through the Roster
+# consumer port it declares, injected by the composition root — never an
+# import).
 [[module]]
 name = "ui"
 matches = { units = ["*/ui"] }
@@ -80,12 +84,16 @@ forbidden = ["board", "api", "server", "users"]
 # Composition root: cmd/todo, package main — sanctioned wiring (go driver marks it
 # role `composition`), depends on all modules it composes. The server→board edge
 # was declared at the wave that first imported board — KW1 api/01, whose wiring
-# opened kanban.db beside todos.db; the todos edge retired at KW4/api/10.
+# opened kanban.db beside todos.db; the todos edge retired at KW4/api/10. The
+# server→users edge was declared at the wave that first imported users — KW9
+# ui/14, whose wiring injects users.Names into ui's Roster consumer port (ui
+# itself stays forbidden from users: the names reach the page through the port,
+# never an import).
 [[module]]
 name = "server"
 matches = { units = ["*/cmd/todo"] }
 [module.allowed]
-depend_on = ["board", "api", "ui"]
+depend_on = ["board", "api", "ui", "users"]
 
 # Schema-diagram generator: cmd/db-diagram, package main — a dev tool, not the
 # app's composition root. Its one internal edge is board: board.Open

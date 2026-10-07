@@ -235,6 +235,20 @@ body:not(.stories) > main > #board-area {
   overflow-wrap: break-word;
 }
 
+/* --- assignee chip (kanban, KW9 ui/14): the name the contract carries on
+   the card, shown beside the title on every assigned card — Done included
+   (display, not an edit affordance). Unassigned cards render no element,
+   so no empty-state rule exists. Styling only: the name comes from the
+   contract body, never from a page-side roster. */
+.card__assignee {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-sunken);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
 /* k6/k7: the row's controls appear on the hovered (or focused, for keyboard
    users) row — at rest the row shows its title alone. The gating is opacity,
    not visibility: the controls hold their layout box and stay hit-testable
@@ -363,6 +377,17 @@ li.editing .edit-form {
   min-width: 0;
   width: auto;
   max-width: none;
+}
+
+/* The band's assignee select (KW9 ui/14): a compact choice field beside
+   the title input — it stretches none of the title's stretch (a choice,
+   not a text field), and shares the input's vertical rhythm. */
+.edit-form .card__assignee-select,
+.card.editing .edit-form .card__assignee-select {
+  flex: none;
+  width: auto;
+  max-width: none;
+  padding: var(--space-4) var(--space-3);
 }
 
 .card.editing .edit-form .save,

@@ -290,15 +290,33 @@ document.body.addEventListener('dragend', function () {
 // by the card itself — the page's only movement mechanic, Done included:
 // drag-out is exactly the freeze's unlock — and the shell script below
 // carries the drag machinery.
+// Since KW9 (cards ui/14–15) an assigned card carries the assignee chip
+// beside its title — on EVERY card with an assignee, Done included (the
+// chip is display, not an edit affordance, so the freeze takes nothing);
+// an unassigned card renders no chip element at all. The edit band gains an
+// assignee select next to the title input: options are Unassigned first,
+// then the roster in the order the Roster port answers — contract order,
+// users/01 — with the card's current value selected. htmx serializes the
+// whole band form, so Save submits title AND assignee in the ONE existing
+// PATCH: one change request per save, unchanged selection included (the
+// band tests' one-request pins stand). A Done card renders no select —
+// the band, select and all, stays outside Done.
 var boardTmpl = template.Must(template.New("board").Parse(`<div id="board" class="board">
-{{- range .}}
+{{- range .Columns}}
 <section id="column-{{.Anchor}}" class="column" data-column="{{.Title}}">
 <h2 class="column__title">{{.Title}}</h2>
 {{if .Cards}}<ul class="column__cards">{{- range .Cards}}
 <li id="card-{{.ID}}" class="card{{if .Done}} card--done{{end}}" data-card="{{.ID}}" draggable="true">
-<span class="card__title">{{.Title}}</span>
-{{if not .Done}}<form class="edit-form" hx-patch="/ui/cards/{{.ID}}" hx-target="#board-area" hx-swap="innerHTML" hx-disabled-elt="#card-{{.ID}} .save">
+<span class="card__title">{{.Title}}</span>{{if .Assignee}}
+<span class="card__assignee">{{.Assignee}}</span>{{end}}
+{{if not .Done}}{{$current := .Assignee}}<form class="edit-form" hx-patch="/ui/cards/{{.ID}}" hx-target="#board-area" hx-swap="innerHTML" hx-disabled-elt="#card-{{.ID}} .save">
 <input class="input" type="text" name="title" value="{{.Title}}">
+<select class="input card__assignee-select" name="assignee">
+<option value=""{{if eq $current ""}} selected{{end}}>Unassigned</option>
+{{- range $.Roster}}
+<option value="{{.}}"{{if eq . $current}} selected{{end}}>{{.}}</option>
+{{- end}}
+</select>
 <button type="submit" class="btn btn--primary save">Save</button>
 <button type="button" class="btn btn--secondary cancel">Cancel</button>
 </form>
@@ -320,7 +338,11 @@ var failedTmpl = template.Must(template.New("failed").Parse(
 
 // column is one rendered column panel; card is one rendered card. Done on a
 // card is derived, never carried: it is set by the mapping below when the
-// card's column is the done column (see doneColumnTitle).
+// card's column is the done column (see doneColumnTitle). Assignee is
+// carried verbatim from the contract (name, or empty for the contract's
+// null) — the chip renders it as-is and the band select preselects it;
+// neither display ever consults the roster, so a card can never render a
+// name the server does not carry on it.
 type column struct {
 	Title  string // display title as the contract states it
 	Anchor string // id-safe form of Title, for the column element's id
@@ -331,7 +353,17 @@ type card struct {
 	ID        int64
 	Title     string
 	Done      bool   // derived from column membership — drives the card--done class
+	Assignee  string // contract's assignee name, empty = unassigned (contract null)
 	EditError string // stated refusal rendering at this card, empty when nothing was rejected
+}
+
+// boardView is boardTmpl's whole data: the columns plus the roster the
+// edit-band select lists. The roster rides the view (not the cards) because
+// it is page data from the Roster port — identical for every card — and
+// the template reaches it as $.Roster from inside the card range.
+type boardView struct {
+	Roster  []string
+	Columns []column
 }
 
 // columnsOf maps the contract body to the render model: columns in array
@@ -343,9 +375,10 @@ func columnsOf(board boardResponse) []column {
 		out := column{Title: col.Title, Anchor: columnAnchor(col.Title)}
 		for _, c := range col.Cards {
 			out.Cards = append(out.Cards, card{
-				ID:    c.ID,
-				Title: c.Title,
-				Done:  col.Title == doneColumnTitle,
+				ID:       c.ID,
+				Title:    c.Title,
+				Done:     col.Title == doneColumnTitle,
+				Assignee: c.Assignee,
 			})
 		}
 		columns = append(columns, out)
@@ -374,9 +407,17 @@ func columnAnchor(title string) string {
 	return strings.ToLower(strings.ReplaceAll(title, " ", "-"))
 }
 
-func renderBoard(w http.ResponseWriter, columns []column) {
+// viewFor builds this page's board template data: the given columns plus
+// the roster from the port. Every boardTmpl rendering — whole page or swap
+// fragment — goes through here, so the select's option list and the chip's
+// source can never disagree between surfaces.
+func (p *page) viewFor(columns []column) boardView {
+	return boardView{Roster: p.rosterNames(), Columns: columns}
+}
+
+func (p *page) renderBoard(w http.ResponseWriter, columns []column) {
 	var b bytes.Buffer
-	if err := boardTmpl.Execute(&b, columns); err != nil {
+	if err := boardTmpl.Execute(&b, p.viewFor(columns)); err != nil {
 		http.Error(w, "render failed", http.StatusInternalServerError)
 		return
 	}

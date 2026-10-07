@@ -26,16 +26,18 @@ import (
 // the same column wherever the server keeps it. The column field is
 // deliberately absent: moving is the drag card's operation (KW5).
 
-// handleEdit — PATCH /ui/cards/{id}. It performs the title change by
-// issuing PATCH {apiBase}/cards/{id} over real HTTP with the contract's
-// {"title": ...} body, then answers the resulting state as a swap fragment
-// targeting #board-area: on success the fresh board (200) — the re-read is
-// the in-place guarantee, the card lands where the server holds it with the
-// new title; on a contract refusal (422 — blank, over-limit, or a title
-// edit on a card sitting in Done) the board re-rendered from server truth
-// with the stated reason at the editing card, the card's original title
-// intact and the contract's status mirrored; on a stale card (404) the
-// shared stale-failure surface (stale.go) — identical for every verb.
+// handleEdit — PATCH /ui/cards/{id}. It performs the change by issuing
+// PATCH {apiBase}/cards/{id} over real HTTP with the contract's body —
+// {"title": ...} plus, since KW9 (card ui/14), the band's "assignee" field
+// (name, or null for the select's Unassigned) — then answers the resulting
+// state as a swap fragment targeting #board-area: on success the fresh
+// board (200) — the re-read is the in-place guarantee, the card lands where
+// the server holds it with the new title and assignee; on a contract
+// refusal (422 — blank, over-limit, an edit on a card sitting in Done, or
+// an assignee the roster does not know) the board re-rendered from server
+// truth with the stated reason at the editing card, the card's original
+// fields intact and the contract's status mirrored; on a stale card (404)
+// the shared stale-failure surface (stale.go) — identical for every verb.
 func (p *page) handleEdit(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
@@ -43,7 +45,7 @@ func (p *page) handleEdit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	title := r.FormValue("title")
-	status, reason := p.patchCardTitle(r, id, title)
+	status, reason := p.patchCard(r, id, title)
 
 	switch status {
 	case http.StatusOK:
@@ -62,7 +64,7 @@ func (p *page) handleEdit(w http.ResponseWriter, r *http.Request) {
 		if board, err := p.loadBoard(); err == nil {
 			columns := columnsOf(board)
 			attachEditError(columns, id, reason)
-			err = writeFragment(&b, boardTmpl, columns)
+			err = writeFragment(&b, boardTmpl, p.viewFor(columns))
 		} else {
 			err = writeFragment(&b, failedTmpl, nil)
 		}
@@ -81,15 +83,35 @@ func (p *page) handleEdit(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// patchCardTitle performs the module's edit write: PATCH {apiBase}/cards/{id}
-// over real HTTP with the contract's {"title": ...} body — never the column
-// field, the edit has no say over placement. It returns the contract's
+// patchCard performs the module's edit write: PATCH {apiBase}/cards/{id}
+// over real HTTP with the contract's body — never the column field, the
+// edit has no say over placement. It returns the contract's
 // status and, on a refusal, its stated reason; the message's single owner
 // stays upstream (api/board), this module only carries it. The fallbacks
 // cover only a body that states nothing: a refusal from the real contract
 // always carries its own wording.
-func (p *page) patchCardTitle(r *http.Request, id int64, title string) (status int, reason string) {
-	body, err := json.Marshal(map[string]string{"title": title})
+//
+// The assignee field carries the band select's three states through to the
+// contract's three spellings (api/change.go): the submitted form has no
+// assignee field (a pre-KW9 band, or a forced title-only seam request) →
+// the field stays ABSENT from the body, no direction, and the request
+// bytes match the pre-KW9 edit exactly; an empty value (the select's
+// Unassigned) → JSON null, the contract's clear; a name → JSON string, the
+// contract's assign. Selections ride the one PATCH the save already makes
+// — htmx serializes the whole band form — so a save is one change request
+// whether or not the assignee moved. Roster validity is never screened
+// here: a name off the cast comes back as the contract's own 422 and
+// renders at the card through the refusal arm below.
+func (p *page) patchCard(r *http.Request, id int64, title string) (status int, reason string) {
+	payload := map[string]any{"title": title}
+	if r.Form.Has("assignee") {
+		if name := r.FormValue("assignee"); name != "" {
+			payload["assignee"] = name
+		} else {
+			payload["assignee"] = nil
+		}
+	}
+	body, err := json.Marshal(payload)
 	if err != nil {
 		return http.StatusInternalServerError, "could not change card"
 	}

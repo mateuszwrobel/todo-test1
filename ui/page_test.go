@@ -18,9 +18,18 @@ func fakeAPI(t *testing.T, handler http.HandlerFunc) *httptest.Server {
 	return srv
 }
 
+// testRoster is the Roster-port fixture for every uiServer below: the same
+// fixed cast the contract's roster endpoint answers (GET /users, served
+// from users.Names at contract order) — written here as fixture data, the
+// way boardJSON hardcodes contract bodies. ui tests must not import the
+// users package (architecture spec), so the fixture stands in.
+var testRoster = RosterFunc(func() []string {
+	return []string{"Ada", "Grace", "Alan", "Barbara", "Linus"}
+})
+
 func uiServer(t *testing.T, apiBase string) *httptest.Server {
 	t.Helper()
-	srv := httptest.NewServer(NewHandler(apiBase))
+	srv := httptest.NewServer(NewHandler(apiBase, testRoster))
 	t.Cleanup(srv.Close)
 	return srv
 }

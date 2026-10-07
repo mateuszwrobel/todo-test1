@@ -128,7 +128,7 @@ func (p *page) writeBoardAreaFragment(w io.Writer) error {
 	if err != nil {
 		return writeFragment(w, failedTmpl, nil)
 	}
-	return writeFragment(w, boardTmpl, columnsOf(board))
+	return writeFragment(w, boardTmpl, p.viewFor(columnsOf(board)))
 }
 
 func writeFragment(w io.Writer, tmpl *template.Template, data any) error {

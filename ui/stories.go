@@ -88,9 +88,9 @@ func (p *page) handleStories(w http.ResponseWriter, r *http.Request) {
 func storySections() []storySection {
 	return []storySection{
 		{ID: "state-board", Caption: "board",
-			HTML: fragmentHTML(boardTmpl, columnsOf(storyBoard()))},
+			HTML: fragmentHTML(boardTmpl, storyView(storyBoard()))},
 		{ID: "state-board-empty", Caption: "empty board",
-			HTML: fragmentHTML(boardTmpl, columnsOf(storyBoardEmpty()))},
+			HTML: fragmentHTML(boardTmpl, storyView(storyBoardEmpty()))},
 		{ID: "state-load-failure", Caption: "load failure",
 			HTML: fragmentHTML(failedTmpl, nil)},
 		{ID: "state-create", Caption: "create band",
@@ -98,7 +98,7 @@ func storySections() []storySection {
 		{ID: "state-create-error", Caption: "rejected create",
 			HTML: fragmentHTML(createAreaTmpl, createAreaData{Value: "   ", Error: "text is required"})},
 		{ID: "state-edit-band", Caption: "edit band open",
-			HTML: addCardClass(fragmentHTML(boardTmpl, columnsOf(storyBoardFull())), 913, "editing")},
+			HTML: addCardClass(fragmentHTML(boardTmpl, storyView(storyBoardFull())), 913, "editing")},
 		{ID: "state-edit-error", Caption: "edit refused at card",
 			HTML: storyEditError()},
 		{ID: "state-stale", Caption: "stale operation",
@@ -217,6 +217,23 @@ func storyBoardFull() boardResponse {
 	}}
 }
 
+// storyRoster is the gallery's roster fixture: the same fixed cast the
+// contract's roster endpoint answers (GET /users, served from users.Names),
+// written here as fixture data exactly like the board fixtures below
+// hardcode contract bodies. The gallery touches no store, no api, and no
+// module code (the ui→users edge is forbidden by the architecture spec),
+// so the deterministic copy stands in — assignment gallery states arrive
+// with card ui/19 (KW10), which owns this file's fixtures.
+func storyRoster() []string {
+	return []string{"Ada", "Grace", "Alan", "Barbara", "Linus"}
+}
+
+// storyView feeds boardTmpl a fixture board with the fixture roster,
+// matching what the live page assembles through page.viewFor.
+func storyView(board boardResponse) boardView {
+	return boardView{Roster: storyRoster(), Columns: columnsOf(board)}
+}
+
 // storyBoardEmpty is the whole-board-empty fixture (journeys' derived page
 // state "empty board"): every column present, every column stating its
 // emptiness — visibly an empty board, not a blank page.
@@ -235,7 +252,7 @@ func storyBoardEmpty() boardResponse {
 func storyEditError() template.HTML {
 	columns := columnsOf(storyBoardFull())
 	attachEditError(columns, 912, "text is required")
-	return fragmentHTML(boardTmpl, columns)
+	return fragmentHTML(boardTmpl, boardView{Roster: storyRoster(), Columns: columns})
 }
 
 // storyStaleFailure renders the stale-operation surface exactly as
@@ -243,7 +260,7 @@ func storyEditError() template.HTML {
 // first, then the truth re-rendered without the card.
 func storyStaleFailure() template.HTML {
 	return fragmentHTML(missingCardTmpl, "no such card") +
-		fragmentHTML(boardTmpl, columnsOf(storyBoardFull()))
+		fragmentHTML(boardTmpl, storyView(storyBoardFull()))
 }
 
 // storyDrag freezes a between-columns drag mid-gesture: card 911 lifted
@@ -254,7 +271,7 @@ func storyStaleFailure() template.HTML {
 // so the frozen hooks are the static stand-in — the markup itself still
 // comes from boardTmpl unchanged.
 func storyDrag() template.HTML {
-	board := addCardClass(fragmentHTML(boardTmpl, columnsOf(storyBoardFull())), 911, "card--source")
+	board := addCardClass(fragmentHTML(boardTmpl, storyView(storyBoardFull())), 911, "card--source")
 	board = template.HTML(strings.Replace(string(board),
 		`<li id="card-914"`,
 		`<li class="drop-indicator"></li><li id="card-914"`, 1))
