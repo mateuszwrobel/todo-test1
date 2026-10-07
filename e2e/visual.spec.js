@@ -23,6 +23,12 @@
 //   example and each #state-* section, rendered from compile-time fixtures
 //   — fixed titles, fixed ids, no store, no clock, no randomness, no client
 //   script — so the gallery halves of the run cannot drift between runs.
+//   KW10 (card ui/19) adds two: #state-assigned (assigned chip, unassigned
+//   card, Done chip-only, band select all in one fixture board) and
+//   #state-filtered (a filtered column stating its filter-named empty).
+//   The live full-page anchors (page-board-populated, page-board-empty)
+//   also carry the new filter dropdown chrome; the seeded fixtures stay
+//   unassigned, so no chip enters those live shots.
 //
 // Regenerate deliberately:
 //   make e2e-visual PW_ARGS=--update-snapshots   (then review + commit the PNGs)
@@ -59,6 +65,8 @@ const STATE_ANCHORS = [
   'state-edit-error',
   'state-stale',
   'state-drag',
+  'state-assigned',
+  'state-filtered',
 ];
 
 // --- live surfaces over the seeded, three-columns-populated board ---
