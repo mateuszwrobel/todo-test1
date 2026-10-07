@@ -56,7 +56,7 @@ func TestChangeTitleKeepsPlaceAndIdentity(t *testing.T) {
 			before := mustList(t, store)
 			target := before[columnIndex(t, before, tt.pick)].Cards[tt.pickPos]
 
-			changed, err := store.Change(target.ID, ptr(tt.newText), nil)
+			changed, err := store.Change(target.ID, ptr(tt.newText), nil, nil)
 			if err != nil {
 				t.Fatalf("Change(%d, %q, nil): %v", target.ID, tt.newText, err)
 			}
@@ -123,7 +123,7 @@ func TestChangeTitleOnDoneCardIsFrozen(t *testing.T) {
 		store, target := frozenFixture(t)
 		before := mustList(t, store)
 
-		got, err := store.Change(target.ID, ptr("frozen?"), nil)
+		got, err := store.Change(target.ID, ptr("frozen?"), nil, nil)
 		if !errors.Is(err, ErrDoneFrozen) {
 			t.Fatalf("Change(%d, title, nil) on a done card: err = %v, want ErrDoneFrozen", target.ID, err)
 		}
@@ -141,7 +141,7 @@ func TestChangeTitleOnDoneCardIsFrozen(t *testing.T) {
 		store, target := frozenFixture(t)
 		before := mustList(t, store)
 
-		got, err := store.Change(target.ID, ptr("escaped with a title?"), ptr(Todo))
+		got, err := store.Change(target.ID, ptr("escaped with a title?"), ptr(Todo), nil)
 		if !errors.Is(err, ErrDoneFrozen) {
 			t.Fatalf("Change(%d, title, Todo) on a done card: err = %v, want ErrDoneFrozen", target.ID, err)
 		}
@@ -158,7 +158,7 @@ func TestChangeTitleOnDoneCardIsFrozen(t *testing.T) {
 	t.Run("column-only move out of done is fine and unlocks the title direction", func(t *testing.T) {
 		store, target := frozenFixture(t)
 
-		moved, err := store.Change(target.ID, nil, ptr(Todo))
+		moved, err := store.Change(target.ID, nil, ptr(Todo), nil)
 		if err != nil {
 			t.Fatalf("column-only Change out of Done: %v — a move is not an edit", err)
 		}
@@ -169,7 +169,7 @@ func TestChangeTitleOnDoneCardIsFrozen(t *testing.T) {
 			t.Errorf("moved card at %q position %d, want todo bottom (position 1)", moved.Column, moved.Position)
 		}
 
-		renamed, err := store.Change(moved.ID, ptr("editable after unlock"), nil)
+		renamed, err := store.Change(moved.ID, ptr("editable after unlock"), nil, nil)
 		if err != nil {
 			t.Fatalf("Change(title) after the move-out: %v — moving out of Done must unlock editing", err)
 		}
@@ -230,7 +230,7 @@ func TestChangeTitleStoresTrimmedText(t *testing.T) {
 				t.Fatalf("Create: %v", err)
 			}
 
-			changed, err := store.Change(created.ID, ptr(tt.text), nil)
+			changed, err := store.Change(created.ID, ptr(tt.text), nil, nil)
 			if err != nil {
 				t.Fatalf("Change(%d, %q, nil): %v", created.ID, tt.text, err)
 			}
@@ -269,7 +269,7 @@ func TestChangeTitleRejectionsUseTheSameTextRules(t *testing.T) {
 			before := mustList(t, store)
 			id := before[columnIndex(t, before, Todo)].Cards[1].ID
 
-			got, err := store.Change(id, ptr(tt.text), nil)
+			got, err := store.Change(id, ptr(tt.text), nil, nil)
 			if !errors.Is(err, tt.want) {
 				t.Fatalf("Change(%d, %q, nil) err = %v, want %v", id, tt.text, err, tt.want)
 			}
@@ -317,7 +317,7 @@ func TestChangeUnknownCardIsReported(t *testing.T) {
 			before := mustList(t, store)
 			z := unknownID(t, store)
 
-			got, err := store.Change(z, tt.title, tt.column)
+			got, err := store.Change(z, tt.title, tt.column, nil)
 			if !errors.Is(err, ErrCardNotFound) {
 				t.Fatalf("Change(%d, %+v, %+v) err = %v, want ErrCardNotFound", z, tt.title, tt.column, err)
 			}
@@ -345,10 +345,10 @@ func TestRejectedChangeDoesNotConsumeIdentifier(t *testing.T) {
 	}
 	z := unknownID(t, store)
 
-	if _, err := store.Change(z, ptr("burned?"), nil); !errors.Is(err, ErrCardNotFound) {
+	if _, err := store.Change(z, ptr("burned?"), nil, nil); !errors.Is(err, ErrCardNotFound) {
 		t.Fatalf("title-direction change of unknown card err = %v, want ErrCardNotFound", err)
 	}
-	if _, err := store.Change(z, nil, ptr(Done)); !errors.Is(err, ErrCardNotFound) {
+	if _, err := store.Change(z, nil, ptr(Done), nil); !errors.Is(err, ErrCardNotFound) {
 		t.Fatalf("column-direction change of unknown card err = %v, want ErrCardNotFound", err)
 	}
 
@@ -407,7 +407,7 @@ func TestChangeRejectsInvalidColumn(t *testing.T) {
 			before := mustList(t, store)
 			id := before[columnIndex(t, before, Todo)].Cards[0].ID
 
-			got, err := store.Change(id, nil, ptr(tt.col))
+			got, err := store.Change(id, nil, ptr(tt.col), nil)
 			if !errors.Is(err, ErrInvalidColumn) {
 				t.Fatalf("Change(%d, nil, %q) err = %v, want ErrInvalidColumn", id, string(tt.col), err)
 			}
@@ -480,7 +480,7 @@ func TestChangeColumnMovesToBottomAndClosesGap(t *testing.T) {
 			target := before[columnIndex(t, before, tt.pick)].Cards[tt.pickPos]
 			wantPosition := len(before[columnIndex(t, before, tt.to)].Cards)
 
-			changed, err := store.Change(target.ID, nil, ptr(tt.to))
+			changed, err := store.Change(target.ID, nil, ptr(tt.to), nil)
 			if err != nil {
 				t.Fatalf("Change(%d, nil, %q): %v", target.ID, tt.to, err)
 			}
@@ -551,7 +551,7 @@ func TestChangeColumnToSameColumnPlacesNothing(t *testing.T) {
 	before := mustList(t, store)
 	target := before[0].Cards[1]
 
-	changed, err := store.Change(target.ID, nil, ptr(Todo))
+	changed, err := store.Change(target.ID, nil, ptr(Todo), nil)
 	if err != nil {
 		t.Fatalf("Change(%d, nil, Todo): %v", target.ID, err)
 	}

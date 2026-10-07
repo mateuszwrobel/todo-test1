@@ -282,7 +282,7 @@ func TestDeletedCardCannotBeChangedAfterwards(t *testing.T) {
 		}
 		before := mustList(t, store)
 
-		got, err := store.Change(target.ID, ptr("changed after delete"), nil)
+		got, err := store.Change(target.ID, ptr("changed after delete"), nil, nil)
 		if !errors.Is(err, ErrCardNotFound) {
 			t.Fatalf("Change(%d) after delete err = %v, want ErrCardNotFound", target.ID, err)
 		}

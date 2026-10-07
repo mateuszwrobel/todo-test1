@@ -39,15 +39,17 @@ matches = { units = ["*/users"] }
 depend_on = []
 forbidden = ["board", "api", "ui", "server"]
 
-# Board data module (kanban pivot, ADR-003): depends on NOTHING internal. Only
-# api (contract translation) and the composition root may import it; ui never
-# reaches it (HTTP only) — workplan_board_store.md Boundaries. The sole data
-# module now that todos retired at KW4/api/10.
+# Board data module (kanban pivot, ADR-003): its one internal edge is users —
+# the assignee direction of Change screens the name through the roster
+# contract. Only api (contract translation) and the composition root may import
+# it; ui never reaches it (HTTP only) — workplan_board_store.md Boundaries. The
+# sole data module now that todos retired at KW4/api/10. The users edge is
+# declared at KW9, the wave that first imported it.
 [[module]]
 name = "board"
 matches = { units = ["*/board"] }
 [module.allowed]
-depend_on = []
+depend_on = ["users"]
 forbidden = ["api", "ui", "server"]
 
 # HTTP translation layer: internal dependency is board alone — the todos edge

@@ -258,7 +258,7 @@ func TestMovePastEndEqualsChangeBottomAppend(t *testing.T) {
 	viaChange := openStore(t)
 	seedBoard(t, viaChange, seed)
 	target2 := mustList(t, viaChange)[columnIndex(t, mustList(t, viaChange), Todo)].Cards[1]
-	if _, err := viaChange.Change(target2.ID, nil, ptr(InProgress)); err != nil {
+	if _, err := viaChange.Change(target2.ID, nil, ptr(InProgress), nil); err != nil {
 		t.Fatalf("Change(%d, nil, in_progress): %v", target2.ID, err)
 	}
 

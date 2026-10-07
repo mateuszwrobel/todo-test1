@@ -13,6 +13,8 @@ import (
 	"unicode/utf8"
 
 	_ "modernc.org/sqlite" // pure-Go, cgo-free SQLite driver
+
+	"todo/users" // the roster the card assignee is validated against
 )
 
 // Column is one of the board's three fixed columns. The set is this module's
@@ -43,13 +45,28 @@ func validColumn(c Column) bool {
 	return false
 }
 
-// Card is a single board record. The fields are exactly the contract's Card
-// model — nothing more is stored.
+// Card is a single board record. The fields are the contract's Card model —
+// id, title, column, position — plus the card's one optional simulated user.
+//
+// Assignee is represented as a plain string with the EMPTY STRING meaning
+// unassigned, and that choice is deliberate on two counts. First, the roster
+// contract (users.IsMember) says the empty string is not a name, so no real
+// assignee can ever collide with the sentinel: the representation is exact,
+// not lossy. Second, a string keeps Card comparable with ==, which is what
+// lets every cell-for-cell pin in this package's tests (boardEqual) compare
+// two listings directly.
+//
+// For the api layer the mapping to the contract's name-or-null is one line:
+// Assignee != "" is the name, Assignee == "" is null. The JSON tag is
+// omitempty so an unassigned card encodes exactly as it did before assignment
+// existed (the field absent); the api lane's contract leg replaces that with
+// the explicit null this field maps to.
 type Card struct {
 	ID       int64  `json:"id"`
 	Title    string `json:"title"`
 	Column   Column `json:"column"`
 	Position int    `json:"position"`
+	Assignee string `json:"assignee,omitempty"`
 }
 
 // ColumnCards is one column of a listed board: its name and its cards
@@ -71,17 +88,44 @@ type ColumnCards struct {
 // and Import's atomic marker write): a key/value row whose presence records
 // that the board's one-time import decision has been made. The composition
 // root's migration guard reads it; the board only stores it.
+// assignee is nullable with no CHECK and no foreign key: NULL is unassigned,
+// and roster membership is a code rule through the users module, not storage
+// data (the cast is built into the program). Open adds the column when an
+// older board file lacks it, and every existing row then reads as unassigned.
 const schema = `CREATE TABLE IF NOT EXISTS cards (
 	id integer primary key autoincrement,
 	title text not null check (trim(title) <> '' and length(title) <= 500),
 	"column" text not null check ("column" in ('todo','in_progress','done')),
-	position integer not null check (position >= 0)
+	position integer not null check (position >= 0),
+	assignee text
 );
 CREATE INDEX IF NOT EXISTS cards_column_position ON cards ("column", position);
 CREATE TABLE IF NOT EXISTS meta (
 	key text primary key,
 	value text not null
 )`
+
+// ensureAssigneeColumn upgrades a pre-assignment board file in place: cards
+// written before KW9 carry no assignee column at all, and Open adds it when
+// missing (ALTER TABLE ADD COLUMN of a nullable column with no default, so
+// every existing row reads as NULL = unassigned — the whole of the schema
+// upgrade, no data rewrite, no row touched). A file created by this code
+// already has the column and the check is a no-op read.
+func ensureAssigneeColumn(db *sql.DB) error {
+	var present int
+	if err := db.QueryRow(
+		`SELECT count(*) FROM pragma_table_info('cards') WHERE name = 'assignee'`,
+	).Scan(&present); err != nil {
+		return fmt.Errorf("inspect cards columns: %w", err)
+	}
+	if present > 0 {
+		return nil
+	}
+	if _, err := db.Exec(`ALTER TABLE cards ADD COLUMN assignee text`); err != nil {
+		return fmt.Errorf("add cards.assignee: %w", err)
+	}
+	return nil
+}
 
 // Store is an open handle on the board data file. One process opens one file
 // at a time; the composition root owns the handle's lifecycle and the path.
@@ -108,6 +152,10 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("init schema at %q: %w", path, err)
 	}
+	if err := ensureAssigneeColumn(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("open data file %q: %w", path, err)
+	}
 	return &Store{db: db}, nil
 }
 
@@ -123,7 +171,9 @@ func (s *Store) Close() error {
 // comes back as ErrTextRequired and over-long text as ErrTextTooLong, each
 // with no insert attempted, so a rejected card neither changes the board nor
 // consumes an identifier. The count and the insert run in one transaction, so
-// the append is all-or-nothing.
+// the append is all-or-nothing. A created card starts unassigned: the insert
+// names no assignee, so the column stores NULL — assignment happens through
+// Change's assignee direction, never through Create.
 func (s *Store) Create(text string) (Card, error) {
 	title, err := validateText(text)
 	if err != nil {
@@ -201,58 +251,120 @@ var ErrCardNotFound = errors.New("board: no card with that identifier")
 // exactly as it was. Callers map it with errors.Is.
 var ErrInvalidColumn = errors.New("board: column must be one of todo, in_progress, done")
 
-// ErrDoneFrozen reports a title direction aimed at a card sitting in the Done
-// column — the store's done-frozen outcome, the contract-level done freeze
-// (user decision 2026-10-07, superseding the pivot's reading that a done
-// card's text is editable): a done card's text is frozen, and moving it out
-// of Done is the only way to make it editable again. The check is the card
-// row read's outcome, made inside the transaction strictly before any write,
-// so a refused change leaves the board exactly as it was and consumes no
-// identifier (Change inserts nothing anyway). Column directions on done
-// cards are unaffected — moving out of Done is precisely the unlock — and
-// Create, Seed and Import write fresh text rather than editing a card, so
-// they stay allowed into Done. Callers map it with errors.Is.
+// ErrDoneFrozen reports a title direction OR an assignee direction aimed at a
+// card sitting in the Done column — the store's done-frozen outcome, the
+// contract-level done freeze (user decision 2026-10-07, superseding the
+// pivot's reading that a done card's text is editable; extended to assignment
+// by the same date's user decision): a done card changes nothing but its
+// column and its existence, and moving it out of Done is the only way to make
+// it editable again. The check is the card row read's outcome, made inside
+// the transaction strictly before any write, so a refused change leaves the
+// board exactly as it was and consumes no identifier (Change inserts nothing
+// anyway). Column directions on done cards are unaffected — moving out of
+// Done is precisely the unlock, and it unlocks both directions — and Create,
+// Seed and Import write fresh rows rather than editing a card, so they stay
+// allowed into Done. Setting AND clearing the assignee are both edits: the
+// freeze does not grade them. Callers map it with errors.Is.
 var ErrDoneFrozen = errors.New("board: card is done; move it out of Done to edit")
+
+// ErrUnknownAssignee reports an assignee name outside the simulated roster —
+// the store's unknown-assignee outcome, validated through the users contract
+// (users.IsMember), the roster being a code rule rather than stored data. The
+// guard runs before the transaction opens, so a rejected name touches no
+// storage; and it is the FIRST rule Change consults, outranking the text
+// rules, the not-found lookup, and the done freeze: an invalid name is a
+// defect of the request itself, and the simulation has rules even where the
+// dropdown makes a bad name unselectable. Callers map it with errors.Is.
+var ErrUnknownAssignee = errors.New("board: assignee is not on the users roster")
+
+// AssigneeDirection is Change's assignee direction. The nil *AssigneeDirection
+// means "no assignee direction — leave the card's assignee alone"; a non-nil
+// one either sets the card's one simulated user (Name is a roster name,
+// validated through the users contract before anything else is consulted) or
+// clears it (Clear true — the card becomes unassigned; Name is then ignored).
+// The zero &AssigneeDirection{} is the clear direction, which is why call
+// sites read clearest through the constructors below.
+//
+// The representation this direction writes into Card.Assignee is the same one
+// reads out of it: a roster name, or the empty string for unassigned.
+// Storing is a NULL column; the read maps NULL back to "".
+type AssigneeDirection struct {
+	// Name is the roster name to assign. Meaningful only when Clear is false.
+	Name string
+	// Clear asks for the card's assignee to be removed.
+	Clear bool
+}
+
+// AssignTo is the set direction: assign the card to roster name. The name is
+// not screened here — Change screens it against the users contract as its
+// first rule, so one validity source covers every call site.
+func AssignTo(name string) *AssigneeDirection { return &AssigneeDirection{Name: name} }
+
+// ClearAssignee is the clear direction: the card ends unassigned.
+func ClearAssignee() *AssigneeDirection { return &AssigneeDirection{Clear: true} }
 
 // Change applies the given directions to the card identified by id in one
 // transaction and returns the card as it now stands. A nil direction is left
-// untouched; at least one direction must be non-nil.
+// untouched; at least one direction must be non-nil. The directions are the
+// card's text, its column, and — since KW9 — its one simulated user.
 //
-// The title direction runs through validateText — the module's single text
-// rule, the same function Create screens through — BEFORE the transaction
-// opens: blank text is ErrTextRequired and over-long text ErrTextTooLong, each
-// with no statement executed, so a rejected change leaves the board exactly as
-// it was. The stored title is the trimmed text. A title-only change touches
-// nothing else: the card keeps its column, its position, and its identifier —
-// place and identity survive the rename — with one refusal: the contract-
-// level done freeze (user decision 2026-10-07) answers ErrDoneFrozen for a
-// title direction aimed at a card whose CURRENT column is Done. Column
-// membership is still the only done state, and that membership alone is what
-// freezes the text; moving the card out of Done is the unlock.
+// The assignee direction carries the card's assignee to a roster name or
+// clears it (AssigneeDirection, AssignTo, ClearAssignee). Setting and clearing
+// are edits and nothing else: the card keeps its column, its position, and its
+// identifier, and a change carrying ONLY an assignee is a complete change in
+// its own right. The written value is a roster name or NULL (unassigned);
+// Card.Assignee reads NULL back as the empty string.
 //
-// The column direction guards the fixed enum (validColumn) BEFORE the
-// transaction opens — a value other than todo, in_progress, done is
-// ErrInvalidColumn with no statement executed, never a storage-constraint
-// failure — then moves the card to the bottom of the target column and
-// closes the gap in the source column, so every column's positions stay
-// contiguous 0..n-1 inside the same transaction. A requested column equal to
-// the card's current one places nothing — Change carries no position
-// direction, so it never reorders within a column. The neighbor-ordering
-// semantics the KW3 note scheduled (insert at an index, same-column reorder)
-// arrived as Move, in board/06 and board/07.
+// Rule ORDER inside Change is contract, and the contract's words are these,
+// quoted from workplan_board_store.md (Database → Data Flow): "Roster
+// membership is validated through the users contract before any write,
+// outranking text rules, not-found, and the done freeze. The Done freeze check
+// in Change now fires when either the title or the assignee direction is
+// present while the card's current column is Done." Concretely, in this
+// function's order:
 //
-// An identifier no card holds comes back as ErrCardNotFound: the existence
-// read is the transaction's first statement, before any write, so a rejected
-// change leaves the board exactly as it was and consumes no identifier.
-func (s *Store) Change(id int64, title *string, column *Column) (Card, error) {
-	if title == nil && column == nil {
-		return Card{}, fmt.Errorf("change card %d: nothing to change (title and column both nil)", id)
+//  1. the request-shape check (at least one direction non-nil);
+//  2. roster validity through users.IsMember — FIRST, so an unknown assignee
+//     answers ErrUnknownAssignee beside blank text, a missing card, AND a done
+//     card, every time, decided before Begin (card board/17);
+//  3. the text rules through validateText, the same function Create screens
+//     through — ErrTextRequired, ErrTextTooLong — with no statement executed;
+//  4. the column enum through validColumn — ErrInvalidColumn, no statement
+//     executed, never a storage-constraint failure;
+//  5. inside the transaction, the existence read — its miss is
+//     ErrCardNotFound before any write, so a rejected change leaves the board
+//     exactly as it was and consumes no identifier;
+//  6. the done freeze — a title OR an assignee direction against a card whose
+//     CURRENT column is Done (the row read above, never a requested column) is
+//     ErrDoneFrozen before any write.
+//
+// Everything after that is the writes themselves: title text (trimmed), the
+// assignee (name or NULL), and the column move — the card to the bottom of the
+// target column with the source gap closed, so every column stays contiguous
+// 0..n-1 in the same transaction. A requested column equal to the card's
+// current one places nothing: Change carries no position direction, so it
+// never reorders within a column; that is Move (board/06, board/07). Column
+// membership is the only done state, and it alone freezes the title and
+// assignee directions; a column-only move out of Done is not an edit and is
+// exactly the unlock, and Move (no title, no assignee) never meets the guard.
+func (s *Store) Change(id int64, title *string, column *Column, assignee *AssigneeDirection) (Card, error) {
+	if title == nil && column == nil && assignee == nil {
+		return Card{}, fmt.Errorf("change card %d: nothing to change (title, column and assignee all nil)", id)
 	}
 
-	// Validation precedes every write: both directions are screened here —
-	// text through validateText, column through the fixed enum — before
-	// Begin, before any SQL. A rejection in either direction is a named
-	// store outcome with no statement executed.
+	// Validation precedes every write, in the contract's rank order (see the
+	// doc above): roster validity FIRST through the users contract, then the
+	// text rule, then the column enum — all of it before Begin, before any
+	// SQL. A rejection in any direction is a named store outcome with no
+	// statement executed.
+	//
+	// Clear is exempt from the name check by construction: a direction that
+	// clears names nobody, and the empty string is not a roster name (users
+	// contract) precisely so no real name can ever be confused with it.
+	if assignee != nil && !assignee.Clear && !users.IsMember(assignee.Name) {
+		return Card{}, fmt.Errorf("change card %d: assignee %q is not on the users roster: %w",
+			id, assignee.Name, ErrUnknownAssignee)
+	}
 	trimmed := ""
 	if title != nil {
 		var err error
@@ -272,27 +384,34 @@ func (s *Store) Change(id int64, title *string, column *Column) (Card, error) {
 	}
 	defer tx.Rollback() // no-op after Commit
 
+	// The existence read, and with it the row's CURRENT column (the freeze's
+	// subject) and current assignee (the returned card's, unless this change
+	// overwrites it).
 	var card Card
+	var storedAssignee sql.NullString
 	err = tx.QueryRow(
-		`SELECT id, title, "column", position FROM cards WHERE id = ?`, id,
-	).Scan(&card.ID, &card.Title, &card.Column, &card.Position)
+		`SELECT id, title, "column", position, assignee FROM cards WHERE id = ?`, id,
+	).Scan(&card.ID, &card.Title, &card.Column, &card.Position, &storedAssignee)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Card{}, fmt.Errorf("change card %d: %w", id, ErrCardNotFound)
 	}
 	if err != nil {
 		return Card{}, fmt.Errorf("change card %d: %w", id, err)
 	}
+	card.Assignee = storedAssignee.String
 
-	// Contract-level done freeze (user decision 2026-10-07): a title
-	// direction aimed at a card that currently sits in Done is refused,
-	// before any write. Ordering, quoted from the workplan amendment: the
-	// freeze is checked against the card's CURRENT column — the row read
-	// above, the transaction's first statement — not against any requested
-	// one. So a combined title+column change that would carry the card out
-	// of Done still refuses while it sits there (title present, current
-	// column Done), a column-only move out of Done is the allowed unlock,
-	// and Move (no title involved) never meets this guard.
-	if title != nil && card.Column == Done {
+	// Contract-level done freeze (user decision 2026-10-07, extended to the
+	// assignee direction the same date): a title direction OR an assignee
+	// direction aimed at a card that currently sits in Done is refused, before
+	// any write. Ordering, quoted from the workplan amendment: the freeze is
+	// checked against the card's CURRENT column — the row read above, the
+	// transaction's first statement — not against any requested one. So a
+	// combined title+column (or assignee+column) change that would carry the
+	// card out of Done still refuses while it sits there; a column-only move
+	// out of Done is the allowed unlock for both directions, and Move (no
+	// title, no assignee involved) never meets this guard. Setting and
+	// clearing are both edits — the freeze does not grade them.
+	if (title != nil || assignee != nil) && card.Column == Done {
 		return Card{}, fmt.Errorf("change card %d: %w", id, ErrDoneFrozen)
 	}
 
@@ -301,6 +420,21 @@ func (s *Store) Change(id int64, title *string, column *Column) (Card, error) {
 			return Card{}, fmt.Errorf("change card %d: %w", id, err)
 		}
 		card.Title = trimmed
+	}
+
+	if assignee != nil {
+		// Clear wins over a carried Name (documented on the direction type):
+		// the write is NULL, the representation's unassigned.
+		next := ""
+		var stored any // a nil bind parameter stores SQL NULL
+		if !assignee.Clear {
+			next = assignee.Name
+			stored = next
+		}
+		if _, err := tx.Exec(`UPDATE cards SET assignee = ? WHERE id = ?`, stored, id); err != nil {
+			return Card{}, fmt.Errorf("change card %d: %w", id, err)
+		}
+		card.Assignee = next
 	}
 
 	if column != nil && *column != card.Column {
@@ -357,8 +491,10 @@ func (s *Store) Change(id int64, title *string, column *Column) (Card, error) {
 // enum BEFORE the transaction opens (ErrInvalidColumn, no statement
 // executed), and the card's existence is the transaction's first read — its
 // miss is ErrCardNotFound before any write, so a rejected move touches nothing
-// and consumes no identifier. The card's identifier and text are untouched by
-// a move — placement is the only thing a move changes.
+// and consumes no identifier. The card's identifier, text and assignee are
+// untouched by a move — placement is the only thing a move changes, so an
+// assigned card arrives at its new slot still assigned to the same user (the
+// returned card carries the assignee through for the caller's benefit).
 func (s *Store) Move(id int64, column Column, position int) (Card, error) {
 	if !validColumn(column) {
 		return Card{}, fmt.Errorf("move card %d: column %q is not todo, in_progress, or done: %w",
@@ -372,15 +508,17 @@ func (s *Store) Move(id int64, column Column, position int) (Card, error) {
 	defer tx.Rollback() // no-op after Commit
 
 	var card Card
+	var storedAssignee sql.NullString
 	err = tx.QueryRow(
-		`SELECT id, title, "column", position FROM cards WHERE id = ?`, id,
-	).Scan(&card.ID, &card.Title, &card.Column, &card.Position)
+		`SELECT id, title, "column", position, assignee FROM cards WHERE id = ?`, id,
+	).Scan(&card.ID, &card.Title, &card.Column, &card.Position, &storedAssignee)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Card{}, fmt.Errorf("move card %d: %w", id, ErrCardNotFound)
 	}
 	if err != nil {
 		return Card{}, fmt.Errorf("move card %d: %w", id, err)
 	}
+	card.Assignee = storedAssignee.String
 
 	// Departure first for a cross-column move: flipping the column lets the
 	// source renormalize see the card as gone and close its gap; the arrival
@@ -531,12 +669,14 @@ func (s *Store) Delete(id int64) error {
 // in_progress, done — all three always present, empty ones holding no cards —
 // each column's cards top-to-bottom by position. The ordered read is grouped
 // by the module into this fixed shape, so callers never see column order as a
-// variable.
+// variable. Each card surfaces its assignee in the Card.Assignee
+// representation (roster name, empty string = unassigned) — the read the
+// contract's per-card "assignee" field maps to name-or-null from.
 func (s *Store) List() ([]ColumnCards, error) {
 	board := make([]ColumnCards, 0, len(columns))
 	for _, col := range columns {
 		rows, err := s.db.Query(
-			`SELECT id, title, "column", position FROM cards WHERE "column" = ? ORDER BY position ASC`,
+			`SELECT id, title, "column", position, assignee FROM cards WHERE "column" = ? ORDER BY position ASC`,
 			string(col),
 		)
 		if err != nil {
@@ -545,10 +685,12 @@ func (s *Store) List() ([]ColumnCards, error) {
 		var cards []Card
 		for rows.Next() {
 			var c Card
-			if err := rows.Scan(&c.ID, &c.Title, &c.Column, &c.Position); err != nil {
+			var storedAssignee sql.NullString
+			if err := rows.Scan(&c.ID, &c.Title, &c.Column, &c.Position, &storedAssignee); err != nil {
 				rows.Close()
 				return nil, fmt.Errorf("list board: %w", err)
 			}
+			c.Assignee = storedAssignee.String
 			cards = append(cards, c)
 		}
 		if err := rows.Err(); err != nil {
