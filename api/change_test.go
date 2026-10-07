@@ -171,11 +171,22 @@ func TestPatchCardTitleReturnsCard(t *testing.T) {
 	}
 }
 
-// The board stores no frozen state — column membership is the only done
-// state — so a card in the done column stays fully editable through the
-// same endpoint: patching its title succeeds, and the card keeps its place
-// in done (board/05 behavior surfaced at the wire).
-func TestPatchCardTitleOnDoneCardSucceeds(t *testing.T) {
+// Card api/05 — Amendment 2026-10-07 (done freeze: title edits refused on
+// cards in Done; edit affordance absent on Done cards — user decision). This
+// pin flips honestly from its earlier claim ("a card in the done column
+// stays fully editable through the same endpoint", which asserted 200 +
+// rename-in-place for a done card's title): the freeze is contract-level, so
+// the wire answers a stated refusal. The class choice mirrors the retired
+// todo app's frozen-todo convention — 422 with one stated message, there
+// "cannot edit a done todo" (api/change.go at 8195fde), here restated for
+// cards and single-sourced through the one board.ErrDoneFrozen mapping:
+//
+// Given a card in the "Done" column
+// When  a client patches a title for it
+// Then  the response is the stated 422 refusal and the board is unchanged
+//
+//	And after it is moved out of Done the title patch succeeds again
+func TestPatchCardTitleOnDoneCardRefused(t *testing.T) {
 	store := openBoardStore(t)
 	srv := httptest.NewServer(NewHandler(store))
 	defer srv.Close()
@@ -183,25 +194,44 @@ func TestPatchCardTitleOnDoneCardSucceeds(t *testing.T) {
 	card := createCardThroughAPI(t, srv.URL, "reviewed work")
 	id := int64(card["id"].(float64))
 
-	// Move it to done first (the column direction the same handler carries).
+	// Move it to done first (the column direction the same handler carries —
+	// a move is not an edit, so it still answers 200).
 	if resp, body := patchCard(t, srv.URL, id, `{"column": "done"}`); resp.StatusCode != http.StatusOK {
 		t.Fatalf("move to done: status = %d, want 200 (body %s)", resp.StatusCode, body)
 	}
+	before := boardSnapshot(t, store)
 
+	// Title present — even alongside a column that would carry it out of
+	// done — the frozen refusal answers (the todo app's leg shape, kept: the
+	// freeze reads the card's CURRENT column, so the combined request too).
+	for _, body := range []string{`{"title": "reviewed work (final)"}`, `{"title": "reviewed work (final)", "column": "todo"}`} {
+		resp, got := patchCard(t, srv.URL, id, body)
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Fatalf("PATCH %s status = %d, want 422 (body %s)", body, resp.StatusCode, got)
+		}
+		assertCreateError(t, []byte(got), "cannot edit a done card")
+	}
+
+	// Board-unchanged probe: the refusals touched nothing, cell for cell.
+	assertBoardUnchanged(t, store, before)
+
+	// "And the card becomes editable after it is moved out of Done": the
+	// column-only patch answers 200, and the title direction then succeeds —
+	// the rename lands in place in To Do.
+	if resp, body := patchCard(t, srv.URL, id, `{"column": "todo"}`); resp.StatusCode != http.StatusOK {
+		t.Fatalf("move out of done: status = %d, want 200 (body %s)", resp.StatusCode, body)
+	}
 	resp, body := patchCard(t, srv.URL, id, `{"title": "reviewed work (final)"}`)
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, want 200 — a done card is editable (body %s)", resp.StatusCode, body)
+		t.Fatalf("status = %d, want 200 — the move-out of Done unlocked the title direction (body %s)", resp.StatusCode, body)
 	}
 	updated := assertCardKeys(t, body)
-	if updated["title"] != "reviewed work (final)" {
-		t.Errorf("title = %v, want the new text", updated["title"])
-	}
-	if updated["column"] != "done" {
-		t.Errorf("column = %v, want done — the title change keeps the place", updated["column"])
+	if updated["title"] != "reviewed work (final)" || updated["column"] != "todo" {
+		t.Errorf("unlocked patch returned %+v, want the renamed card in todo", updated)
 	}
 	list := boardSnapshot(t, store)
-	if len(list[2].Cards) != 1 || list[2].Cards[0].Title != "reviewed work (final)" {
-		t.Errorf("done column holds %+v, want the one renamed card", list[2].Cards)
+	if len(list[0].Cards) != 1 || list[0].Cards[0].Title != "reviewed work (final)" {
+		t.Errorf("todo column holds %+v, want the one renamed card", list[0].Cards)
 	}
 }
 

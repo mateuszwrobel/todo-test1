@@ -22,7 +22,11 @@ import (
 // (card api/06). The table now covers the full board.Change and board.Move
 // outcome enumeration: not-found api/07, invalid-column api/08 (the enum
 // guard is the same typed outcome in both operations), the title class
-// api/05, and the shape-only empty-change refusal api/09.
+// api/05, the shape-only empty-change refusal api/09, and the done freeze
+// (api/05 amendment 2026-10-07, user decision): a title present for a card
+// whose CURRENT column is done is refused with one stated 422 before
+// anything moves — every leg that reaches Change answers it, and Move never
+// carries a title, so moving out of Done stays the one-request unlock.
 //
 // Field combinations route through applyPatch below: the title/column legs
 // keep Change's shipped mapping (title edit, bottom-append column move),
@@ -155,11 +159,13 @@ func handleCardChange(store BoardStore) http.HandlerFunc {
 //   - column + position — board.Move, the card's move leg: target column and
 //     target index in one transaction.
 //   - title + position — Change carries the title first (its text rule is
-//     the only title validator, and it runs before any write), then Move
-//     places the card in the column it now stands in. Two writes, not one
-//     transaction: the cards demand no cross-field atomicity, and every
-//     stated refusal (title class, not-found) lands on the first call with
-//     the board untouched — only an internal store error can split them.
+//     the only title validator, and it runs before any write; under the
+//     2026-10-07 done freeze a done card's title direction is refused here
+//     too), then Move places the card in the column it now stands in. Two
+//     writes, not one transaction: the cards demand no cross-field
+//     atomicity, and every stated refusal (title class, not-found, done
+//     freeze) lands on the first call with the board untouched — only an
+//     internal store error can split them.
 //   - title + column + position — Change validates text and column together
 //     (appending to the target's bottom), then Move places at the index.
 //     Change's enum guard runs before its first write, so an invalid column
@@ -242,6 +248,15 @@ func writeChangeError(w http.ResponseWriter, err error) {
 		// guard lives in board (shape-only validation here), and it runs
 		// before any write in both Change and Move, so the card is unchanged.
 		errorJSON(w, http.StatusUnprocessableEntity, "invalid column")
+	case errors.Is(err, board.ErrDoneFrozen):
+		// Card api/05 amendment 2026-10-07 (contract-level done freeze, user
+		// decision): a title aimed at a card whose current column is done is
+		// refused — 422 with one stated message, mirroring the retired todo
+		// app's frozen-todo class verbatim in shape ("cannot edit a done
+		// todo", api/change.go at 8195fde) restated for cards. The board's
+		// typed error is the single rule source; its freeze check precedes
+		// any write, so the card is unchanged.
+		errorJSON(w, http.StatusUnprocessableEntity, "cannot edit a done card")
 	case errors.Is(err, board.ErrTextRequired):
 		errorJSON(w, http.StatusUnprocessableEntity, "title is required")
 	case errors.Is(err, board.ErrTextTooLong):
