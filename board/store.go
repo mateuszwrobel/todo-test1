@@ -201,6 +201,19 @@ var ErrCardNotFound = errors.New("board: no card with that identifier")
 // exactly as it was. Callers map it with errors.Is.
 var ErrInvalidColumn = errors.New("board: column must be one of todo, in_progress, done")
 
+// ErrDoneFrozen reports a title direction aimed at a card sitting in the Done
+// column — the store's done-frozen outcome, the contract-level done freeze
+// (user decision 2026-10-07, superseding the pivot's reading that a done
+// card's text is editable): a done card's text is frozen, and moving it out
+// of Done is the only way to make it editable again. The check is the card
+// row read's outcome, made inside the transaction strictly before any write,
+// so a refused change leaves the board exactly as it was and consumes no
+// identifier (Change inserts nothing anyway). Column directions on done
+// cards are unaffected — moving out of Done is precisely the unlock — and
+// Create, Seed and Import write fresh text rather than editing a card, so
+// they stay allowed into Done. Callers map it with errors.Is.
+var ErrDoneFrozen = errors.New("board: card is done; move it out of Done to edit")
+
 // Change applies the given directions to the card identified by id in one
 // transaction and returns the card as it now stands. A nil direction is left
 // untouched; at least one direction must be non-nil.
@@ -211,9 +224,11 @@ var ErrInvalidColumn = errors.New("board: column must be one of todo, in_progres
 // with no statement executed, so a rejected change leaves the board exactly as
 // it was. The stored title is the trimmed text. A title-only change touches
 // nothing else: the card keeps its column, its position, and its identifier —
-// place and identity survive the rename — and done-column cards are fully
-// editable, because no frozen state is stored anywhere (column membership is
-// the only done state).
+// place and identity survive the rename — with one refusal: the contract-
+// level done freeze (user decision 2026-10-07) answers ErrDoneFrozen for a
+// title direction aimed at a card whose CURRENT column is Done. Column
+// membership is still the only done state, and that membership alone is what
+// freezes the text; moving the card out of Done is the unlock.
 //
 // The column direction guards the fixed enum (validColumn) BEFORE the
 // transaction opens — a value other than todo, in_progress, done is
@@ -266,6 +281,19 @@ func (s *Store) Change(id int64, title *string, column *Column) (Card, error) {
 	}
 	if err != nil {
 		return Card{}, fmt.Errorf("change card %d: %w", id, err)
+	}
+
+	// Contract-level done freeze (user decision 2026-10-07): a title
+	// direction aimed at a card that currently sits in Done is refused,
+	// before any write. Ordering, quoted from the workplan amendment: the
+	// freeze is checked against the card's CURRENT column — the row read
+	// above, the transaction's first statement — not against any requested
+	// one. So a combined title+column change that would carry the card out
+	// of Done still refuses while it sits there (title present, current
+	// column Done), a column-only move out of Done is the allowed unlock,
+	// and Move (no title involved) never meets this guard.
+	if title != nil && card.Column == Done {
+		return Card{}, fmt.Errorf("change card %d: %w", id, ErrDoneFrozen)
 	}
 
 	if title != nil {

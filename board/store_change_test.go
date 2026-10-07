@@ -13,11 +13,13 @@ import (
 // Then  the card shows the new text in in_progress at position 1 with identifier N
 //
 // The scenario pins the in_progress-at-1 witness; the table checks the general
-// contract — any column, any position — and the done row pins that done cards
-// are fully editable (no frozen state exists anywhere; column membership is
-// the only done state). Place and identity are pinned through List, cell by
-// cell: only the changed card's title may differ, so neighbors provably stay
-// where they were.
+// contract — any column, any position. The former done row ("done column
+// stays fully editable") flipped to frozen legs under the 2026-10-07
+// contract-level done freeze (card board/08 amendment: title edits refused
+// on cards in Done) — see TestChangeTitleOnDoneCardIsFrozen; column
+// membership is still the only done state, and it alone freezes the text.
+// Place and identity are pinned through List, cell by cell: only the changed
+// card's title may differ, so neighbors provably stay where they were.
 func TestChangeTitleKeepsPlaceAndIdentity(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -42,14 +44,9 @@ func TestChangeTitleKeepsPlaceAndIdentity(t *testing.T) {
 			},
 			Todo, 0, "renamed top",
 		},
-		{
-			"done column stays fully editable",
-			[]columnFixture{
-				{Todo, []string{"t0"}},
-				{Done, []string{"d0", "d1"}},
-			},
-			Done, 1, "done cards edit too",
-		},
+		// (The done row of this table — "done column stays fully editable" —
+		// flipped to the frozen legs of TestChangeTitleOnDoneCardIsFrozen
+		// under the 2026-10-07 done freeze; card board/08 amendment.)
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -101,6 +98,116 @@ func TestChangeTitleKeepsPlaceAndIdentity(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Card board/08 — Amendment 2026-10-07 (contract-level done freeze, user
+// decision; card text appended: title edits refused on cards in Done; edit
+// affordance absent on Done cards — the affordance half belongs to api/05 and
+// ui/06). The frozen legs this test now pins flipped from the old
+// done-editable row of TestChangeTitleKeepsPlaceAndIdentity. The contract,
+// quoted from the parent workplan scenario:
+//
+// Given a card in the "Done" column
+// When  the user submits a text change for it
+// Then  the change is refused with a stated error and the board is unchanged
+//
+//	And the card becomes editable after it is moved out of "Done"
+//
+// The freeze reads the card's CURRENT column (the amendment's ordering): a
+// combined title+column change from Done refuses too — the way to edit is
+// move-out first, edit after. Column-only moves are not edits and never meet
+// the guard, and writing FRESH text into Done (Seed, Create's target, Import)
+// is not a title edit either.
+func TestChangeTitleOnDoneCardIsFrozen(t *testing.T) {
+	t.Run("title direction on a done card refuses with the board cell-for-cell unchanged", func(t *testing.T) {
+		store, target := frozenFixture(t)
+		before := mustList(t, store)
+
+		got, err := store.Change(target.ID, ptr("frozen?"), nil)
+		if !errors.Is(err, ErrDoneFrozen) {
+			t.Fatalf("Change(%d, title, nil) on a done card: err = %v, want ErrDoneFrozen", target.ID, err)
+		}
+		if got != (Card{}) {
+			t.Errorf("Change returned %+v on frozen refusal, want the zero Card", got)
+		}
+		after := mustList(t, store)
+		if !boardEqual(before, after) {
+			t.Errorf("frozen refusal changed the board:\n before: %s\n after:  %s",
+				flatten(before), flatten(after))
+		}
+	})
+
+	t.Run("title+column together from done refuses — the freeze reads the CURRENT column", func(t *testing.T) {
+		store, target := frozenFixture(t)
+		before := mustList(t, store)
+
+		got, err := store.Change(target.ID, ptr("escaped with a title?"), ptr(Todo))
+		if !errors.Is(err, ErrDoneFrozen) {
+			t.Fatalf("Change(%d, title, Todo) on a done card: err = %v, want ErrDoneFrozen", target.ID, err)
+		}
+		if got != (Card{}) {
+			t.Errorf("Change returned %+v on frozen refusal, want the zero Card", got)
+		}
+		after := mustList(t, store)
+		if !boardEqual(before, after) {
+			t.Errorf("frozen refusal of the combined change moved the board:\n before: %s\n after:  %s",
+				flatten(before), flatten(after))
+		}
+	})
+
+	t.Run("column-only move out of done is fine and unlocks the title direction", func(t *testing.T) {
+		store, target := frozenFixture(t)
+
+		moved, err := store.Change(target.ID, nil, ptr(Todo))
+		if err != nil {
+			t.Fatalf("column-only Change out of Done: %v — a move is not an edit", err)
+		}
+		if moved.ID != target.ID || moved.Title != target.Title {
+			t.Errorf("moved card = %+v, want identity and text of %+v kept", moved, target)
+		}
+		if moved.Column != Todo || moved.Position != 1 { // bottom of the one-card todo column
+			t.Errorf("moved card at %q position %d, want todo bottom (position 1)", moved.Column, moved.Position)
+		}
+
+		renamed, err := store.Change(moved.ID, ptr("editable after unlock"), nil)
+		if err != nil {
+			t.Fatalf("Change(title) after the move-out: %v — moving out of Done must unlock editing", err)
+		}
+		if renamed.Title != "editable after unlock" || renamed.Column != Todo ||
+			renamed.Position != 1 || renamed.ID != target.ID {
+			t.Errorf("card after unlock = %+v, want the renamed card at todo position 1 with identity kept", renamed)
+		}
+	})
+
+	t.Run("writing fresh text into done is not an edit — seed stays allowed", func(t *testing.T) {
+		store := openStore(t)
+		// Create lands in todo and Import feeds its done batches through
+		// the same fresh-text path as Seed; the seed arm is Done's writing
+		// witness here — none of the three is a title edit, so the freeze
+		// must not reach them.
+		if err := store.Seed(Done, []string{"s0", "s1"}); err != nil {
+			t.Fatalf("Seed(Done, ...): %v — seeding into Done is not a title edit", err)
+		}
+		list := mustList(t, store)
+		done := list[columnIndex(t, list, Done)].Cards
+		if len(done) != 2 || done[0].Title != "s0" || done[0].Position != 0 ||
+			done[1].Title != "s1" || done[1].Position != 1 {
+			t.Errorf("Done column after seed = %s, want the given order at positions 0, 1", titles(done))
+		}
+	})
+}
+
+// frozenFixture boards {todo: t0} + {done: d0, d1} and hands back the store
+// with the done card at position 1 — the frozen legs' one card.
+func frozenFixture(t *testing.T) (*Store, Card) {
+	t.Helper()
+	store := openStore(t)
+	seedBoard(t, store, []columnFixture{
+		{Todo, []string{"t0"}},
+		{Done, []string{"d0", "d1"}},
+	})
+	list := mustList(t, store)
+	return store, list[columnIndex(t, list, Done)].Cards[1]
 }
 
 // The title direction stores the trimmed text — the same normalization Create
@@ -356,7 +463,7 @@ func TestChangeColumnMovesToBottomAndClosesGap(t *testing.T) {
 			Todo, 0, Done,
 		},
 		{
-			"done card back to todo bottom stays editable",
+			"done card back to todo bottom — the move-out is the freeze unlock (2026-10-07)",
 			[]columnFixture{
 				{Todo, []string{"t0"}},
 				{Done, []string{"d0", "d1"}},
