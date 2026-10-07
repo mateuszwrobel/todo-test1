@@ -124,11 +124,21 @@ func statedReason(body io.Reader) string {
 // deliberate: order and column membership are server truth (workplan
 // re-render decision), and a fresh GET /board is exactly that truth.
 func (p *page) writeBoardAreaFragment(w io.Writer) error {
-	board, err := p.loadBoard()
+	return p.writeFilteredBoardAreaFragment(w, "")
+}
+
+// writeFilteredBoardAreaFragment is the same swap writer under an active
+// filter keyword: the narrowed read through the contract's ?assignee=
+// parameter (card ui/18 — the pair's success answer stays the filtered
+// view the user dropped into), with the filtered empty wording derived
+// from the keyword. The empty keyword is the unfiltered leg above,
+// byte-for-byte as shipped.
+func (p *page) writeFilteredBoardAreaFragment(w io.Writer, keyword string) error {
+	board, err := p.loadBoardFilter(keyword, keyword != "")
 	if err != nil {
 		return writeFragment(w, failedTmpl, nil)
 	}
-	return writeFragment(w, boardTmpl, p.viewFor(columnsOf(board)))
+	return writeFragment(w, boardTmpl, p.viewFor(columnsOf(board), keyword))
 }
 
 func writeFragment(w io.Writer, tmpl *template.Template, data any) error {

@@ -14,12 +14,16 @@ import (
 // fallback exists), and every accepted drop arrives here as exactly ONE
 // request carrying the target column and the drop position. The endpoint
 // performs the move by issuing PATCH {apiBase}/cards/{id} over real HTTP
-// with the contract's {"column": ..., "position": ...} body — one contract
-// call per accepted drop, the module's half of the one-request rule the
-// scenario pins — and answers the resulting state as a swap fragment
-// targeting #board-area: the fresh board re-read, never a local guess
-// (mutations re-render from server truth, same decision as edit.go and
-// delete.go), so the card lands exactly where the store renormalized it and
+// with the contract's {"column": ..., "position": ...} body — or, while
+// the URL carries a filter, with the contract's move pair {"column": ...,
+// "slot": ..., "within": ...} instead (card ui/18, KW10: the slot counts
+// only the visible matching cards, the server resolves it into whole-board
+// truth) — one contract call per accepted drop, the module's half of the
+// one-request rule the scenario pins — and answers the resulting state as a
+// swap fragment targeting #board-area: the fresh board re-read, never a
+// local guess (mutations re-render from server truth, same decision as
+// edit.go and delete.go; under the pair the re-read carries the same
+// filter), so the card lands exactly where the store renormalized it and
 // the source column packs its gap.
 //
 // The position rides the contract's own semantics — the index within the
@@ -69,28 +73,59 @@ func (p *page) handleMove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// The drop payload the shell's one request site sends: the target
-	// column's display title and the drop index. A payload missing either
-	// is a client defect, not a contract state — transport error, the
-	// module's standing shape-only split.
+	// column's display title and the drop index — as the contract's
+	// absolute position when the page is unfiltered, or as the slot+within
+	// pair when the URL carries a filter (card ui/18, KW10): slot is the
+	// index counted among the VISIBLE cards of the target column after the
+	// card's removal, read off the rendered DOM exactly like position, and
+	// within names the active filter the count was taken under. A payload
+	// outside those two complete shapes — missing column, position beside
+	// a pair, half a pair — is a client defect, not a contract state:
+	// transport error, the module's standing shape-only split. The pair
+	// legs' semantics (keyword validity, slot range) belong to the
+	// contract, never restated here.
 	var drop struct {
 		Column   *string `json:"column"`
 		Position *int    `json:"position"`
+		Slot     *int    `json:"slot"`
+		Within   *string `json:"within"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&drop); err != nil ||
-		drop.Column == nil || drop.Position == nil {
+	if err := json.NewDecoder(r.Body).Decode(&drop); err != nil || drop.Column == nil {
 		http.Error(w, "invalid move payload", http.StatusBadRequest)
 		return
 	}
-	status, reason := p.patchCardMove(r, id, *drop.Column, *drop.Position)
+	filtered := drop.Slot != nil && drop.Within != nil
+	if drop.Position != nil == filtered {
+		// exactly one complete leg: position XOR slot+within
+		http.Error(w, "invalid move payload", http.StatusBadRequest)
+		return
+	}
+	var status int
+	var reason string
+	if filtered {
+		status, reason = p.patchCardMoveFiltered(r, id, *drop.Column, *drop.Slot, *drop.Within)
+	} else {
+		status, reason = p.patchCardMove(r, id, *drop.Column, *drop.Position)
+	}
 
 	switch status {
 	case http.StatusOK:
 		// The re-read is the whole Then-clause: the card renders in the
 		// target column at the drop position because the server lists it
 		// there, and it is gone from the source column because the server
-		// no longer lists it there.
+		// no longer lists it there. Under the pair the re-read carries the
+		// same filter the drop was counted under — the view the user is
+		// looking at is the filtered one, and the hidden truth underneath
+		// is revealed only by clearing the filter (card ui/18's second
+		// clause is the full-board GET the pair's resolution guarantees).
 		var b bytes.Buffer
-		if err := p.writeBoardAreaFragment(&b); err != nil {
+		var err error
+		if filtered {
+			err = p.writeFilteredBoardAreaFragment(&b, *drop.Within)
+		} else {
+			err = p.writeBoardAreaFragment(&b)
+		}
+		if err != nil {
 			http.Error(w, "render failed", http.StatusInternalServerError)
 			return
 		}
@@ -103,7 +138,7 @@ func (p *page) handleMove(w http.ResponseWriter, r *http.Request) {
 		if board, err := p.loadBoard(); err == nil {
 			columns := columnsOf(board)
 			attachEditError(columns, id, reason)
-			err = writeFragment(&b, boardTmpl, p.viewFor(columns))
+			err = writeFragment(&b, boardTmpl, p.viewFor(columns, ""))
 		} else {
 			err = writeFragment(&b, failedTmpl, nil)
 		}
@@ -123,14 +158,12 @@ func (p *page) handleMove(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// patchCardMove performs the module's move write: PATCH {apiBase}/cards/{id}
+// patchCardMove performs the unfiltered move write: PATCH {apiBase}/cards/{id}
 // over real HTTP with the contract's {"column": ..., "position": ...} body —
 // the display title mapped through the fixed enum mirror above, the position
 // passed through untouched. It returns the contract's status and, on a
 // refusal, its stated reason; the message's single owner stays upstream
-// (api/board), this module only carries it. The fallbacks cover only a body
-// that states nothing: a refusal from the real contract always carries its
-// own wording.
+// (api/board), this module only carries it.
 func (p *page) patchCardMove(r *http.Request, id int64, column string, position int) (status int, reason string) {
 	body, err := json.Marshal(map[string]any{
 		"column":   columnKey(column),
@@ -139,6 +172,33 @@ func (p *page) patchCardMove(r *http.Request, id int64, column string, position 
 	if err != nil {
 		return http.StatusInternalServerError, "could not move card"
 	}
+	return p.sendCardPatch(r, id, body)
+}
+
+// patchCardMoveFiltered performs the pair's move write (card ui/18): the
+// same PATCH over real HTTP carrying the contract's move pair —
+// {"column": ..., "slot": ..., "within": ...} instead of position. slot is
+// the index among the cards visible under within, counted after the card's
+// removal — the number the page read off the rendered DOM; resolving it to
+// the whole-board position is the contract's one job (api/15, board's
+// MoveFiltered), never second-guessed here.
+func (p *page) patchCardMoveFiltered(r *http.Request, id int64, column string, slot int, within string) (status int, reason string) {
+	body, err := json.Marshal(map[string]any{
+		"column": columnKey(column),
+		"slot":   slot,
+		"within": within,
+	})
+	if err != nil {
+		return http.StatusInternalServerError, "could not move card"
+	}
+	return p.sendCardPatch(r, id, body)
+}
+
+// sendCardPatch is the move legs' one write site: send the marshaled PATCH
+// body to the contract and read back its status and stated reason. The
+// fallbacks cover only a body that states nothing: a refusal from the real
+// contract always carries its own wording.
+func (p *page) sendCardPatch(r *http.Request, id int64, body []byte) (status int, reason string) {
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodPatch,
 		fmt.Sprintf("%s/cards/%d", p.apiBase, id), bytes.NewReader(body))
 	if err != nil {

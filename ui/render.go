@@ -35,6 +35,15 @@ var pageTmpl = template.Must(template.New("page").Parse(`<!doctype html>
 <body>
 <main>
 <h1 class="heading">Board</h1>
+<div class="filter">
+<select id="board-filter" class="input filter__select" name="assignee" aria-label="Filter by assignee">
+<option value=""{{if eq .Filter ""}} selected{{end}}>All users</option>
+{{- range .Roster}}
+<option value="{{.}}"{{if eq . $.Filter}} selected{{end}}>{{.}}</option>
+{{- end}}
+<option value="unassigned"{{if eq .Filter "unassigned"}} selected{{end}}>Unassigned</option>
+</select>
+</div>
 <div id="board-area">{{.State}}</div>
 {{.CreateArea}}
 </main>
@@ -116,6 +125,24 @@ var dropIndicator = null; // the insertion line, parked at the landing gap
 // dragPending names the card whose drop request is unanswered; drop sets it
 // and the promise's single finally below clears it.
 var dragPending = null;
+
+// Filter dropdown (card ui/16, KW10): the URL owns the filter — choosing
+// a value navigates to '/?assignee=' + encodeURIComponent(value) (the
+// filter travels URL-encoded, per the workplan's URL decision), and
+// "All users" navigates to the plain '/' so the parameter LEAVES the URL.
+// The navigation is a plain GET: the server renders the filtered board
+// from the address, so the back button and a reload replay exactly what
+// the URL says — there is no client-side filter state anywhere on the
+// page to disagree with the address.
+document.body.addEventListener('change', function (event) {
+  var select = event.target.closest
+    ? event.target.closest('.filter__select')
+    : null;
+  if (!select) return;
+  window.location = select.value
+    ? '/?assignee=' + encodeURIComponent(select.value)
+    : '/';
+});
 
 function ensureDropIndicator() {
   if (!dropIndicator) {
@@ -220,10 +247,21 @@ document.body.addEventListener('drop', function (event) {
   // the dragstart guard above.
   dragPending = pending;
   pending.draggable = false;
+  // Under an active filter the same count is a SLOT among the visible
+  // cards, and the drop names the filter it was counted under (card
+  // ui/18, workplan amendment): the slot+within pair replaces the
+  // absolute position, and the URL — the filter's only owner — supplies
+  // the within value verbatim. Unfiltered, the shipped position payload
+  // rides byte-for-byte as before. The server resolves the pair into
+  // whole-board truth; the client never computes hidden positions.
+  var within = new URLSearchParams(window.location.search).get('assignee');
+  var payload = within
+    ? { column: target, slot: position, within: within }
+    : { column: target, position: position };
   fetch('/ui/cards/' + id + '/move', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ column: target, position: position })
+    body: JSON.stringify(payload)
   }).then(function (resp) {
     var type = resp.headers.get('Content-Type');
     if (type && type.indexOf('text/html') === 0) {
@@ -301,6 +339,14 @@ document.body.addEventListener('dragend', function () {
 // PATCH: one change request per save, unchanged selection included (the
 // band tests' one-request pins stand). A Done card renders no select —
 // the band, select and all, stays outside Done.
+// Since KW10 (cards ui/16–17) the whole page's chrome carries the filter
+// dropdown (pageTmpl), and an empty column states its emptiness through
+// the view's derived EmptyText: the shipped "No cards" byte-for-byte when
+// unfiltered, the filter-naming wording ("Nothing for <name> here" /
+// "Nothing unassigned here") while a filter is active — the same
+// column__empty markup class either way, so an empty column is always
+// visibly an empty column and the filtered emptiness never reads as the
+// all-empty board's.
 var boardTmpl = template.Must(template.New("board").Parse(`<div id="board" class="board">
 {{- range .Columns}}
 <section id="column-{{.Anchor}}" class="column" data-column="{{.Title}}">
@@ -325,7 +371,7 @@ var boardTmpl = template.Must(template.New("board").Parse(`<div id="board" class
 <p id="edit-error-{{.ID}}" class="error-text">{{.EditError}}</p>{{end}}
 </li>
 {{- end}}
-</ul>{{else}}<p class="column__empty" data-empty="true">No cards</p>{{end}}
+</ul>{{else}}<p class="column__empty" data-empty="true">{{$.EmptyText}}</p>{{end}}
 </section>
 {{- end}}
 </div>`))
@@ -357,13 +403,54 @@ type card struct {
 	EditError string // stated refusal rendering at this card, empty when nothing was rejected
 }
 
-// boardView is boardTmpl's whole data: the columns plus the roster the
-// edit-band select lists. The roster rides the view (not the cards) because
-// it is page data from the Roster port — identical for every card — and
-// the template reaches it as $.Roster from inside the card range.
+// unassignedFilterKeyword is the contract's filter sentinel for the cards
+// no one is assigned to — the same "unassigned" keyword the api's
+// ?assignee= contract and board's filter condition own. ui mirrors it at
+// the URL and the dropdown exactly as it mirrors the column enum: the
+// keyword is contract data, never learned from the roster or the store
+// (ui imports neither).
+const unassignedFilterKeyword = "unassigned"
+
+// emptyText is the ONE stated-column-empty site. Unfiltered keeps the
+// shipped "No cards" byte-for-byte (card ui/02); under a filter the
+// emptiness names the filter (card ui/17) — "Nothing for <name> here"
+// for a roster keyword, "Nothing unassigned here" for the sentinel.
+// html/template escapes the keyword as it interpolates, so a hostile
+// value can never leave the text node.
+func emptyText(filter string) string {
+	switch filter {
+	case "":
+		return "No cards"
+	case unassignedFilterKeyword:
+		return "Nothing unassigned here"
+	default:
+		return "Nothing for " + filter + " here"
+	}
+}
+
+// boardView is boardTmpl's whole data: the columns, the roster the
+// edit-band select lists, and the column-empty wording the active filter
+// dictates. The roster rides the view (not the cards) because it is page
+// data from the Roster port — identical for every card — and the template
+// reaches it as $.Roster from inside the card range. EmptyText is derived
+// from the filter keyword through the one emptyText site, so the unfiltered
+// leg can never drift from the shipped byte and the filtered wording has
+// no second owner.
 type boardView struct {
-	Roster  []string
-	Columns []column
+	Roster    []string
+	EmptyText string
+	Columns   []column
+}
+
+// pageChrome is the shell chrome's data above the swapped surface: the
+// roster the filter dropdown lists (the Roster port, same order the band
+// select uses) and the filter the URL carries right now — "All users" is
+// the absent parameter, spelled as the empty keyword. The chrome renders
+// from the address, never from state the page keeps: back and reload
+// replay exactly what the URL says.
+type pageChrome struct {
+	Roster []string
+	Filter string
 }
 
 // columnsOf maps the contract body to the render model: columns in array
@@ -407,35 +494,47 @@ func columnAnchor(title string) string {
 	return strings.ToLower(strings.ReplaceAll(title, " ", "-"))
 }
 
-// viewFor builds this page's board template data: the given columns plus
-// the roster from the port. Every boardTmpl rendering — whole page or swap
-// fragment — goes through here, so the select's option list and the chip's
-// source can never disagree between surfaces.
-func (p *page) viewFor(columns []column) boardView {
-	return boardView{Roster: p.rosterNames(), Columns: columns}
+// viewFor builds this page's board template data: the given columns, the
+// roster from the port, and the empty wording the filter dictates. Every
+// boardTmpl rendering — whole page or swap fragment — goes through here,
+// so the select's option list and the chip's source can never disagree
+// between surfaces, and neither can the column-empty wording. filter is
+// the active filter keyword, empty for the unfiltered read every
+// pre-KW10 leg performs.
+func (p *page) viewFor(columns []column, filter string) boardView {
+	return boardView{Roster: p.rosterNames(), EmptyText: emptyText(filter), Columns: columns}
 }
 
-func (p *page) renderBoard(w http.ResponseWriter, columns []column) {
+// chromeFor builds the shell chrome's data for the given filter keyword.
+func (p *page) chromeFor(filter string) pageChrome {
+	return pageChrome{Roster: p.rosterNames(), Filter: filter}
+}
+
+// renderBoard renders the whole page around the given columns under the
+// given filter keyword (empty = unfiltered, the shipped leg).
+func (p *page) renderBoard(w http.ResponseWriter, columns []column, filter string) {
 	var b bytes.Buffer
-	if err := boardTmpl.Execute(&b, p.viewFor(columns)); err != nil {
+	if err := boardTmpl.Execute(&b, p.viewFor(columns, filter)); err != nil {
 		http.Error(w, "render failed", http.StatusInternalServerError)
 		return
 	}
-	renderPage(w, template.HTML(b.String()))
+	renderPage(w, template.HTML(b.String()), p.chromeFor(filter))
 }
 
-func renderPage(w http.ResponseWriter, state template.HTML) {
+func renderPage(w http.ResponseWriter, state template.HTML, chrome pageChrome) {
 	_ = pageTmpl.Execute(w, struct {
 		State      template.HTML
 		CreateArea template.HTML
-	}{state, createAreaHTML(createAreaData{})})
+		Roster     []string
+		Filter     string
+	}{state, createAreaHTML(createAreaData{}), chrome.Roster, chrome.Filter})
 }
 
-func renderState(w http.ResponseWriter, which *template.Template) {
+func renderState(w http.ResponseWriter, which *template.Template, chrome pageChrome) {
 	var b bytes.Buffer
 	if err := which.Execute(&b, nil); err != nil {
 		http.Error(w, "render failed", http.StatusInternalServerError)
 		return
 	}
-	renderPage(w, template.HTML(b.String()))
+	renderPage(w, template.HTML(b.String()), chrome)
 }

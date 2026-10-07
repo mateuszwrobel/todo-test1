@@ -76,6 +76,8 @@ func TestStoryGalleryRendersEveryState(t *testing.T) {
 		{"state-edit-error", "state: edit refused at card"},
 		{"state-stale", "state: stale operation"},
 		{"state-drag", "state: drag mid-gesture"},
+		{"state-assigned", "state: assignment states"},
+		{"state-filtered", "state: filtered column"},
 	}
 	for _, s := range states {
 		sectionHTML(t, page, s.id) // fails loudly when the container is absent

@@ -105,6 +105,10 @@ func storySections() []storySection {
 			HTML: storyStaleFailure()},
 		{ID: "state-drag", Caption: "drag mid-gesture",
 			HTML: storyDrag()},
+		{ID: "state-assigned", Caption: "assignment states",
+			HTML: fragmentHTML(boardTmpl, storyView(storyBoardAssigned()))},
+		{ID: "state-filtered", Caption: "filtered column",
+			HTML: fragmentHTML(boardTmpl, storyViewFilter(storyBoardFiltered(), "Grace"))},
 	}
 }
 
@@ -222,16 +226,68 @@ func storyBoardFull() boardResponse {
 // written here as fixture data exactly like the board fixtures below
 // hardcode contract bodies. The gallery touches no store, no api, and no
 // module code (the ui→users edge is forbidden by the architecture spec),
-// so the deterministic copy stands in — assignment gallery states arrive
-// with card ui/19 (KW10), which owns this file's fixtures.
+// so the deterministic copy stands in — since KW10 (card ui/19) the
+// assignment and filtered gallery states list these names too.
 func storyRoster() []string {
 	return []string{"Ada", "Grace", "Alan", "Barbara", "Linus"}
 }
 
-// storyView feeds boardTmpl a fixture board with the fixture roster,
-// matching what the live page assembles through page.viewFor.
+// storyView feeds boardTmpl an UNFILTERED fixture board with the fixture
+// roster, matching what the live page assembles through page.viewFor with
+// no filter keyword — the empty wording is the shipped "No cards", so the
+// existing board anchors stay byte-for-byte (no card here carries an
+// assignee, so no chip renders either; assignment states get their own
+// fixture below).
 func storyView(board boardResponse) boardView {
-	return boardView{Roster: storyRoster(), Columns: columnsOf(board)}
+	return boardView{Roster: storyRoster(), EmptyText: emptyText(""), Columns: columnsOf(board)}
+}
+
+// storyViewFilter feeds boardTmpl a fixture board rendered UNDER a filter
+// keyword — the gallery's filtered-column state (card ui/19): the empty
+// wording is derived from the keyword through the one emptyText site, the
+// same derivation the live page runs.
+func storyViewFilter(board boardResponse, keyword string) boardView {
+	return boardView{Roster: storyRoster(), EmptyText: emptyText(keyword), Columns: columnsOf(board)}
+}
+
+// storyBoardAssigned is the assignment-state fixture (card ui/19): an
+// assigned non-Done card (chip + band select), an unassigned non-Done card
+// (no chip at all), and an assigned DONE card — chip beside the title, no
+// edit band and no assignee control, because the band renders outside Done
+// only. It is separate from storyBoard/storyBoardFull on purpose: those
+// unassigned fixtures feed the existing board/populated anchors, which
+// must stay byte-for-byte — the assignment states never touch them.
+func storyBoardAssigned() boardResponse {
+	return boardResponse{Columns: []boardColumnResponse{
+		{Title: "To Do", Cards: []boardCardResponse{
+			{ID: 921, Title: "Draft the launch note", Column: "todo", Position: 1, Assignee: "Grace"},
+			{ID: 922, Title: "Rotate the API keys", Column: "todo", Position: 2},
+		}},
+		{Title: "In Progress", Cards: []boardCardResponse{
+			{ID: 923, Title: "Wire the webhook", Column: "in_progress", Position: 1, Assignee: "Alan"},
+		}},
+		{Title: "Done", Cards: []boardCardResponse{
+			{ID: 924, Title: "Ship v1.2", Column: "done", Position: 1, Assignee: "Ada"},
+		}},
+	}}
+}
+
+// storyBoardFiltered is the filtered-view fixture (card ui/19): under the
+// "Grace" filter the columns hold only Grace's cards in their order, and
+// one column holds none — the column that states its emptiness names the
+// filter ("Nothing for Grace here"), visibly distinct from the all-empty
+// board's "No cards".
+func storyBoardFiltered() boardResponse {
+	return boardResponse{Columns: []boardColumnResponse{
+		{Title: "To Do", Cards: []boardCardResponse{
+			{ID: 931, Title: "Draft the launch note", Column: "todo", Position: 4, Assignee: "Grace"},
+			{ID: 932, Title: "Rotate the API keys", Column: "todo", Position: 7, Assignee: "Grace"},
+		}},
+		{Title: "In Progress", Cards: []boardCardResponse{
+			{ID: 933, Title: "Wire the webhook", Column: "in_progress", Position: 2, Assignee: "Grace"},
+		}},
+		{Title: "Done", Cards: []boardCardResponse{}},
+	}}
 }
 
 // storyBoardEmpty is the whole-board-empty fixture (journeys' derived page

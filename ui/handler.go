@@ -120,20 +120,37 @@ func NewHandler(apiBase string, roster Roster) http.Handler {
 	return mux
 }
 
+// handleIndex renders the whole page from the URL — the page keeps no
+// filter state of its own. The ?assignee= parameter is handled as the api
+// seam handles it (mirror, not import): PRESENCE of the parameter decides,
+// the value travels verbatim to the contract. An absent parameter is the
+// shipped unfiltered read, byte-for-byte; a present one renders the
+// narrowed board (card ui/16: reload replays exactly what the address
+// says). A filtered read that fails — the contract's 422 unknown user
+// among the failures — states the failure the one stated way a failed
+// read is stated (failedTmpl, the card ui/03 surface), never an empty
+// board standing in for the truth.
 func (p *page) handleIndex(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
 		return
 	}
-	board, err := p.loadBoard()
+	values, filtered := r.URL.Query()["assignee"]
+	keyword := ""
+	if filtered {
+		keyword = values[0]
+	}
+	board, err := p.loadBoardFilter(keyword, filtered)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err != nil {
 		// A failed read states the failure — never columns standing in
-		// for a truth the server could not give (card ui/03 pins it).
-		renderState(w, failedTmpl)
+		// for a truth the server could not give (card ui/03 pins it). The
+		// chrome still names the URL's filter, so the dropdown reflects
+		// the address the failure came from.
+		renderState(w, failedTmpl, p.chromeFor(keyword))
 		return
 	}
-	p.renderBoard(w, columnsOf(board))
+	p.renderBoard(w, columnsOf(board), keyword)
 }
 
 func (p *page) handleHTMX(w http.ResponseWriter, r *http.Request) {

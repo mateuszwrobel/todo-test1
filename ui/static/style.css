@@ -63,8 +63,18 @@ body:not(.stories) > main > #create-area {
   grid-column: 2;
   justify-self: end;
 }
-body:not(.stories) > main > #board-area {
+/* KW10 (card ui/16): the filter dropdown joins the header band — its own
+   line under the heading, board full width beneath it. DOM order is
+   unchanged (h1, filter, board-area, create-area); placement is pure
+   layout. */
+body:not(.stories) > main > .filter {
   grid-row: 2;
+  grid-column: 1;
+  justify-self: start;
+  align-self: center;
+}
+body:not(.stories) > main > #board-area {
+  grid-row: 3;
   grid-column: 1 / -1;
 }
 
@@ -107,6 +117,18 @@ body:not(.stories) > main > #board-area {
 
 #create-form button[type="submit"] {
   justify-self: end;
+}
+
+/* --- filter dropdown (KW10 card ui/16): the board's read-narrowing chrome ---
+   One select in the header band. The field look is the shared .input
+   component (the dropdown carries both classes); this rule settles only
+   the control's own measure so it sits on the heading's baseline. No
+   selector keys on rendered text — the option labels come from the
+   contract's roster and the URL's filter, never from here. */
+.filter__select {
+  min-width: 0;
+  padding: 9px 12px; /* mockup-exact, off the scale */
+  color: var(--color-text);
 }
 
 .hint,
