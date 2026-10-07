@@ -48,3 +48,15 @@ e2e-visual:
 .PHONY: db-diagram
 db-diagram:
 	go run ./cmd/db-diagram
+
+# Git hooks — install the committed .githooks/* into this repository's hooks
+# dir. The target is the COMMON git dir, so in a worktree setup the hook lands
+# once and gates commits in every worktree. The pre-commit hook re-runs
+# db-diagram and blocks a commit whose docs/db-schema.md is stale; it never
+# mutates the tree. Standalone — wired to no other target.
+.PHONY: hooks
+hooks:
+	@hooks=$$(git rev-parse --git-common-dir)/hooks; \
+	mkdir -p "$$hooks" && \
+	install -m 0755 .githooks/pre-commit "$$hooks/pre-commit" && \
+	echo "installed pre-commit -> $$hooks/pre-commit"

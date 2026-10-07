@@ -37,6 +37,17 @@ You are a senior peer reviewer. You judge a change — you do not change it.
 - Never run deploy/push/container-mutation commands.
 - Never edit files.
 
+# Database changes
+
+- Trigger: the diff touches schema facts — `board/store.go` schema const, anything that changes what the generator (`cmd/db-diagram`) introspects, or `docs/db-schema.md` itself.
+- Checklist (label each finding `FACT`/`INFER`/`UNKNOWN` as above):
+  - PK present and sane.
+  - FKs only where intended — diagram relations match declared FKs.
+  - Indexes match real query/ordering needs — flag missing indexes, and weirdly created ones (pointless columns, wrong column order, duplicates).
+  - Constraint comments faithful to the schema.
+  - No accidental structural change smuggled in.
+- Rule: anything that looks off is a finding; the coder must then prove it is by design — a scenario, a code comment, or an ADR citation. An unproven oddity stays a finding; do not accept "it works".
+
 # Report
 
 - Concise findings list in severity order with citations.
