@@ -177,15 +177,15 @@ func handleCardChange(store BoardStore) http.HandlerFunc {
 func applyPatch(store BoardStore, id int64, title *string, column *board.Column, position *int) (board.Card, error) {
 	switch {
 	case position == nil:
-		return store.Change(id, title, column)
+		return store.Change(id, title, column, nil)
 	case title != nil && column != nil:
 		// The returned card is superseded by Move's placement below.
-		if _, err := store.Change(id, title, column); err != nil {
+		if _, err := store.Change(id, title, column, nil); err != nil {
 			return board.Card{}, err
 		}
 		return store.Move(id, *column, *position)
 	case title != nil:
-		updated, err := store.Change(id, title, nil)
+		updated, err := store.Change(id, title, nil, nil)
 		if err != nil {
 			return board.Card{}, err
 		}

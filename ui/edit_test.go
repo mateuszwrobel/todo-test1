@@ -37,7 +37,7 @@ func cardTitles(t *testing.T, store *board.Store, column board.Column) []string 
 // store — the board's own truth for the state a drag (KW5) will produce.
 func moveTo(t *testing.T, store *board.Store, id int64, column board.Column) {
 	t.Helper()
-	if _, err := store.Change(id, nil, &column); err != nil {
+	if _, err := store.Change(id, nil, &column, nil); err != nil {
 		t.Fatalf("seed move to %q: %v", column, err)
 	}
 }

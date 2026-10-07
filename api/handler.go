@@ -23,7 +23,11 @@ import (
 type BoardStore interface {
 	List() ([]board.ColumnCards, error)
 	Create(text string) (board.Card, error)
-	Change(id int64, title *string, column *board.Column) (board.Card, error)
+	// Change mirrors the store contract's fourth direction (the assignee) as
+	// of KW9. The api's assignment leg is a later lane: the handlers that
+	// exist today carry no assignee direction and pass nil, which is the
+	// contract's "leave it alone".
+	Change(id int64, title *string, column *board.Column, assignee *board.AssigneeDirection) (board.Card, error)
 	Move(id int64, column board.Column, position int) (board.Card, error)
 	Delete(id int64) error
 }
