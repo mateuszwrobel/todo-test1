@@ -28,10 +28,10 @@ language = "go"
 
 # The simulation's cast (KW9): a bottom module — one constant roster and a
 # membership check, no state, no I/O, no imports at all. It is imported by
-# board alone (assignee validity); api reaches the names through board's
-# contract or its own future edge, ui never imports it — names reach the page
-# over the contract only (workplan_users_roster.md Boundaries). Declared at the
-# wave that lands the package; nothing imports it until the board edge below.
+# board (assignee validity) and by api (GET /users, the roster endpoint); ui
+# never imports it — names reach the page over the contract only
+# (workplan_users_roster.md Boundaries). Declared at the wave that lands the
+# package; the board edge arrived with board/15, the api edge with api/12.
 [[module]]
 name = "users"
 matches = { units = ["*/users"] }
@@ -52,15 +52,18 @@ matches = { units = ["*/board"] }
 depend_on = ["users"]
 forbidden = ["api", "ui", "server"]
 
-# HTTP translation layer: internal dependency is board alone — the todos edge
-# this also carried served the todo endpoints, retired by KW4 (api/01, api/02,
-# api/05, api/10). The api→board edge was declared at the wave that first
-# imported board — KW1 api/01, not before.
+# HTTP translation layer: its board edge — the todos edge this also carried
+# served the todo endpoints, retired by KW4 (api/01, api/02, api/05, api/10).
+# The api→board edge was declared at the wave that first imported board —
+# KW1 api/01, not before. The api→users edge was declared at the wave that
+# first imported users — KW9 api/12 (GET /users served from the roster), not
+# before; it carries no state dependency, only the constant cast the endpoint
+# states verbatim.
 [[module]]
 name = "api"
 matches = { units = ["*/api"] }
 [module.allowed]
-depend_on = ["board"]
+depend_on = ["board", "users"]
 forbidden = ["ui", "server"]
 
 # Page module: coupling to api is HTTP at runtime (invisible to the driver), so

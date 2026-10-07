@@ -33,16 +33,20 @@ type BoardStore interface {
 }
 
 // NewHandler builds the handler for the JSON contract: GET /board,
-// POST /cards, PATCH /cards/{id}, and DELETE /cards/{id} over the board
-// store. The todo endpoints are gone (GET /todos retired at api/01,
-// POST /todos at api/02, PATCH /todos at api/05, DELETE /todos at api/10 —
-// the board endpoints replaced the whole surface). The composition root
-// mounts it on its listener.
+// POST /cards, PATCH /cards/{id}, DELETE /cards/{id}, and — since KW9 —
+// GET /users, the simulated roster served straight from the users module. The
+// todo endpoints are gone (GET /todos retired at api/01, POST /todos at
+// api/02, PATCH /todos at api/05, DELETE /todos at api/10 — the board
+// endpoints replaced the whole surface). The composition root mounts it on
+// its listener.
 func NewHandler(boardStore BoardStore) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /board", handleBoard(boardStore))
 	mux.HandleFunc("POST /cards", handleCreate(boardStore))
 	mux.HandleFunc("PATCH /cards/{id}", handleCardChange(boardStore))
 	mux.HandleFunc("DELETE /cards/{id}", handleCardDelete(boardStore))
+	// GET /users takes no store: the roster is program data (the users
+	// module), not board state, and this endpoint states it verbatim.
+	mux.HandleFunc("GET /users", handleUsers())
 	return mux
 }
