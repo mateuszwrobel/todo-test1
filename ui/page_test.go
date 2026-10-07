@@ -161,15 +161,24 @@ func TestBoardRendersThreeFixedColumns(t *testing.T) {
 		t.Errorf("page carries a done checkbox/toggle:\n%s", page)
 	}
 
-	// Every card carries its edit and delete affordance hooks. The edit
-	// band is live since KW3 (card ui/06 — every card, every column); the
+	// Every card carries its delete affordance hook; the edit affordance
+	// rides cards outside Done only (the done freeze of 2026-10-07 —
+	// contract refusal at the seam is the guarantee, pinned by
+	// edit_test.go). The edit band is live since KW3 (card ui/06); the
 	// delete control is live since KW4 (card ui/07) — hx-delete wiring,
-	// pinned in full by delete_test.go.
-	for _, id := range []int64{1, 2, 3, 4} {
+	// pinned in full by delete_test.go. Card 4 sits in the Done column.
+	for _, id := range []int64{1, 2, 3} {
 		card := cardHTML(t, page, id)
 		if !strings.Contains(card, `class="btn btn--secondary card__edit"`) {
 			t.Errorf("card %d has no edit affordance element:\n%s", id, card)
 		}
+	}
+	if card := cardHTML(t, page, 4); strings.Contains(card, `card__edit`) ||
+		strings.Contains(card, `class="edit-form"`) {
+		t.Errorf("done card 4 carries a frozen edit affordance:\n%s", card)
+	}
+	for _, id := range []int64{1, 2, 3, 4} {
+		card := cardHTML(t, page, id)
 		if !strings.Contains(card, `hx-delete="/ui/cards/`) {
 			t.Errorf("card %d has no delete affordance element:\n%s", id, card)
 		}

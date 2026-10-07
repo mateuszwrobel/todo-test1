@@ -118,6 +118,7 @@ func TestStoryGalleryFixturesAreContractTrue(t *testing.T) {
 			`id="board"`, `id="column-to-do"`, `id="column-in-progress"`, `id="column-done"`,
 			"Draft the launch note", "Rotate the API keys", "Ship v1.2",
 			`id="card-903" class="card card--done"`,                   // done treatment derived from column membership
+			`hx-delete="/ui/cards/903"`,                               // delete stays on the done card (the freeze takes the edit only)
 			`<p class="column__empty" data-empty="true">No cards</p>`, // the empty column's stated treatment
 		}},
 		{"state-board-empty", []string{
@@ -156,6 +157,16 @@ func TestStoryGalleryFixturesAreContractTrue(t *testing.T) {
 				t.Errorf("section #%s missing %q\nsection: %s", c.section, want, section)
 			}
 		}
+	}
+	// The done freeze (2026-10-07, parent scenario 15): the board
+	// fixture's Done card 903 renders no edit affordance, while the cards
+	// outside it keep their bands.
+	if s := sectionHTML(t, page, "state-board"); strings.Contains(s, `hx-patch="/ui/cards/903"`) {
+		t.Errorf("state-board renders an edit affordance on the done card:\n%s", s)
+	}
+	if s := sectionHTML(t, page, "state-board"); !strings.Contains(s, `hx-patch="/ui/cards/901"`) ||
+		!strings.Contains(s, `hx-patch="/ui/cards/902"`) {
+		t.Errorf("state-board lost an edit band on a card outside Done:\n%s", s)
 	}
 	// The whole-board-empty section states emptiness three times and never
 	// fakes cards or failure.
@@ -216,6 +227,20 @@ func TestGalleryComponentExamplesCarryFrozenStates(t *testing.T) {
 		if !strings.Contains(page, want) {
 			t.Errorf("component example missing %q", want)
 		}
+	}
+	// The done card example carries delete only: the done freeze of
+	// 2026-10-07 leaves no edit affordance on a done card (the plain
+	// example above keeps Edit — the pair shows both arms).
+	at := strings.Index(page, `id="c-card-done"`)
+	if at < 0 {
+		t.Fatal(`gallery has no #c-card-done example`)
+	}
+	doneExample := page[at : at+strings.Index(page[at:], `</li>`)]
+	if strings.Contains(doneExample, `card__edit`) || strings.Contains(doneExample, `edit-form`) {
+		t.Errorf("done card example carries a frozen edit affordance:\n%s", doneExample)
+	}
+	if !strings.Contains(doneExample, `card__delete`) {
+		t.Errorf("done card example lost its delete control:\n%s", doneExample)
 	}
 }
 

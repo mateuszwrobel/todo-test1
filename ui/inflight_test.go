@@ -33,7 +33,10 @@ import (
 // its own in-flight block in the rendered page: the create form covers both
 // input and button (a live input would re-submit on Enter while the request
 // is in flight), each card's edit form disables its save control, each
-// card's delete control disables itself. Every column counts, Done included.
+// card's delete control disables itself. Delete counts in every column,
+// Done included; the edit-form seam rides cards outside Done only (the
+// done freeze of 2026-10-07 — a Done card renders no edit form, so there
+// is no save control to block).
 func TestInFlightBlockingWiringIsOnEveryControl(t *testing.T) {
 	uiSrv := uiServer(t, boardAPI(t).URL)
 
@@ -51,8 +54,12 @@ func TestInFlightBlockingWiringIsOnEveryControl(t *testing.T) {
 		idStr := strconv.FormatInt(id, 10)
 		card := cardHTML(t, page, id)
 
-		if !strings.Contains(card, `hx-disabled-elt="#card-`+idStr+` .save"`) {
-			t.Errorf("card %d edit form lacks its save-control block:\n%s", id, card)
+		if id != 4 { // cards outside Done — the canned board's Done card is 4
+			if !strings.Contains(card, `hx-disabled-elt="#card-`+idStr+` .save"`) {
+				t.Errorf("card %d edit form lacks its save-control block:\n%s", id, card)
+			}
+		} else if strings.Contains(card, `.save"`) {
+			t.Errorf("done card %d carries a save-control block for a frozen edit form:\n%s", id, card)
 		}
 
 		// The delete control's block is "this" — the element itself — and it

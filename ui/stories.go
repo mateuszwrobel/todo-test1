@@ -115,7 +115,10 @@ func storySections() []storySection {
 // examples are rendered through the REAL surface templates so an example
 // cannot drift from what the page renders. The heading example is a div,
 // not an h1: the gallery pins itself to one h1, and .heading carries the
-// identical computed style either way. The #c-tokens block shows one
+// identical computed style either way. The #c-card-done example mirrors
+// the done freeze of 2026-10-07 (parent scenario 15): a done card carries
+// its delete control and no edit affordance, matching boardTmpl. The
+// #c-tokens block shows one
 // labeled chip per --color-* token parsed from tokens.css: the chips
 // mirror the declaration inventory, so the gallery cannot hide a
 // declaration change. Renames are pinned on the consumer side — a unit
@@ -138,7 +141,7 @@ func componentExamplesHTML() template.HTML {
 <p class="component-label">board cards (k6/k7: the controls paint in on row hover)</p>
 <ul class="column__cards">
 <li id="c-card" class="card"><span class="card__title">Draft the launch note</span><button type="button" class="btn btn--secondary card__edit">Edit</button><button type="button" class="btn btn--secondary card__delete">Delete</button></li>
-<li id="c-card-done" class="card card--done"><span class="card__title">Ship v1.2</span><button type="button" class="btn btn--secondary card__edit">Edit</button><button type="button" class="btn btn--secondary card__delete">Delete</button></li>
+<li id="c-card-done" class="card card--done"><span class="card__title">Ship v1.2</span><button type="button" class="btn btn--secondary card__delete">Delete</button></li>
 <li id="c-source-slot" class="card card--source"><span class="card__title">Lifted while dragging</span></li>
 </ul>
 <p class="component-label">drag chrome (the shell-toggled classes, frozen static)</p>

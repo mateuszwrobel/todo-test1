@@ -272,19 +272,24 @@ document.body.addEventListener('dragend', function () {
 
 // boardTmpl renders the three column panels in the contract's array order
 // (the contract fixes the order To Do / In Progress / Done, and the page
-// renders the server's truth rather than re-imposing its own). Each card
-// carries its edit and delete affordance hooks: the edit band is live since
-// KW3 (card ui/06) — the Edit control reveals an inline form prefilled with
-// the card's title, and Save submits PATCH /ui/cards/{id} through htmx, on
-// every card in every column including Done (J6: done is just a column, a
-// done card's text is editable). The delete control is live since KW4 (card
-// ui/07): its click issues hx-delete DELETE /ui/cards/{id} through htmx — no
-// confirmation dialog, the card text states activation, not confirmation —
-// and the answer swaps the truth without the card into #board-area, on every
-// card in every column including Done (a done card is as deletable as any
-// other; done is just a column). Since KW5 (cards ui/08–10) every card is
-// also draggable by the card itself — the page's only movement mechanic —
-// and the shell script below carries the drag machinery.
+// renders the server's truth rather than re-imposing its own). Delete and
+// drag hooks ride EVERY card in every column; the edit affordance is
+// rendered on cards OUTSIDE Done only. The edit band is live since KW3
+// (card ui/06) — the Edit control reveals an inline form prefilled with the
+// card's title, and Save submits PATCH /ui/cards/{id} through htmx — but
+// since the done freeze of 2026-10-07 (parent scenario 15) a card sitting
+// in Done carries no edit band and no Edit control: the contract refuses a
+// title edit there (422 with the stated reason at the card whenever the
+// seam is forced — edit.go), and moving out of Done is the only unlock.
+// The delete control is live since KW4 (card ui/07): its click issues
+// hx-delete DELETE /ui/cards/{id} through htmx — no confirmation dialog,
+// the card text states activation, not confirmation — and the answer swaps
+// the truth without the card into #board-area, on every card in every
+// column including Done (a done card is as deletable as any other; done is
+// just a column). Since KW5 (cards ui/08–10) every card is also draggable
+// by the card itself — the page's only movement mechanic, Done included:
+// drag-out is exactly the freeze's unlock — and the shell script below
+// carries the drag machinery.
 var boardTmpl = template.Must(template.New("board").Parse(`<div id="board" class="board">
 {{- range .}}
 <section id="column-{{.Anchor}}" class="column" data-column="{{.Title}}">
@@ -292,13 +297,13 @@ var boardTmpl = template.Must(template.New("board").Parse(`<div id="board" class
 {{if .Cards}}<ul class="column__cards">{{- range .Cards}}
 <li id="card-{{.ID}}" class="card{{if .Done}} card--done{{end}}" data-card="{{.ID}}" draggable="true">
 <span class="card__title">{{.Title}}</span>
-<form class="edit-form" hx-patch="/ui/cards/{{.ID}}" hx-target="#board-area" hx-swap="innerHTML" hx-disabled-elt="#card-{{.ID}} .save">
+{{if not .Done}}<form class="edit-form" hx-patch="/ui/cards/{{.ID}}" hx-target="#board-area" hx-swap="innerHTML" hx-disabled-elt="#card-{{.ID}} .save">
 <input class="input" type="text" name="title" value="{{.Title}}">
 <button type="submit" class="btn btn--primary save">Save</button>
 <button type="button" class="btn btn--secondary cancel">Cancel</button>
 </form>
 <button type="button" class="btn btn--secondary card__edit">Edit</button>
-<button type="button" class="btn btn--secondary card__delete" hx-delete="/ui/cards/{{.ID}}" hx-target="#board-area" hx-swap="innerHTML" hx-disabled-elt="this">Delete</button>{{if .EditError}}
+{{end}}<button type="button" class="btn btn--secondary card__delete" hx-delete="/ui/cards/{{.ID}}" hx-target="#board-area" hx-swap="innerHTML" hx-disabled-elt="this">Delete</button>{{if .EditError}}
 <p id="edit-error-{{.ID}}" class="error-text">{{.EditError}}</p>{{end}}
 </li>
 {{- end}}

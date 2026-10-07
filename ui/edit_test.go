@@ -66,18 +66,21 @@ func patchCardForm(t *testing.T, uiURL string, id int64, title string) (int, str
 	return resp.StatusCode, buf.String()
 }
 
-// Card ui/06 (surface arm) — every card in every column carries the live
-// edit band, Done included (no frozen-done: J6 states a done card's text is
-// editable; done is just a column). The canned board has cards in all three
-// columns, so one page proves all three arms.
-func TestEditBandOnEveryCardEveryColumn(t *testing.T) {
+// Card ui/06 (surface arm, frozen 2026-10-07): every card OUTSIDE the Done
+// column carries the live edit band; a card sitting in Done carries no edit
+// affordance at all (parent scenario 15 — the done freeze: the contract
+// refuses a title edit there, so the page renders no control for it). The
+// delete affordance and drag hooks stay on every card, Done included. The
+// canned board has cards in all three columns, so one page proves all arms.
+func TestEditBandOnEveryCardOutsideDone(t *testing.T) {
 	api := boardAPI(t)
 	status, page := getPage(t, uiServer(t, api.URL).URL+"/")
 	if status != http.StatusOK {
 		t.Fatalf("GET / status = %d, want 200", status)
 	}
 
-	for _, id := range []int64{1, 2, 3, 4} {
+	// The canned board's card 4 sits in the Done column; 1–3 are editable.
+	for _, id := range []int64{1, 2, 3} {
 		card := cardHTML(t, page, id)
 		idStr := strconv.FormatInt(id, 10)
 		// The band: a prefilled form wired to the card's own fragment
@@ -99,8 +102,24 @@ func TestEditBandOnEveryCardEveryColumn(t *testing.T) {
 		}
 	}
 
+	// The Done card (4) carries neither the band nor the Edit control —
+	// no affordance to freeze, not even one that would fail. Its drag
+	// hooks stay intact: drag-out is the freeze's only unlock.
+	doneCard := cardHTML(t, page, 4)
+	for _, absent := range []string{`class="edit-form"`, `hx-patch="/ui/cards/4"`, `card__edit`} {
+		if strings.Contains(doneCard, absent) {
+			t.Errorf("done card 4 carries a frozen edit affordance %s:\n%s", absent, doneCard)
+		}
+	}
+	for _, want := range []string{`data-card="4"`, `draggable="true"`, `card--done`} {
+		if !strings.Contains(doneCard, want) {
+			t.Errorf("done card 4 missing %s (freeze takes the edit only):\n%s", want, doneCard)
+		}
+	}
+
 	// The delete affordance is live since KW4 (card ui/07): the button
-	// issues its own DELETE through htmx at the card's fragment endpoint.
+	// issues its own DELETE through htmx at the card's fragment endpoint —
+	// every card in every column, the done freeze takes no delete.
 	for _, id := range []int64{1, 2, 3, 4} {
 		card := cardHTML(t, page, id)
 		idStr := strconv.FormatInt(id, 10)
@@ -171,10 +190,17 @@ func TestEditUpdatesInPlace(t *testing.T) {
 	}
 }
 
-// Card ui/06 (Done arm) — a card in the Done column is just as editable;
-// the edit touches text only, so the done treatment (class card--done,
-// derived from column membership) survives the swap unchanged.
-func TestEditDoneCardKeepsDoneTreatmentInPlace(t *testing.T) {
+// Card ui/06 (Done arm, frozen 2026-10-07) — Edit of a done card is
+// rejected. The page renders no edit affordance on a Done card (the pin
+// above); the contract's refusal is the guarantee that stays when the seam
+// is forced anyway: PATCH /ui/cards/{id} on a Done card answers the
+// contract's 422 with its stated reason at the card — the same
+// error-at-card machinery as the blank/over-limit refusals (attachEditError
+// over unchanged truth) — the original title stands, the board is
+// unchanged, and the card keeps its done treatment in place. Moving out of
+// Done is the only unlock: the drag's column-only move is no edit, and the
+// edit then lands normally at the new home.
+func TestEditDoneCardRefusedStatesAtCard(t *testing.T) {
 	store, uiSrv := realChain(t, "Migrate todo list", "Set up CI")
 	moveTo(t, store, 2, board.Done)
 
@@ -183,29 +209,49 @@ func TestEditDoneCardKeepsDoneTreatmentInPlace(t *testing.T) {
 		t.Fatalf("card 2 (Done column) lacks the done treatment:\n%s", page)
 	}
 
-	// Editing a Done card is a normal operation — no frozen-done refusal,
-	// no different status.
+	// Forcing the seam: the very form PATCH the edit band would issue.
 	status, frag := patchCardForm(t, uiSrv.URL, 2, "Set up CI pipelines")
-	if status != http.StatusOK {
-		t.Fatalf("PATCH /ui/cards/2 status = %d, want 200 (body %s)", status, frag)
+	if status != http.StatusUnprocessableEntity {
+		t.Fatalf("PATCH /ui/cards/2 status = %d, want 422 (body %s)", status, frag)
 	}
 
-	// Same column, same position, new text, still the done treatment.
-	done := columnHTML(t, frag, "done")
-	if !strings.Contains(done, `id="card-2"`) || !strings.Contains(done, "Set up CI pipelines") {
-		t.Errorf("edited Done card not rendered in the Done column:\n%s", frag)
+	// The contract's stated refusal, its exact string, at the card — not
+	// re-worded here, same pattern as every other refused edit.
+	card := cardHTML(t, frag, 2)
+	if !strings.Contains(card, `id="edit-error-2"`) ||
+		!strings.Contains(card, `class="error-text">cannot edit a done card<`) {
+		t.Errorf("done refusal not stated at the editing card:\n%s", card)
 	}
-	if !strings.Contains(cardHTML(t, frag, 2), `card--done`) {
-		t.Errorf("done treatment did not survive the edit swap:\n%s", cardHTML(t, frag, 2))
+	// The original title stands, the done treatment survives, the card
+	// stays exactly where it sat.
+	if !strings.Contains(card, `<span class="card__title">Set up CI</span>`) {
+		t.Errorf("original text not kept on the refused Done card:\n%s", card)
+	}
+	if !strings.Contains(card, `card--done`) ||
+		!strings.Contains(columnHTML(t, frag, "done"), `id="card-2"`) {
+		t.Errorf("refused edit changed the Done treatment or moved the card:\n%s", frag)
 	}
 	if strings.Contains(columnHTML(t, frag, "to-do"), `id="card-2"`) {
 		t.Errorf("editing a Done card moved it:\n%s", frag)
 	}
-	if got := cardTitles(t, store, board.Done); len(got) != 1 || got[0] != "Set up CI pipelines" {
-		t.Errorf("store Done column = %q, want only the title changed", got)
+	// The contract's truth: the board is untouched by the refusal.
+	if got := cardTitles(t, store, board.Done); len(got) != 1 || got[0] != "Set up CI" {
+		t.Errorf("store Done column = %q, want untouched by the refusal", got)
 	}
 	if got := cardTitles(t, store, board.Todo); len(got) != 1 || got[0] != "Migrate todo list" {
 		t.Errorf("store To Do column = %q, want untouched", got)
+	}
+
+	// Drag-out is the only unlock: a column-only move — what the drag's
+	// request performs, straight through the store like the seed above —
+	// is not an edit, and the same edit then lands at the new home.
+	moveTo(t, store, 2, board.InProgress)
+	status, frag = patchCardForm(t, uiSrv.URL, 2, "Set up CI pipelines")
+	if status != http.StatusOK {
+		t.Fatalf("PATCH /ui/cards/2 after move-out status = %d, want 200 (body %s)", status, frag)
+	}
+	if !strings.Contains(cardHTML(t, frag, 2), `<span class="card__title">Set up CI pipelines</span>`) {
+		t.Errorf("edit after the move-out unlock did not land:\n%s", frag)
 	}
 }
 

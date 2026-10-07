@@ -9,26 +9,33 @@ import (
 	"strconv"
 )
 
-// The edit surface (card ui/06, KW3): every card in every column — Done
-// included, no frozen-done (J6: done is just a column, and editing touches
-// neither position nor identity) — carries an inline edit band, and its Save
-// posts here as PATCH /ui/cards/{id}. The title change is performed by
-// calling the api contract over HTTP (never in-process), and the answer is
-// the resulting state as a swap fragment — the create endpoint's pattern
-// (create.go) on the card surface: mutations re-render from server truth,
-// not local guesses, so the edited card shows the new title at the same
-// position in the same column wherever the server keeps it. The column
-// field is deliberately absent: moving is the drag card's operation (KW5).
+// The edit surface (card ui/06, KW3): every card outside the Done column
+// carries an inline edit band, and its Save posts here as PATCH
+// /ui/cards/{id}. Since the done freeze of 2026-10-07 (parent scenario 15
+// — the frozen-text rule the 2026-10-06 pivot had deleted, restored) a card
+// sitting in Done renders no edit affordance at all; this endpoint stays
+// the seam the contract's refusal shows through — a forced title PATCH on a
+// Done card answers 422 with the contract's stated reason rendered at the
+// card, the same attachEditError path as the blank/over-limit refusals.
+// Moving out of Done is the only unlock (editing elsewhere touches neither
+// position nor identity). The title change is performed by calling the api
+// contract over HTTP (never in-process), and the answer is the resulting
+// state as a swap fragment — the create endpoint's pattern (create.go) on
+// the card surface: mutations re-render from server truth, not local
+// guesses, so the edited card shows the new title at the same position in
+// the same column wherever the server keeps it. The column field is
+// deliberately absent: moving is the drag card's operation (KW5).
 
 // handleEdit — PATCH /ui/cards/{id}. It performs the title change by
 // issuing PATCH {apiBase}/cards/{id} over real HTTP with the contract's
 // {"title": ...} body, then answers the resulting state as a swap fragment
 // targeting #board-area: on success the fresh board (200) — the re-read is
 // the in-place guarantee, the card lands where the server holds it with the
-// new title; on a contract refusal (422) the board re-rendered from server
-// truth with the stated reason at the editing card, the card's original
-// title intact and the contract's status mirrored; on a stale card (404)
-// the shared stale-failure surface (stale.go) — identical for every verb.
+// new title; on a contract refusal (422 — blank, over-limit, or a title
+// edit on a card sitting in Done) the board re-rendered from server truth
+// with the stated reason at the editing card, the card's original title
+// intact and the contract's status mirrored; on a stale card (404) the
+// shared stale-failure surface (stale.go) — identical for every verb.
 func (p *page) handleEdit(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
