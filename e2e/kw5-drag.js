@@ -309,19 +309,6 @@ async function assertNoDragChrome(page, where) {
   assert.strictEqual(residue, 0, `${where}: drag chrome survived the finished gesture`);
 }
 
-// The user's edit gesture on a card (cross-checked in the Done leg; the
-// surface is kw3's): reveal the band, replace the text, save.
-async function editCardTitle(page, card, newTitle) {
-  await card.locator('.card__edit').click();
-  await card.locator('.edit-form .input').fill(newTitle);
-  await card.locator('.edit-form .save').click();
-  await card.locator('.card__title').waitForFunction(
-    (el, t) => el.textContent === t,
-    newTitle,
-    { timeout: 10000 }
-  );
-}
-
 // A point at fraction `fy` of an element's height, horizontally centered.
 async function pointOn(locator, fy) {
   const box = await locator.boundingBox();
@@ -667,20 +654,22 @@ async function main() {
     await page3.close();
     console.log('scenario 3 (done is column membership — treatment with membership, no done control): OK');
 
-    // --- Scenario 3 cross-check (kw3's coverage — "editing a Done card
-    // keeps the treatment" — re-exercised on a card the DRAG placed in
-    // Done): done is membership, so an edit must keep text, place,
-    // identifier and treatment — one PATCH to the card endpoint, a swap,
-    // no reload. The assertion runs on the fresh truth render (after a
-    // reload), and the post-drop fragment's INTERACTION WIRING is then
-    // PINNED HARD: after a further drop, an edit Save on the fetch-injected
-    // markup must be exactly one PATCH to the card endpoint with no page
-    // navigation, and a Delete there exactly one DELETE with the card gone.
+    // --- Scenario 3 cross-check — the done-edit leg, FLIPPED for the
+    // contract-level done freeze (amendment 2026-10-07, parent scenario 15
+    // "Edit of a done card is rejected"): on a card the DRAG places in Done
+    // the edit affordance must DISAPPEAR (kw3's retired "editing a Done
+    // card keeps the treatment" coverage — delete + drag hooks stay), and
+    // after the drag back OUT it must be BACK, with the edit there landing
+    // exactly one PATCH to the card endpoint ("becomes editable after it is
+    // moved out of Done"). The post-drop fragment's INTERACTION WIRING
+    // stays PINNED HARD on that markup: the edit Save is exactly one PATCH
+    // with no page navigation, and a Delete (after a further in-place drop
+    // re-injects the fetch markup) exactly one DELETE with the card gone.
     // (This block previously WITNESSED a product bug — the drag's fetch
     // swap assigned raw innerHTML and htmx 2.0.6 auto-processes nothing it
     // did not swap, leaving post-drop controls unwired; render.go's swap
-    // site now calls htmx.process on the swapped region, so the kw3
-    // behavior is asserted on the post-drop markup too, not reported.)
+    // site now calls htmx.process on the swapped region, so the behavior
+    // is asserted on the post-drop markup too, not reported.)
     const dbs3x = tmpPaths('done-edit-crosscheck');
     run(seedBin, ['--db', dbs3x.board, '--titles', 'Prepare the demo,File the expense claim', '--in-progress', '0']);
     const port3x = await freePort();
@@ -697,33 +686,41 @@ async function main() {
     assert.strictEqual(assertOneMoveRequest(log3x, demoX.id, 'the cross-check drop into Done').column, 'Done',
       'the cross-check card must reach Done through the one-request drop');
 
-    // Reload into the fresh truth render, then edit it THERE: the treatment
-    // survives, the edit is exactly one PATCH to the card endpoint, no
-    // reload.
+    // The flip (kw8 done freeze, parent scenario 15): dragging INTO Done
+    // makes the edit affordance DISAPPEAR — asserted on the fetch-swapped
+    // post-drop markup, so the freeze holds on the drag's own render path,
+    // not just a fresh page. This block used to reload and EDIT the Done
+    // card (kw3's cross-check); that leg retires with the affordance the
+    // freeze removed. What stays at this seam is the freeze's UI half: no
+    // Edit control, no edit band — delete and the drag hook intact.
+    const doneLiX = cardById(page3x, demoX.id);
+    assert.strictEqual(await doneLiX.locator('.card__edit').count(), 0,
+      'the card dragged into Done must render no edit control (done freeze — parent scenario 15)');
+    assert.strictEqual(await doneLiX.locator('.edit-form').count(), 0,
+      'the card dragged into Done must render no edit band (done freeze — parent scenario 15)');
+    assert.strictEqual(await doneLiX.locator('.card__delete').count(), 1,
+      'a card dragged into Done keeps its delete control — deleting is not editing');
+    assert.strictEqual(await doneLiX.getAttribute('draggable'), 'true',
+      'the card dragged into Done stays draggable — dragging out is the unlock');
+
+    // Fresh-truth render agrees: the freeze is the render's rule, not a
+    // fragment artifact of the drop swap.
     await page3x.reload();
-    await page3x.evaluate(() => { window.__kw5NoReloadMarker = 'alive'; });
-    const renamed = 'Prepare the demo v2';
-    log3x.reset();
-    await editCardTitle(page3x, cardById(page3x, demoX.id), renamed);
-    const editedCard = (await snapshot(page3x)).find((c) => c.column === 'Done').cards[0];
-    assert.strictEqual(editedCard.title, renamed, 'the edited Done card must show its new text');
-    assert.strictEqual(editedCard.id, demoX.id, 'editing a Done card must keep its identifier');
-    assert.strictEqual(editedCard.done, true, 'editing a Done card must keep its done treatment (J6)');
-    assert.strictEqual(log3x.patches.length, 1, 'the edit must be exactly one PATCH');
-    assert.ok(log3x.patches[0].url.endsWith(`/ui/cards/${demoX.id}`),
-      `the edit must go to the card endpoint, not a move: ${log3x.patches[0].url}`);
-    assert.strictEqual(await page3x.evaluate(() => window.__kw5NoReloadMarker), 'alive',
-      'the edit must stay a fragment swap, not a page reload');
+    assert.strictEqual(await cardById(page3x, demoX.id).locator('.card__edit').count(), 0,
+      'the fresh render of a Done card must carry no edit control either');
 
     // Post-drop wiring PINNED (the block that previously witnessed the
     // product bug): drag the card so the fetch swap injects fresh markup,
     // then EDIT that markup — Save must be exactly one PATCH to the card
     // endpoint, must not navigate the page (an unwired form submits
     // natively: GET /?title=..., a full navigation, edit discarded), and
-    // must update the title. The edit's own swap is htmx-mediated, so the
-    // DELETE pin needs a drop of its own to re-inject the fetch markup:
-    // drag the card again, then Delete it — exactly one DELETE to the card
-    // endpoint, no navigation, the card gone from the page.
+    // must update the title. This drag is also scenario 15's UNLOCK drag —
+    // out of Done, back into To Do — so the edit doubles as the freeze's
+    // "becomes editable after it is moved out of Done" leg, landing one
+    // PATCH. The edit's own swap is htmx-mediated, so the DELETE pin needs
+    // a drop of its own to re-inject the fetch markup: drag the card again,
+    // then Delete it — exactly one DELETE to the card endpoint, no
+    // navigation, the card gone from the page.
     const deleteLog = [];
     page3x.on('request', (req) => {
       if (req.method() === 'DELETE') deleteLog.push({ url: req.url() });
@@ -731,6 +728,11 @@ async function main() {
     log3x.reset();
     await dragTo(page3x, cardById(page3x, demoX.id), await pointOn(page3x.locator('#column-to-do li.card').first(), 0.75));
     await waitForCardIn(page3x, demoX.id, 'To Do');
+    // The unlock half of scenario 15: moved out of Done, the card regains
+    // its edit control — on the very fetch-injected markup the wiring pin
+    // below now exercises.
+    assert.strictEqual(await cardById(page3x, demoX.id).locator('.card__edit').count(), 1,
+      'the card dragged out of Done must regain its edit control (drag-out is the unlock — parent scenario 15)');
     const urlBefore = await page3x.evaluate(() => location.href);
     const renamedPostDrop = 'Renamed on fetch-swapped markup';
     await page3x.locator(`li.card[data-card="${demoX.id}"] .card__edit`).click();
@@ -784,7 +786,7 @@ async function main() {
 
     await stopServer(srv3x);
     await page3x.close();
-    console.log('scenario 3 cross-check (edit a Done card — treatment kept, one PATCH, no reload): OK');
+    console.log('scenario 3 cross-check (done freeze — drag in removes the edit affordance, drag out restores it, edit one PATCH): OK');
 
     // --- Scenario 4 (the MOVE leg of "Operation on missing card" — the leg
     // that completes the scenario: the edit leg went green at kw3, the
