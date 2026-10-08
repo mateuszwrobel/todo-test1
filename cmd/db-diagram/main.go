@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"todo/board"
+	"todo/users"
 )
 
 func main() {
@@ -351,7 +352,10 @@ func (t *table) applyDDL(ddl string) {
 
 // renderDocument is the whole committed doc: one H1, one fenced mermaid
 // block. Relations first (empty while the schema holds no foreign keys), then
-// the entity blocks, then the note lines.
+// the entity blocks, then the note lines. An assignee column also gets a note
+// naming its roster — who an assignee is cannot be introspected (the cast is
+// users-module data, not stored), so the names are read from users.Names at
+// generation time; the generator hardcodes no name.
 func renderDocument(db *sql.DB) (string, error) {
 	tables, err := loadTables(db)
 	if err != nil {
@@ -392,6 +396,15 @@ func renderDocument(db *sql.DB) (string, error) {
 		}
 		for _, chk := range t.tableChecks {
 			fmt.Fprintf(&b, "\tnote for %s %s\n", t.name, quote("check: "+scrub(chk)))
+		}
+		// The roster note rides the table that stores an assignee: one line
+		// after that table's other notes, naming the cast from the users
+		// module so the TEXT column gains a referent. Column-name and name
+		// spellings come from introspection and users.Names — never typed in.
+		if c := t.find("assignee"); c != nil {
+			note := c.name + ": one of the built-in simulated users (users module, not stored): " +
+				strings.Join(users.Names(), ", ")
+			fmt.Fprintf(&b, "\tnote for %s %s\n", t.name, quote(note))
 		}
 	}
 	b.WriteString("```\n")

@@ -96,15 +96,18 @@ matches = { units = ["*/cmd/todo"] }
 depend_on = ["board", "api", "ui", "users"]
 
 # Schema-diagram generator: cmd/db-diagram, package main — a dev tool, not the
-# app's composition root. Its one internal edge is board: board.Open
-# materializes the current schema in a temp file and the generator reads it
-# back with PRAGMA introspection. It composes no api/ui handlers and must not
-# start reaching for them.
+# app's composition root. Its board edge: board.Open materializes the current
+# schema in a temp file and the generator reads it back with PRAGMA
+# introspection. The users edge was declared at the wave that first imported
+# users — the roster note on the assignee column, whose names the generator
+# reads from users.Names so docs/db-schema.md states who an assignee can be
+# (the cast is module data, never stored, so introspection cannot show it).
+# It composes no api/ui handlers and must not start reaching for them.
 [[module]]
 name = "db-diagram"
 matches = { units = ["*/cmd/db-diagram"] }
 [module.allowed]
-depend_on = ["board"]
+depend_on = ["board", "users"]
 forbidden = ["api", "ui", "server"]
 
 # No dependency cycles among the declared modules.
