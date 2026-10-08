@@ -14,4 +14,5 @@ erDiagram
 		TEXT value "not null"
 	}
 	note for cards "index cards_column_position on cards (column, position)"
+	note for cards "assignee: one of the built-in simulated users (users module, not stored): Ada, Grace, Alan, Barbara, Linus"
 ```
